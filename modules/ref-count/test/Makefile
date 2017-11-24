@@ -4,7 +4,7 @@ include $(HCLIB_ROOT)/include/hclib.mak
 include $(HCLIB_ROOT)/../modules/system/inc/hclib_system.post.mak
 include $(HCLIB_ROOT)/../modules/ref-count/inc/hclib_ref-count.post.mak
 
-TARGETS=ref-count-rel0 ref-count-rel1
+TARGETS=ref-count-rel0 ref-count-rel1 ref-count0 ref-count1
 
 all: $(TARGETS)
 
