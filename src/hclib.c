@@ -479,6 +479,10 @@ void hclib_get_curr_task_info(void (**fp_out)(void *), void **args_out) {
     *args_out = curr_task->args;
 }
 
+void** hclib_get_curr_task_local() {
+    return &(((hclib_task_t *)(CURRENT_WS_INTERNAL->curr_task))->task_local);
+}
+
 /*** END FORASYNC IMPLEMENTATION ***/
 
 #ifdef __cplusplus
