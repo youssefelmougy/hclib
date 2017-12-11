@@ -39,6 +39,18 @@ class safe_vector {
 Reslient Promise for pointer type data
 */
 
+template<typename T>
+class future_t: public hclib::ref_count::future_t<T> {
+
+    void ref_count_decr();
+
+  public:
+
+    void release() {
+      ref_count_decr();
+    }
+};
+
 //TODO: To enable non pointer and reference types, 
 //create template specialisation for pointer and reference
 //and get the required data pointer as given in default impl.
@@ -46,10 +58,26 @@ Reslient Promise for pointer type data
 //the specialisations only override put().
 //put_acutal() remains same
 template<typename T, int N=3>
-class promise_t: public hclib::promise_t<T> {
+class promise_t: public hclib::ref_count::promise_t<T> {
     T tmp_data[N];
+    int *diamond_ref_count = nullptr;
 
   public:
+
+    promise_t(int n) : hclib::ref_count::promise_t<T>(n) {
+        diamond_ref_count = new int(0);
+    }
+
+    void ref_count_decr() {
+        if(diamond_ref_count != nullptr) {
+            int d_cnt = __sync_add_and_fetch(diamond_ref_count, 1);
+            if(d_cnt % N == 0)
+	        hclib::ref_count::promise_t<T>::ref_count_decr();
+	}
+	else
+	    hclib::ref_count::promise_t<T>::ref_count_decr();
+    }
+
     bool equal(int i, int j) {
         return !memcmp(tmp_data[i], tmp_data[j], sizeof(int));
     }
@@ -60,6 +88,12 @@ class promise_t: public hclib::promise_t<T> {
         hclib::promise_t<T>::put(tmp_data[i]);
     }
 };
+
+template<typename T>
+void future_t<T>::ref_count_decr() {
+    promise_t<T> * p = static_cast<promise_t<T>*>(hclib_future_t::owner);
+    p->ref_count_decr();
+}
 
 /*
 safe vector of promises
@@ -98,18 +132,34 @@ void promise_t<T,N>::put(T datum) {
 Resilient async_await
 */
 template <typename T>
-class AsyncResilience {
-    T& _lambda;
+class AsyncResilience  {
+    T _lambda;
+    hclib_future_t *future1, *future2, *future3, *future4;
     diamond_task_params_t<void*> *dtp;
 
     public:
-        AsyncResilience(T& lambda, diamond_task_params_t<void*>* tmp_dtp)
-	: _lambda(lambda), dtp(tmp_dtp) {}
+        AsyncResilience(T lambda, hclib_future_t *f1, hclib_future_t *f2,
+            hclib_future_t *f3, hclib_future_t *f4,
+            diamond_task_params_t<void*>* tmp_dtp)
+	: _lambda(lambda), future1(f1), future2(f2)
+        , future3(f3), future4(f4), dtp(tmp_dtp) {}
 
     //set the task local to the diamond_task_parameters and invoke the lambda
     void operator() () {
         *(hclib_get_curr_task_local()) = dtp;
 	_lambda();
+        future_t<void*> *f = static_cast<future_t<void*>*>(future1);
+        if(f != NULL)
+            f->release();
+        f = static_cast<future_t<void*>*>(future2);
+        if(f != NULL)
+            f->release();
+        f = static_cast<future_t<void*>*>(future3);
+        if(f != NULL)
+            f->release();
+        f = static_cast<future_t<void*>*>(future4);
+        if(f != NULL)
+            f->release();
     }
 };
 
@@ -120,7 +170,7 @@ inline void async_await(T&& lambda, hclib_future_t *future1,
 
     //fetch the diamond_task_parameters from task local and pass is to the async
     auto dtp = (diamond_task_params_t<void*>*)(*hclib_get_curr_task_local());
-    AsyncResilience<T> async_res(lambda, dtp);
+    AsyncResilience<T> async_res(lambda, future1, future2, future3, future4, dtp);
     hclib::async_await(std::move(async_res), future1, future2, future3, future4);
 }
 

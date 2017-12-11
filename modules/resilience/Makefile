@@ -1,4 +1,6 @@
+include $(HCLIB_ROOT)/../modules/ref-count/inc/hclib_ref-count.pre.mak
 include $(HCLIB_ROOT)/include/hclib.mak
+include $(HCLIB_ROOT)/../modules/ref-count/inc/hclib_ref-count.post.mak
 
 DEFINES=-DHC_ASSERTION_CHECK
 

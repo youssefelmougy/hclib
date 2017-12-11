@@ -13,18 +13,20 @@ int main(int argc, char ** argv) {
             int a_ref=10;
             hclib::promise_t<int*> *prom = new hclib::promise_t<int*>();
             diamond::promise_t<int*> *prom1 = new diamond::promise_t<int*>(1);
+            diamond::promise_t<int*> *prom2 = new diamond::promise_t<int*>(2);
 
             hclib::async( [=]() {
                    sleep(1);
                    int *n= (int*) malloc(sizeof(int));
                    *n = SIGNAL_VALUE;
                    prom->put(n);
+		   ((hclib::promise_t<int*>*)(prom2))->put(n);
             });
 
-	    hclib::async_await( [=]() {
+	    hclib::ref_count::async_await( [=]() {
                     int *n2_tmp = prom1->get_future()->get();
                     printf("Value2 %d\n", *n2_tmp);
-            }, prom1->get_future());
+            }, prom1->get_future(), prom2->get_future());
            
             diamond::async_await_check( [=]() {
                     int* signal = prom->get_future()->get();
@@ -35,7 +37,7 @@ int main(int argc, char ** argv) {
 		        int *n2 = (int*) malloc(sizeof(int));
 			*n2 = 22;
 		        prom1->put(n2);
-		    }, nullptr);
+		    }, prom2->get_future());
             }, prom->get_future());
         });
     });

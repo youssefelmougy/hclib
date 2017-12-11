@@ -2,6 +2,7 @@
 #define HCLIB_RESILIENCE_H
 
 #include "hclib_cpp.h"
+#include "hclib_ref-count.h"
 #include <vector>
 #include <mutex>
 
