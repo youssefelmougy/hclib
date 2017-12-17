@@ -10,6 +10,8 @@ namespace ref_count {
 Future
 */
 
+enum class DelType {NORMAL, ARR, FREE};
+
 template<typename T>
 class future_t: public hclib::future_t<T> {
 };
@@ -27,6 +29,39 @@ class future_t<T*>: public hclib::future_t<T*> {
 };
 
 /*
+Type erased deleter
+*/
+
+class deleter_t {
+  public:
+   virtual void operator()( void* ) = 0;
+};
+
+template <typename T>
+class deleter_norm : public deleter_t {
+  public:
+    void operator()( void* p ) {
+      delete static_cast<T*>(p);
+    }
+};
+
+template <typename T>
+class deleter_arr : public deleter_t {
+  public:
+    void operator()( void* p ) {
+      delete[] static_cast<T*>(p);
+    }
+};
+
+template <typename T>
+class deleter_free : public deleter_t {
+  public:
+    void operator()( void* p ) {
+      free(p);
+    }
+};
+
+/*
 Promise
 */
 
@@ -38,22 +73,35 @@ class promise_t: public hclib::promise_t<T> {
 template<typename T>
 class promise_t<T*>: public hclib::promise_t<T*> {
 
-    int *ref_count = NULL;
+    int *ref_count = nullptr;
+    deleter_t* deleter = nullptr;
 
   public:
 
-    promise_t(int n) {
+    promise_t(int n, DelType d_type=DelType::NORMAL) {
       ref_count = new int(n);
+      switch(d_type) {
+        case DelType::NORMAL:
+	  deleter = new deleter_norm<T>();
+	  break;
+	case DelType::ARR:
+	  deleter = new deleter_arr<T>();
+	  break;
+	case DelType::FREE:
+	  deleter = new deleter_free<T>();
+	  break;
+      }
     }
 
     void ref_count_decr() {
-        if(ref_count == NULL) return;
+        if(ref_count == nullptr) return;
         int cnt = __sync_sub_and_fetch(ref_count, 1);
 	HASSERT(cnt >= 0);
 	if(cnt == 0) {
-	    free(hclib_promise_t::datum);
-            hclib_promise_t::datum = NULL;
-	    delete ref_count;
+            (*deleter)(hclib_promise_t::datum);
+            hclib_promise_t::datum = nullptr;
+            delete ref_count;
+            delete deleter;
 	}
     }
 
@@ -78,46 +126,34 @@ class AsyncRefCount {
     hclib_future_t *future1, *future2, *future3, *future4;
 
   public:
-    AsyncRefCount(T lambda, hclib_future_t *f1, hclib_future_t *f2,
+    AsyncRefCount(T&& lambda, hclib_future_t *f1, hclib_future_t *f2,
         hclib_future_t *f3, hclib_future_t *f4)
-        : _lambda(lambda), future1(f1), future2(f2)
+        : _lambda(std::forward<T>(lambda)), future1(f1), future2(f2)
         , future3(f3), future4(f4) {}
 
     void operator() () {
         _lambda();
 	future_t<void*> *f = static_cast<future_t<void*>*>(future1);
-	if(f != NULL)
+	if(f != nullptr)
 	    f->release();
         f = static_cast<future_t<void*>*>(future2);
-	if(f != NULL)
+	if(f != nullptr)
 	    f->release();
         f = static_cast<future_t<void*>*>(future3);
-	if(f != NULL)
+	if(f != nullptr)
 	    f->release();
         f = static_cast<future_t<void*>*>(future4);
-	if(f != NULL)
+	if(f != nullptr)
 	    f->release();
     }
 };
 
 template <typename T>
-inline void async_await(T&& lambda, hclib_future_t *future) {
-    AsyncRefCount<T> async_ref_count(lambda, future, NULL, NULL, NULL);
-    hclib::async_await(async_ref_count, future);
-}
-
-template <typename T>
 inline void async_await(T&& lambda, hclib_future_t *future1,
-        hclib_future_t *future2) {
-    AsyncRefCount<T> async_ref_count(lambda, future1, future2, NULL, NULL);
-    hclib::async_await(async_ref_count, future1, future2);
-}
-
-template <typename T>
-inline void async_await(T&& lambda, hclib_future_t *future1,
-        hclib_future_t *future2, hclib_future_t *future3, hclib_future_t *future4) {
-    AsyncRefCount<T> async_ref_count(lambda, future1, future2, future3, future4);
-    hclib::async_await(async_ref_count, future1, future2, future3, future4);
+        hclib_future_t *future2=nullptr, hclib_future_t *future3=nullptr, 
+        hclib_future_t *future4=nullptr) {
+    AsyncRefCount<T> async_ref_count(std::forward<T>(lambda), future1, future2, future3, future4);
+    hclib::async_await(std::move(async_ref_count), future1, future2, future3, future4);
 }
 
 } // namespace ref_count

@@ -7,7 +7,8 @@ int main(int argc, char ** argv) {
     int SIGNAL_VALUE = 42;
     const char *deps[] = { "system"};
     hclib::launch(deps, 1, [=]() {
-        hclib::ref_count::promise_t<int*> *prom = new hclib::ref_count::promise_t<int*>(2);
+        hclib::ref_count::promise_t<int*> *prom = new hclib::ref_count::promise_t<int*>(2,
+                                                      hclib::ref_count::DelType::FREE);
         hclib::finish([=]() {
 
             hclib::async_await([=]() {
@@ -26,7 +27,7 @@ int main(int argc, char ** argv) {
 
             hclib::async([=]() {
                     sleep(1);
-                    int *n= (int*) malloc(sizeof(int));
+                    int *n = (int*) malloc(sizeof(int));
                     *n = SIGNAL_VALUE;
                     prom->put(n);
                 });
