@@ -19,8 +19,7 @@ int main(int argc, char ** argv) {
                 }, prom->get_future());
             hclib::async([=]() {
                     sleep(1);
-                    int *n= (int*) malloc(sizeof(int));
-                    *n = SIGNAL_VALUE;
+		    int *n = new int(SIGNAL_VALUE);
                     prom->put(n);
                 });
         });
