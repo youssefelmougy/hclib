@@ -78,8 +78,12 @@ class promise_t<T*>: public hclib::promise_t<T*> {
 
   public:
 
-    promise_t(int n, DelType d_type=DelType::NORMAL) {
-      ref_count = new int(n);
+    static const int TYPE = 2;
+
+    promise_t(int n, DelType d_type=DelType::NORMAL) 
+    : ref_count(new int(n)) {
+
+      hclib_promise_t::type = TYPE;
       switch(d_type) {
         case DelType::NORMAL:
 	  deleter = new deleter_norm<T>();
@@ -94,7 +98,8 @@ class promise_t<T*>: public hclib::promise_t<T*> {
     }
 
     void ref_count_decr() {
-        if(ref_count == nullptr) return;
+        if(hclib_promise_t::type < TYPE) return;
+        HASSERT(ref_count != nullptr);
         int cnt = __sync_sub_and_fetch(ref_count, 1);
 	HASSERT(cnt >= 0);
 	if(cnt == 0) {
@@ -133,18 +138,14 @@ class AsyncRefCount {
 
     void operator() () {
         _lambda();
-	future_t<void*> *f = static_cast<future_t<void*>*>(future1);
-	if(f != nullptr)
-	    f->release();
-        f = static_cast<future_t<void*>*>(future2);
-	if(f != nullptr)
-	    f->release();
-        f = static_cast<future_t<void*>*>(future3);
-	if(f != nullptr)
-	    f->release();
-        f = static_cast<future_t<void*>*>(future4);
-	if(f != nullptr)
-	    f->release();
+	if(future1 != nullptr)
+	    static_cast<future_t<void*>*>(future1)->release();
+	if(future2 != nullptr)
+	    static_cast<future_t<void*>*>(future2)->release();
+	if(future3 != nullptr)
+	    static_cast<future_t<void*>*>(future3)->release();
+	if(future4 != nullptr)
+	    static_cast<future_t<void*>*>(future4)->release();
     }
 };
 
