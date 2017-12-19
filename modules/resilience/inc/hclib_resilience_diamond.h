@@ -1,6 +1,13 @@
 #ifndef HCLIB_RESILIENCE_DIAMOND_H
 #define HCLIB_RESILIENCE_DIAMOND_H
 
+#include <vector>
+#include <mutex>
+
+namespace ref_count = hclib::ref_count;
+
+namespace hclib {
+namespace resilience {
 namespace diamond {
 
 /*
@@ -40,7 +47,7 @@ Reslient Promise for pointer type data
 */
 
 template<typename T>
-class future_t: public hclib::ref_count::future_t<T> {
+class future_t: public ref_count::future_t<T> {
 
     void ref_count_decr();
 
@@ -58,28 +65,34 @@ class future_t: public hclib::ref_count::future_t<T> {
 //the specialisations only override put().
 //put_acutal() remains same
 template<typename T, int N=3>
-class promise_t: public hclib::ref_count::promise_t<T> {
+class promise_t: public ref_count::promise_t<T> {
     T tmp_data[N];
     int *diamond_ref_count = nullptr;
 
   public:
 
-    promise_t(int n) : hclib::ref_count::promise_t<T>(n) {
-        diamond_ref_count = new int(0);
+    static const int TYPE = ref_count::promise_t<T>::TYPE+1;
+
+    promise_t(int n, ref_count::DelType del_type = ref_count::DelType::NORMAL)
+    : ref_count::promise_t<T>(n),
+      diamond_ref_count(new int(0)) {
+        hclib_promise_t::type = TYPE;
     }
 
+
     void ref_count_decr() {
-        if(diamond_ref_count != nullptr) {
-            int d_cnt = __sync_add_and_fetch(diamond_ref_count, 1);
-            if(d_cnt % N == 0)
-	        hclib::ref_count::promise_t<T>::ref_count_decr();
-	}
-	else
-	    hclib::ref_count::promise_t<T>::ref_count_decr();
+        if(hclib_promise_t::type < TYPE) return;
+        assert(diamond_ref_count != nullptr);
+        int d_cnt = __sync_add_and_fetch(diamond_ref_count, 1);
+        if(d_cnt % N == 0)
+	    ref_count::promise_t<T>::ref_count_decr();
     }
 
     bool equal(int i, int j) {
-        return !memcmp(tmp_data[i], tmp_data[j], sizeof(int));
+        obj* obj1 = static_cast<obj*>(tmp_data[i]);
+        obj* obj2 = static_cast<obj*>(tmp_data[j]);
+        return obj1->equals(obj2);
+        //return !memcmp(tmp_data[i], tmp_data[j], sizeof(int));
     }
 
     void put(T datum);
@@ -138,10 +151,10 @@ class AsyncResilience  {
     diamond_task_params_t<void*> *dtp;
 
     public:
-        AsyncResilience(T lambda, hclib_future_t *f1, hclib_future_t *f2,
+        AsyncResilience(T&& lambda, hclib_future_t *f1, hclib_future_t *f2,
             hclib_future_t *f3, hclib_future_t *f4,
             diamond_task_params_t<void*>* tmp_dtp)
-	: _lambda(lambda), future1(f1), future2(f2)
+	: _lambda(std::forward<T>(lambda)), future1(f1), future2(f2)
         , future3(f3), future4(f4), dtp(tmp_dtp) {}
 
     //set the task local to the diamond_task_parameters and invoke the lambda
@@ -170,7 +183,7 @@ inline void async_await(T&& lambda, hclib_future_t *future1,
 
     //fetch the diamond_task_parameters from task local and pass is to the async
     auto dtp = (diamond_task_params_t<void*>*)(*hclib_get_curr_task_local());
-    AsyncResilience<T> async_res(lambda, future1, future2, future3, future4, dtp);
+    AsyncResilience<T> async_res(std::forward<T>(lambda), future1, future2, future3, future4, dtp);
     hclib::async_await(std::move(async_res), future1, future2, future3, future4);
 }
 
@@ -241,6 +254,8 @@ void async_await_check(T&& lambda,
 }
 
 } // namespace diamond
+} // namespace resilience
+} // namespace hclib
 
 #endif
 

@@ -3,29 +3,28 @@
 
 #include "hclib_cpp.h"
 #include "hclib_ref-count.h"
-#include <vector>
-#include <mutex>
 
 namespace hclib {
 namespace resilience {
 
-//template<typename T>
-//class obj {
-//    T *data = nullptr;
-//    int size = 0;
-//
-//  public:
-//    obj(T *ptr, int sz) : data(ptr), size(sz) {}
-//
-//    bool equals(obj & obj2) {
-//        return size==obj2.size && memcmp(data, obj2.data, size)==0;
-//    }
-//};
+/*
+Resilient object.
+Users should extend this class to provide their own
+equals method to be used for comparison at the end
+of resilient task
+*/
+class obj {
+  public:
+    virtual ~obj() {}
+
+    //return 1 if objs are equal else 0
+    virtual bool equals(obj* obj2) {}
+};
+
+}
+}
 
 #include "hclib_resilience_diamond.h"
-
-}
-}
 
 #endif
 
