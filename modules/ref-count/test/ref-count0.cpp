@@ -15,11 +15,11 @@ int main(int argc, char ** argv) {
                     assert(*signal == SIGNAL_VALUE);
                     printf("Value %d\n", *signal);
                 }, prom->get_future());
-            hclib::async([=]() {
+            hclib::async_await([=]() {
                     sleep(1);
 		    int *n = new int(SIGNAL_VALUE);
                     prom->put(n);
-                });
+                }, nullptr);
         });
     });
     printf("Exiting...\n");

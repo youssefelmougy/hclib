@@ -9,7 +9,7 @@ TARGETS=ref-count-rel0 ref-count-rel1 ref-count0 ref-count1
 all: $(TARGETS)
 
 %: %.cpp
-	g++ -g -O0 -std=c++11 $(HCLIB_CFLAGS) $(HCLIB_LDFLAGS) -o $@ $^ $(HCLIB_LDLIBS)
+	g++ -g -O0 -std=c++14 $(HCLIB_CFLAGS) $(HCLIB_LDFLAGS) -o $@ $^ $(HCLIB_LDLIBS)
 
 clean:
 	rm -f $(TARGETS)

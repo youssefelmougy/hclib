@@ -25,12 +25,12 @@ int main(int argc, char ** argv) {
                     prom->get_future()->release();
                 }, prom->get_future());
 
-            hclib::async([=]() {
+            hclib::async_await([=]() {
                     sleep(1);
                     int *n = (int*) malloc(sizeof(int));
                     *n = SIGNAL_VALUE;
                     prom->put(n);
-                });
+                }, nullptr);
         });
         assert(prom->get_future()->get() == NULL);
     });
