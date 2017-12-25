@@ -17,11 +17,11 @@ int main(int argc, char ** argv) {
 		    prom->get_future()->release();
 		    assert(prom->get_future()->get() == NULL);
                 }, prom->get_future());
-            hclib::async([=]() {
+            hclib::async_await([=]() {
                     sleep(1);
 		    int *n = new int(SIGNAL_VALUE);
                     prom->put(n);
-                });
+                }, nullptr);
         });
     });
     printf("Exiting...\n");

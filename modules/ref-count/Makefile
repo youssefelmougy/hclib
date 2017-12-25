@@ -15,7 +15,7 @@ lib/libhclib_ref-count.so: $(OBJS)
 	g++ -shared $(HCLIB_LDFLAGS) $(HCLIB_LDLIBS) -o $@ $(OBJS)
 
 obj/hclib_ref-count.o: src/hclib_ref-count.cpp
-	g++ -g -O0 -std=c++11 -Iinc $^ -o $@ $(HCLIB_CFLAGS) --compile -fPIC $(DEFINES)
+	g++ -g -O0 -std=c++14 -Iinc $^ -o $@ $(HCLIB_CFLAGS) --compile -fPIC $(DEFINES)
 
 clean:
 	rm -f obj/*.o lib/*
