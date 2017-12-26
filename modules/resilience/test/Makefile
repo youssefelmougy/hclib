@@ -11,7 +11,7 @@ TARGETS=resilience-d0 resilience-d1
 all: $(TARGETS)
 
 %: %.cpp
-	g++ -g -O0 -std=c++11 $(HCLIB_CFLAGS) $(HCLIB_LDFLAGS) -o $@ $^ $(HCLIB_LDLIBS)
+	g++ -g -O0 -std=c++14 $(HCLIB_CFLAGS) $(HCLIB_LDFLAGS) -o $@ $^ $(HCLIB_LDLIBS)
 
 clean:
 	rm -f $(TARGETS)

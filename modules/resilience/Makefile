@@ -17,7 +17,7 @@ lib/libhclib_resilience.so: $(OBJS)
 	g++ -shared $(HCLIB_LDFLAGS) $(HCLIB_LDLIBS) -o $@ $(OBJS)
 
 obj/hclib_resilience.o: src/hclib_resilience.cpp
-	g++ -g -O0 -std=c++11 -Iinc $^ -o $@ $(HCLIB_CFLAGS) --compile -fPIC $(DEFINES)
+	g++ -g -O0 -std=c++14 -Iinc $^ -o $@ $(HCLIB_CFLAGS) --compile -fPIC $(DEFINES)
 
 clean:
 	rm -f obj/*.o lib/*

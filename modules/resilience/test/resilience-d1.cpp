@@ -24,19 +24,21 @@ int main(int argc, char ** argv) {
             hclib::promise_t<int*> *prom = new hclib::promise_t<int*>();
             diamond::promise_t<int_obj*> *prom1 = new diamond::promise_t<int_obj*>(1);
             diamond::promise_t<int*> *prom2 = new diamond::promise_t<int*>(2, ref_count::DelType::ARR);
+            hclib::promise_t<int>* prom_res = new hclib::promise_t<int>();
 
-            hclib::async( [=]() {
+            hclib::async_await( [=]() {
                    sleep(1);
                    int *n= new int[1];
                    n[0] = SIGNAL_VALUE;
                    prom->put(n);
-		   ((hclib::promise_t<int*>*)(prom2))->put(n);
-            });
+		   prom2->put(n);
+            }, nullptr);
 
 	    hclib::ref_count::async_await( [=]() {
                     int_obj *n2_tmp = prom1->get_future()->get();
-                    printf("Value2 %d\n", n2_tmp->n);
-            }, prom1->get_future(), prom2->get_future());
+                    int res = prom_res->get_future()->get();
+                    printf("Value2 %d result %d\n", n2_tmp->n, res);
+            }, prom1->get_future(), prom2->get_future(), prom_res->get_future());
            
             diamond::async_await_check( [=]() {
                     int* signal = prom->get_future()->get();
@@ -48,7 +50,7 @@ int main(int argc, char ** argv) {
 			n2->n = 22;
 		        prom1->put(n2);
 		    }, prom2->get_future());
-            }, prom->get_future());
+            }, prom_res, prom->get_future());
         });
     });
     printf("Exiting...\n");
