@@ -24,7 +24,8 @@ class obj {
 }
 }
 
-#include "hclib_resilience_diamond.h"
+#include "hclib_resilience_diamond2.h"
+#include "hclib_resilience_diamond3.h"
 
 #endif
 

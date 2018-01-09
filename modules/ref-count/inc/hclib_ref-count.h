@@ -11,6 +11,7 @@ Future
 */
 
 enum class DelType {NORMAL, ARR, FREE};
+enum PromiseType {REF_COUNT=2};
 
 template<typename T>
 class future_t: public hclib::future_t<T> {
@@ -74,11 +75,11 @@ template<typename T>
 class promise_t<T*>: public hclib::promise_t<T*> {
 
     int *ref_count = nullptr;
+  protected:
     deleter_t* deleter = nullptr;
 
   public:
-
-    static const int TYPE = 2;
+    static const int TYPE = PromiseType::REF_COUNT;
 
     promise_t(int n, DelType d_type=DelType::NORMAL) 
     : ref_count(new int(n)) {

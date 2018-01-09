@@ -9,11 +9,18 @@ class int_obj : public hclib::resilience::obj {
   public:
     int n;
 
+    int_obj() {
+      printf("Creating int_obj\n");
+    }
+
+    ~int_obj() {
+      printf("Deleting int_obj\n");
+    }
+
     bool equals(obj* obj2) {
       return n == ((int_obj*)obj2)->n;
     }
 };
-
 
 int main(int argc, char ** argv) {
     int SIGNAL_VALUE = 42;
@@ -34,9 +41,9 @@ int main(int argc, char ** argv) {
 
 	    hclib::async_await( [=]() {
                     int_obj *n2_tmp = prom1->get_future()->get();
-                    int res = prom_res->get_future()->get();
-                    printf("Value2 %d result %d\n", n2_tmp->n, res);
-            }, prom1->get_future(), prom_res->get_future());
+                    printf("Value2 %d\n", n2_tmp->n);
+                    prom1->get_future()->release();
+            }, prom1->get_future());
            
             diamond::async_await_check( [=]() {
                     int* signal = prom->get_future()->get();
@@ -49,6 +56,12 @@ int main(int argc, char ** argv) {
 		        prom1->put(n2);
 		    }, nullptr);
             }, prom_res, prom->get_future());
+
+            hclib::async_await( [=]() {
+                int res = prom_res->get_future()->get();
+                printf("result %d\n", res);
+                if(res == 0) exit(0);
+            }, prom_res->get_future());
         });
     });
     printf("Exiting...\n");
