@@ -14,6 +14,7 @@ lib/libhclib_system.a: $(OBJS)
 
 lib/libhclib_system.so: $(OBJS)
 	$(CXX) -shared -fPIC $(HCLIB_LDLIBS) $(HCLIB_LDFLAGS) -o $@ $(OBJS)
+	cp $@ $(HCLIB_ROOT)/lib
 
 obj/hclib_system.o: src/hclib_system.cpp
 	$(CXX) -c -fPIC -std=c++11 -Iinc $^ -o $@ $(HCLIB_CFLAGS) $(DEFINES)
