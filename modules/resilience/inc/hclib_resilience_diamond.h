@@ -1,9 +1,6 @@
 #ifndef HCLIB_RESILIENCE_DIAMOND_H
 #define HCLIB_RESILIENCE_DIAMOND_H
 
-#include <vector>
-#include <mutex>
-
 #define N_CNT 3
 
 namespace ref_count = hclib::ref_count;
@@ -11,40 +8,6 @@ namespace ref_count = hclib::ref_count;
 namespace hclib {
 namespace resilience {
 namespace diamond {
-
-/*
-vector that allows concurrent insertion
-Read operations are not concurrent with insertion
-*/
-template<typename T>
-class safe_vector {
-
-    std::vector<T> vec;
-    std::mutex mtx;
-
-  public:
-    //TODO: can this take both lvalue and rvalue?
-    void push_back(T&& value) {
-        std::lock_guard<std::mutex> lkg(mtx);
-        vec.push_back(std::forward<T>(value));
-    }
-
-    auto begin() noexcept -> decltype(vec.begin()) {
-        return vec.begin();
-    }
-
-    auto end() noexcept -> decltype(vec.end()) {
-        vec.end();
-    }
-
-    auto size() const noexcept -> decltype(vec.size()){
-        return vec.size();
-    }
-
-    auto data() noexcept -> decltype(vec.data()) {
-        return vec.data();
-    }
-};
 
 /*
 Reslient Future and Promise for pointer type data
@@ -166,10 +129,10 @@ class promise_t<T*, N>: public ref_count::promise_t<T*> {
 safe vector of promises and futures
 */
 template<typename T, int N>
-using promise_vector = safe_vector<promise_t<T, N>*>;
+using promise_vector = hclib::resilience::util::safe_vector<promise_t<T, N>*>;
 
 template<typename T, int N>
-using future_vector = safe_vector<future_t<T, N>*>;
+using future_vector = hclib::resilience::util::safe_vector<future_t<T, N>*>;
 
 /*
 metadata that is passed between tasks created within each replica

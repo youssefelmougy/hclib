@@ -37,6 +37,7 @@ async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
         }
       });
 
+      *(hclib_get_curr_task_local()) = nullptr;
       int result = check_result<N>(put_vec);
       if(result < 0 )
           prom_check->put(0);

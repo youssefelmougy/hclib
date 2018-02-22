@@ -41,6 +41,7 @@ async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
       bool result = check_result_helper<N+1>(put_vec, 0, 1);
       //it all puts in both replica are same then do the actual put
       if(result) {
+          *(hclib_get_curr_task_local()) = nullptr;
           //perform the actual put
           for(auto && elem: *put_vec)
               elem->put_actual(0);
@@ -60,6 +61,7 @@ async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
               async_await(lambda_mv2, f1, f2, f3, f4);
           });
 
+          *(hclib_get_curr_task_local()) = nullptr;
           int index = -1;
 	  result = check_result_helper<N+1>(put_vec, 0, 2);
 	  if(result)

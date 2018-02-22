@@ -28,7 +28,7 @@ int main(int argc, char ** argv) {
     const char *deps[] = { "system"};
     hclib::launch(deps, 1, [=]() {
         hclib::finish([=]() {
-            int a_ref=10;
+
             hclib::promise_t<int*> *prom = new hclib::promise_t<int*>();
             diamond::promise_t<int_obj*> *prom1 = new diamond::promise_t<int_obj*>(1);
             diamond::promise_t<int*> *prom2 = new diamond::promise_t<int*>(2, ref_count::DelType::ARR);
