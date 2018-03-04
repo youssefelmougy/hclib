@@ -69,6 +69,7 @@ class safe_vector {
 
 #include "hclib_resilience_diamond2.h"
 #include "hclib_resilience_diamond3.h"
+#include "hclib_resilience_replay.h"
 
 #endif
 
