@@ -248,6 +248,12 @@ int check_result(promise_vector<T,N>* put_vec) {
         return -1;
 }
 
+int get_replica_index() {
+  auto task_local = (diamond_task_params_base_t*)(*hclib_get_curr_task_local());
+  assert(task_local != nullptr);
+  return task_local->index;
+}
+
 template <int N=N_CNT-1, typename T>
 std::enable_if_t< N>=N_CNT-1, void>
 async_await(T&& lambda, hclib_future_t *future1,
