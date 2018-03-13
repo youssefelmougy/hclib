@@ -49,8 +49,7 @@ async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
               elem->put_actual(index);
           //perform the release
           for(auto && elem: *rel_vec)
-              //elem->release();
-              elem->ref_count_decr();
+              elem->release();
           prom_check->put(1);
       }
 

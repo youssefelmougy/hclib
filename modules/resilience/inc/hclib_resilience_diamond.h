@@ -20,18 +20,7 @@ Reslient Future and Promise for pointer type data
 template<typename T>
 class future_t: public ref_count::future_t<T> {
   public:
-    void ref_count_decr();
     void add_future_vector();
-
-    void release() {
-      void *ptr = * hclib_get_curr_task_local();
-      if(is_diamond_task(ptr)){
-        add_future_vector();
-      }
-      else {
-        ref_count_decr();
-      }
-    }
 };
 
 //Currently only pointer type promise is allowed
@@ -65,16 +54,6 @@ class promise_t<T*>: public ref_count::promise_t<T*> {
           hclib_promise_t::type = TYPE;
     }
 
-    bool equal(int i, int j) {
-        obj* obj1 = static_cast<obj*>(tmp_data[i]);
-        obj* obj2 = static_cast<obj*>(tmp_data[j]);
-
-        //Each replica should have allocated its own data
-        //otherwise all replicas are modifying the same data
-        assert(obj1 != obj2);
-        return obj1->equals(obj2);
-    }
-
     void put(T* datum);
 
     future_t<T*> *get_future() {
@@ -86,6 +65,16 @@ class promise_t<T*>: public ref_count::promise_t<T*> {
           if( i!=replica_index )
              (* ref_count::promise_t<T*>::deleter)(tmp_data[i]);
         hclib::promise_t<T*>::put(tmp_data[replica_index]);
+    }
+
+    bool equal(int i, int j) {
+        obj* obj1 = static_cast<obj*>(tmp_data[i]);
+        obj* obj2 = static_cast<obj*>(tmp_data[j]);
+
+        //Each replica should have allocated its own data
+        //otherwise all replicas are modifying the same data
+        assert(obj1 != obj2);
+        return obj1->equals(obj2);
     }
 };
 
@@ -121,17 +110,10 @@ struct diamond_task_params_t {
 definition of future_t and promise_t functions
 */
 template<typename T>
-void future_t<T>::ref_count_decr() {
-    auto p = static_cast<promise_t<T>*>(hclib_future_t::owner);
-    p->ref_count_decr();
-}
-
-template<typename T>
 void future_t<T>::add_future_vector() {
     auto task_local = static_cast<diamond_task_params_t<T>*>(*hclib_get_curr_task_local());
     assert(is_diamond_task(task_local));
-    if(task_local->index==0)
-        task_local->rel_vec->push_back(this);
+    task_local->rel_vec->push_back(this);
 }
 
 /*
@@ -204,20 +186,20 @@ void async_await(T&& lambda, hclib_future_t *future1,
         *(hclib_get_curr_task_local()) = dtp;
 	lambda_mv();
         auto task_local = static_cast<diamond_task_params_t<void*>*>(*hclib_get_curr_task_local());
-        //if(task_local->index == 0) {
-        if(future1 != nullptr)
-            //static_cast<future_t<void*>*>(future1)->release();
-            static_cast<future_t<void*>*>(future1)->add_future_vector();
-        if(future2 != nullptr)
-            //static_cast<future_t<void*>*>(future2)->release();
-            static_cast<future_t<void*>*>(future2)->add_future_vector();
-        if(future3 != nullptr)
-            //static_cast<future_t<void*>*>(future3)->release();
-            static_cast<future_t<void*>*>(future3)->add_future_vector();
-        if(future4 != nullptr)
-            //static_cast<future_t<void*>*>(future4)->release();
-            static_cast<future_t<void*>*>(future4)->add_future_vector();
-        //}
+        if(task_local->index == 0) {
+          if(future1 != nullptr)
+              //static_cast<future_t<void*>*>(future1)->release();
+              static_cast<future_t<void*>*>(future1)->add_future_vector();
+          if(future2 != nullptr)
+              //static_cast<future_t<void*>*>(future2)->release();
+              static_cast<future_t<void*>*>(future2)->add_future_vector();
+          if(future3 != nullptr)
+              //static_cast<future_t<void*>*>(future3)->release();
+              static_cast<future_t<void*>*>(future3)->add_future_vector();
+          if(future4 != nullptr)
+              //static_cast<future_t<void*>*>(future4)->release();
+              static_cast<future_t<void*>*>(future4)->add_future_vector();
+        }
     }, future1, future2, future3, future4);
 }
 

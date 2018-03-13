@@ -44,8 +44,7 @@ async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
               elem->put_actual(0);
           //perform the release
           for(auto && elem: *rel_vec)
-              //elem->release();
-              elem->ref_count_decr();
+              elem->release();
           prom_check->put(1);
       }
       //if there is error in put, start a third task and then compare output
@@ -77,8 +76,7 @@ async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
 	          elem->put_actual(index);
               //perform the release
               for(auto && elem: *rel_vec)
-                  //elem->release();
-                  elem->ref_count_decr();
+                  elem->release();
 	      prom_check->put(1);
 	  }
       }
@@ -86,7 +84,7 @@ async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
       delete put_vec;
       delete rel_vec;
       delete[] dtp_arr;
-    }, nullptr);
+    }, f1, f2, f3, f4);
 }
 
 } // namespace diamond

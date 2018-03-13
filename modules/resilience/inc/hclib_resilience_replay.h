@@ -18,21 +18,8 @@ Reslient Future and Promise for pointer type data
 
 template<typename T>
 class future_t: public ref_count::future_t<T> {
-
-    void ref_count_decr();
-    void add_future_vector();
-
   public:
-
-    void release() {
-      void *ptr = * hclib_get_curr_task_local();
-      if(is_replay_task(ptr)){
-        add_future_vector();
-      }
-      else {
-        ref_count_decr();
-      }
-    }
+    void add_future_vector();
 };
 
 //Currently only pointer type promise is allowed
@@ -54,6 +41,9 @@ template<typename T>
 class promise_t<T*>: public ref_count::promise_t<T*> {
 
     static const int TYPE = ref_count::promise_t<T*>::TYPE+2;
+
+    //datum is stored in tmp_data when put is performed
+    //and later at the end of replay task it performs actual put
     T* tmp_data = nullptr;
 
   public:
@@ -106,11 +96,6 @@ struct replay_task_params_t {
 /*
 definition of future_t and promise_t functions
 */
-template<typename T>
-void future_t<T>::ref_count_decr() {
-    auto p = static_cast<promise_t<T>*>(hclib_future_t::owner);
-    p->ref_count_decr();
-}
 
 template<typename T>
 void future_t<T>::add_future_vector() {
@@ -152,13 +137,17 @@ void async_await(T&& lambda, hclib_future_t *future1,
         *(hclib_get_curr_task_local()) = rtp;
         lambda_mv();
         if(future1 != nullptr)
-            static_cast<future_t<void*>*>(future1)->release();
+            //static_cast<future_t<void*>*>(future1)->release();
+            static_cast<future_t<void*>*>(future1)->add_future_vector();
         if(future2 != nullptr)
-            static_cast<future_t<void*>*>(future2)->release();
+            //static_cast<future_t<void*>*>(future2)->release();
+            static_cast<future_t<void*>*>(future2)->add_future_vector();
         if(future3 != nullptr)
-            static_cast<future_t<void*>*>(future3)->release();
+            //static_cast<future_t<void*>*>(future3)->release();
+            static_cast<future_t<void*>*>(future3)->add_future_vector();
         if(future4 != nullptr)
-            static_cast<future_t<void*>*>(future4)->release();
+            //static_cast<future_t<void*>*>(future4)->release();
+            static_cast<future_t<void*>*>(future4)->add_future_vector();
     }, future1, future2, future3, future4);
 }
 
@@ -208,7 +197,7 @@ void async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
 	delete rtp->put_vec;
 	delete rtp->rel_vec;
         delete rtp;;
-    }, nullptr);
+    }, f1, f2, f3, f4);
 }
 
 } // namespace replay
