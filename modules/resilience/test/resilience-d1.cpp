@@ -52,7 +52,7 @@ int main(int argc, char ** argv) {
                     assert(*signal == SIGNAL_VALUE);
                     printf("Value1 %d replica %d\n", *signal, diamond::get_replica_index());
 
-		    diamond::async_await<3>( [=]() {
+		    diamond::async_await( [=]() {
                         int_obj *n2 = new int_obj();
 			n2->n = 22;
 		        prom1->put(n2);
