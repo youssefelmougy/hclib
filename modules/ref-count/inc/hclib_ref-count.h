@@ -99,6 +99,11 @@ class promise_t<T*>: public hclib::promise_t<T*> {
       }
     }
 
+    ~promise_t() {
+      delete ref_count;
+      delete deleter;
+    }
+
     void ref_count_decr() {
         if(hclib_promise_t::type < TYPE) return;
 
@@ -108,8 +113,6 @@ class promise_t<T*>: public hclib::promise_t<T*> {
 	if(cnt == 0) {
             (*deleter)(hclib_promise_t::datum);
             hclib_promise_t::datum = nullptr;
-            delete ref_count;
-            delete deleter;
 	}
     }
 

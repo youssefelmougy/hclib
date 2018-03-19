@@ -86,6 +86,8 @@ metadata that is passed between tasks created within each replay
 //added to a list, so that they can be later released.
 template<typename T>
 struct replay_task_params_t {
+    int index; //replay id
+
     //vector which captures all the puts
     promise_vector<T> *put_vec;
 
@@ -151,6 +153,12 @@ void async_await(T&& lambda, hclib_future_t *future1,
     }, future1, future2, future3, future4);
 }
 
+int get_replay_index() {
+  auto task_local = static_cast<replay_task_params_t<void*>*>(*hclib_get_curr_task_local());
+  assert(is_replay_task(task_local));
+  return task_local->index;
+}
+
 template <int N=2, typename T>
 void async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
         std::function<int(void*)> error_check_fn, void * params,
@@ -166,6 +174,7 @@ void async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
         assert(*(hclib_get_curr_task_local()) ==  nullptr);
 	for(int i=0; i<N; i++) {
 	    hclib::finish([=]() {
+              rtp->index = i;
 	      *(hclib_get_curr_task_local()) = rtp;
 	      async_await(lambda_mv1, f1, f2, f3, f4);
 	    });

@@ -110,7 +110,7 @@ struct diamond_task_params_t {
 definition of future_t and promise_t functions
 */
 template<typename T>
-void future_t<T>::add_future_vector() {
+inline void future_t<T>::add_future_vector() {
     auto task_local = static_cast<diamond_task_params_t<T>*>(*hclib_get_curr_task_local());
     assert(is_diamond_task(task_local));
     task_local->rel_vec->push_back(this);
@@ -122,7 +122,7 @@ by its replica id. And the first replica adds the promise
 to the vector later used to perform the actual put
 */
 template<typename T>
-void promise_t<T*>::put(T* datum) {
+inline void promise_t<T*>::put(T* datum) {
     //HASSERT_STATIC(std::is_pointer<T*>::value,
     //    "resilient promise_t currently only supports pointers\n");
     auto task_local = static_cast<diamond_task_params_t<T*>*>(*hclib_get_curr_task_local());

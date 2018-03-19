@@ -2,6 +2,9 @@
 #include "hclib_cpp.h"
 #include "hclib_resilience.h"
 #include <unistd.h>
+#include <vector>
+
+using namespace std;
 
 namespace replay = hclib::resilience::replay;
 
@@ -22,8 +25,8 @@ int check(void *args) {
       count++;
       return 0;
     }
-    int *ptr = (int*)(args);
-    if(*ptr == 22)
+    auto ptr = (vector<void*>*)args;
+    if((*(int*)(ptr->at(0))) == 22)
       return 1;
     else return 0;
 }
@@ -51,8 +54,9 @@ int main(int argc, char ** argv) {
             }, prom1->get_future());
  
             //This could be an array, vector, hash table or anything
-            int *args = (int*)malloc(sizeof(int)*1);
+            auto vec = new vector<void*>();
             replay::async_await_check( [=]() {
+                    vec->clear();
                     int* signal = prom->get_future()->get();
                     assert(*signal == SIGNAL_VALUE);
                     printf("Value1 %d replay %d\n", *signal, replay::get_replay_index());
@@ -61,13 +65,14 @@ int main(int argc, char ** argv) {
                         int_obj *n2 = new int_obj();
                         n2->n = 22;
 		        prom1->put(n2);
-                        *args = n2->n;
+                        vec->push_back(&(n2->n));
 		    }, nullptr);
-            }, prom_res, check, args, prom->get_future());
+            }, prom_res, check, vec, prom->get_future());
 
             hclib::async_await( [=]() {
                 int res = prom_res->get_future()->get();
                 printf("result %d\n", res);
+                delete vec;
                 if(res == 0) exit(0);
             }, prom_res->get_future());
         });

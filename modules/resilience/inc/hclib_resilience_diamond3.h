@@ -54,6 +54,7 @@ async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
       }
 
       delete put_vec;
+      delete rel_vec;
       delete[] dtp_arr;
     }, nullptr);
 }
