@@ -522,7 +522,7 @@ static inline void rt_schedule_async(hclib_task_t *async_task,
 static inline int is_eligible_to_schedule(hclib_task_t *async_task) {
 #ifdef VERBOSE
     fprintf(stderr, "is_eligible_to_schedule: async_task=%p singleton_future_0=%p\n",
-            async_task, async_task->singleton_future_0);
+            async_task, async_task);
 #endif
     // If any futures are non-null, the first must be non-null
     if (async_task->waiting_on[0]) {
@@ -1005,7 +1005,7 @@ static void _help_finish_ctx(LiteCtx *ctx) {
      * itself).
      */
 #ifdef VERBOSE
-    printf("_help_finish_ctx: ctx = %p, ctx->arg = %p\n", ctx, ctx->arg);
+    printf("_help_finish_ctx: ctx = %p, ctx->arg = %p\n", ctx, ctx);
 #endif
     finish_t *finish = ctx->arg1;
     hclib_task_t *starting_task = ctx->arg2;
@@ -1071,7 +1071,7 @@ void help_finish(finish_t *finish) {
 #endif
 
 #ifdef VERBOSE
-        printf("help_finish: newCtx = %p, newCtx->arg = %p\n", newCtx, newCtx->arg);
+        printf("help_finish: newCtx = %p, newCtx->arg = %p\n", newCtx, newCtx);
 #endif
         ctx_swap(currentCtx, newCtx, __func__);
         /*

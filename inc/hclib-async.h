@@ -35,6 +35,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *      Acknowledgments: https://wiki.rice.edu/confluence/display/HABANERO/People
  */
 #include <functional>
+#include <vector>
+#include <array>
 
 #include "hclib.h"
 #include "hclib-async-struct.h"
@@ -244,6 +246,24 @@ inline void async_await(T&& lambda, hclib_future_t *future1,
 }
 
 template <typename T>
+inline void async_await(T&& lambda, std::vector<hclib_future_t *> *futures) {
+	MARK_OVH(current_ws()->id);
+  typedef typename std::remove_reference<T>::type U;
+  hclib_task_t* task = initialize_task(call_lambda<U>, new U(lambda));
+
+  spawn_await(task, futures->data(), futures->size());
+}
+
+template <typename T, std::size_t N>
+inline void async_await(T&& lambda, std::array<hclib_future_t *, N> *futures) {
+	MARK_OVH(current_ws()->id);
+  typedef typename std::remove_reference<T>::type U;
+  hclib_task_t* task = initialize_task(call_lambda<U>, new U(lambda));
+
+  spawn_await(task, futures->data(), futures->size());
+}
+
+template <typename T>
 inline void async_await_at(T&& lambda, hclib_future_t *future,
         hclib_locale_t *locale) {
 	MARK_OVH(current_ws()->id);
@@ -270,6 +290,43 @@ inline void async_await_at(T&& lambda, hclib_future_t *future1,
     }
 
 	spawn_await_at(task, futures, nfutures, locale);
+}
+
+template <typename T>
+inline void async_await_at(T&& lambda, hclib_future_t *future1,
+        hclib_future_t *future2, hclib_future_t *future3,
+        hclib_future_t *future4, hclib_locale_t *locale) {
+	MARK_OVH(current_ws()->id);
+    typedef typename std::remove_reference<T>::type U;
+    hclib_task_t* task = initialize_task(call_lambda<U>, new U(lambda));
+
+    int nfutures = 0;
+    hclib_future_t *futures[4];
+    if (future1) futures[nfutures++] = future1;
+    if (future2) futures[nfutures++] = future2;
+    if (future3) futures[nfutures++] = future3;
+    if (future4) futures[nfutures++] = future4;
+
+    spawn_await_at(task, futures, nfutures, locale);
+}
+template <typename T>
+inline void async_await_at(T&& lambda, std::vector<hclib_future_t *> *futures,
+        hclib_locale_t *locale) {
+	MARK_OVH(current_ws()->id);
+  typedef typename std::remove_reference<T>::type U;
+  hclib_task_t* task = initialize_task(call_lambda<U>, new U(lambda));
+
+  spawn_await_at(task, futures->data(), futures->size(), locale);
+}
+
+template <typename T, std::size_t N>
+inline void async_await_at(T&& lambda, std::array<hclib_future_t *, N> *futures,
+        hclib_locale_t *locale) {
+        MARK_OVH(current_ws()->id);
+  typedef typename std::remove_reference<T>::type U;
+  hclib_task_t* task = initialize_task(call_lambda<U>, new U(lambda));
+
+  spawn_await_at(task, futures->data(), futures->size(), locale);
 }
 
 /*
