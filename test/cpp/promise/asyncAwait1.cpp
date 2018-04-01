@@ -34,8 +34,9 @@ int main(int argc, char ** argv) {
                 // Build async's arguments
                 printf("Creating async %d await on %p will enable %p\n", index,
                         promise_list, &(promise_list[index]));
-                auto f_arr = new std::vector<hclib_future_t*>();
-                f_arr->push_back(promise_list[index-1]->get_future());
+
+                std::vector<hclib_future_t*> f_arr;
+                f_arr.push_back(promise_list[index-1]->get_future());
                 hclib::async_await([=]() {
                     printf("Running async %d\n", index);
                     hclib::future_t<int*> *future = promise_list[index - 1]->get_future();
@@ -45,7 +46,7 @@ int main(int argc, char ** argv) {
                     printf("Async %d putting in promise %d @ %p\n", index, index,
                             promise_list[index]);
                     promise_list[index]->put(new int(index));
-                }, f_arr);
+                }, f_arr); //std::vector<hclib_future_t*>{promise_list[index-1]->get_future()});
             }
 
             printf("Putting in promise 0\n");

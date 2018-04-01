@@ -246,21 +246,39 @@ inline void async_await(T&& lambda, hclib_future_t *future1,
 }
 
 template <typename T>
-inline void async_await(T&& lambda, std::vector<hclib_future_t *> *futures) {
+inline void async_await(T&& lambda, std::vector<hclib_future_t *> &futures) {
 	MARK_OVH(current_ws()->id);
   typedef typename std::remove_reference<T>::type U;
   hclib_task_t* task = initialize_task(call_lambda<U>, new U(lambda));
 
-  spawn_await(task, futures->data(), futures->size());
+  spawn_await(task, futures.data(), futures.size());
+}
+
+template <typename T>
+inline void async_await(T&& lambda, std::vector<hclib_future_t *> &&futures) {
+	MARK_OVH(current_ws()->id);
+  typedef typename std::remove_reference<T>::type U;
+  hclib_task_t* task = initialize_task(call_lambda<U>, new U(lambda));
+
+  spawn_await(task, futures.data(), futures.size());
 }
 
 template <typename T, std::size_t N>
-inline void async_await(T&& lambda, std::array<hclib_future_t *, N> *futures) {
+inline void async_await(T&& lambda, std::array<hclib_future_t *, N> &futures) {
 	MARK_OVH(current_ws()->id);
   typedef typename std::remove_reference<T>::type U;
   hclib_task_t* task = initialize_task(call_lambda<U>, new U(lambda));
 
-  spawn_await(task, futures->data(), futures->size());
+  spawn_await(task, futures.data(), futures.size());
+}
+
+template <typename T, std::size_t N>
+inline void async_await(T&& lambda, std::array<hclib_future_t *, N> &&futures) {
+	MARK_OVH(current_ws()->id);
+  typedef typename std::remove_reference<T>::type U;
+  hclib_task_t* task = initialize_task(call_lambda<U>, new U(lambda));
+
+  spawn_await(task, futures.data(), futures.size());
 }
 
 template <typename T>
@@ -309,24 +327,45 @@ inline void async_await_at(T&& lambda, hclib_future_t *future1,
 
     spawn_await_at(task, futures, nfutures, locale);
 }
+
 template <typename T>
-inline void async_await_at(T&& lambda, std::vector<hclib_future_t *> *futures,
+inline void async_await_at(T&& lambda, std::vector<hclib_future_t *> &futures,
         hclib_locale_t *locale) {
 	MARK_OVH(current_ws()->id);
   typedef typename std::remove_reference<T>::type U;
   hclib_task_t* task = initialize_task(call_lambda<U>, new U(lambda));
 
-  spawn_await_at(task, futures->data(), futures->size(), locale);
+  spawn_await_at(task, futures.data(), futures.size(), locale);
+}
+
+template <typename T>
+inline void async_await_at(T&& lambda, std::vector<hclib_future_t *> &&futures,
+        hclib_locale_t *locale) {
+	MARK_OVH(current_ws()->id);
+  typedef typename std::remove_reference<T>::type U;
+  hclib_task_t* task = initialize_task(call_lambda<U>, new U(lambda));
+
+  spawn_await_at(task, futures.data(), futures.size(), locale);
 }
 
 template <typename T, std::size_t N>
-inline void async_await_at(T&& lambda, std::array<hclib_future_t *, N> *futures,
+inline void async_await_at(T&& lambda, std::array<hclib_future_t *, N> &futures,
         hclib_locale_t *locale) {
         MARK_OVH(current_ws()->id);
   typedef typename std::remove_reference<T>::type U;
   hclib_task_t* task = initialize_task(call_lambda<U>, new U(lambda));
 
-  spawn_await_at(task, futures->data(), futures->size(), locale);
+  spawn_await_at(task, futures.data(), futures.size(), locale);
+}
+
+template <typename T, std::size_t N>
+inline void async_await_at(T&& lambda, std::array<hclib_future_t *, N> &&futures,
+        hclib_locale_t *locale) {
+        MARK_OVH(current_ws()->id);
+  typedef typename std::remove_reference<T>::type U;
+  hclib_task_t* task = initialize_task(call_lambda<U>, new U(lambda));
+
+  spawn_await_at(task, futures.data(), futures.size(), locale);
 }
 
 /*
