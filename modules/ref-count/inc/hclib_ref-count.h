@@ -136,8 +136,12 @@ inline void async_await(T&& lambda, hclib_future_t *future1,
         hclib_future_t *future2=nullptr, hclib_future_t *future3=nullptr,
         hclib_future_t *future4=nullptr) {
 
-    hclib::async_await( [=, lambda_mv = std::move(lambda)] () {
-        lambda_mv();
+    typedef typename std::remove_reference<T>::type U;
+    U* lambda_ptr = new U(lambda);
+
+    hclib::async_await( [=]() {
+        (*lambda_ptr)();
+        delete lambda_ptr;
 	if(future1 != nullptr)
 	    static_cast<future_t<void*>*>(future1)->release();
 	if(future2 != nullptr)

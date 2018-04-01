@@ -7,7 +7,7 @@ namespace resilience {
 namespace replay {
 
 
-bool is_replay_task(void *ptr)
+inline bool is_replay_task(void *ptr)
 {
     return nullptr != ptr;
 }
@@ -128,16 +128,19 @@ void promise_t<T*>::put(T* datum) {
 }
 
 template <typename T>
-void async_await(T&& lambda, hclib_future_t *future1,
+inline void async_await(T&& lambda, hclib_future_t *future1,
         hclib_future_t *future2=nullptr, hclib_future_t *future3=nullptr,
         hclib_future_t *future4=nullptr) {
 
     //fetch the replay_task_parameters from task local and pass is to the async
     auto rtp = *hclib_get_curr_task_local();
 
-    hclib::async_await( [=, lambda_mv = std::move(lambda)] () {
+    typedef typename std::remove_reference<T>::type U;
+    U* lambda_ptr = new U(lambda);
+    hclib::async_await( [=] () {
         *(hclib_get_curr_task_local()) = rtp;
-        lambda_mv();
+        (*lambda_ptr)();
+        delete lambda_ptr;
         if(future1 != nullptr)
             //static_cast<future_t<void*>*>(future1)->release();
             static_cast<future_t<void*>*>(future1)->add_future_vector();
@@ -153,7 +156,7 @@ void async_await(T&& lambda, hclib_future_t *future1,
     }, future1, future2, future3, future4);
 }
 
-int get_replay_index() {
+inline int get_replay_index() {
   auto task_local = static_cast<replay_task_params_t<void*>*>(*hclib_get_curr_task_local());
   assert(is_replay_task(task_local));
   return task_local->index;
@@ -165,7 +168,10 @@ void async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
         hclib_future_t *f1, hclib_future_t *f2=nullptr,
         hclib_future_t *f3=nullptr, hclib_future_t *f4=nullptr) {
 
-    hclib::async_await([=, lambda_mv1 = std::move(lambda)]() {
+    typedef typename std::remove_reference<T>::type U;
+    U* lambda_ptr = new U(lambda);
+
+    hclib::async_await([=]() {
         auto rtp = new replay_task_params_t<void*>();;
 	rtp->put_vec = new promise_vector<void*>();
 	rtp->rel_vec = new future_vector<void*>();
@@ -176,10 +182,11 @@ void async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
 	    hclib::finish([=]() {
               rtp->index = i;
 	      *(hclib_get_curr_task_local()) = rtp;
-	      async_await(lambda_mv1, f1, f2, f3, f4);
+	      async_await(*lambda_ptr, f1, f2, f3, f4);
 	    });
             //ran successfully without errors
-	    if(error_check_fn(params) == 1) {
+	    if(error_check_fn(params) == 1)
+	    {
                 result = true;
                 break;
             }
@@ -188,6 +195,7 @@ void async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
             rtp->put_vec->clear();
             rtp->rel_vec->clear();
 	}
+        delete lambda_ptr;
 
         *(hclib_get_curr_task_local()) = nullptr;
 

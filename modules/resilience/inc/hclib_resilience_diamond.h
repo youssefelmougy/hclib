@@ -9,7 +9,7 @@ namespace hclib {
 namespace resilience {
 namespace diamond {
 
-bool is_diamond_task(void *ptr)
+inline bool is_diamond_task(void *ptr)
 {
     return nullptr != ptr;
 }
@@ -145,7 +145,7 @@ Resilient async_await
 */
 
 template<typename T>
-bool check_result_helper(promise_vector<T>* put_vec,
+inline bool check_result_helper(promise_vector<T>* put_vec,
         int replica1, int replica2) {
 
     for(auto && elem: *put_vec) {
@@ -157,7 +157,7 @@ bool check_result_helper(promise_vector<T>* put_vec,
 
 //TODO: currently only works for triple redundancy
 template<typename T>
-int check_result(promise_vector<T>* put_vec) {
+inline int check_result(promise_vector<T>* put_vec) {
     if(check_result_helper(put_vec, 0, 1))
         return 0;
     else if(check_result_helper(put_vec, 1, 2))
@@ -168,23 +168,26 @@ int check_result(promise_vector<T>* put_vec) {
         return -1;
 }
 
-int get_replica_index() {
+inline int get_replica_index() {
   auto task_local = static_cast<diamond_task_params_t<void*>*>(*hclib_get_curr_task_local());
   assert(is_diamond_task(task_local));
   return task_local->index;
 }
 
 template <typename T>
-void async_await(T&& lambda, hclib_future_t *future1,
+inline void async_await(T&& lambda, hclib_future_t *future1,
         hclib_future_t *future2=nullptr, hclib_future_t *future3=nullptr,
         hclib_future_t *future4=nullptr) {
 
     //fetch the diamond_task_parameters from task local and pass is to the async
     auto dtp = *hclib_get_curr_task_local();
 
-    hclib::async_await( [=, lambda_mv = std::move(lambda)] () {
+    typedef typename std::remove_reference<T>::type U;
+    U* lambda_ptr = new U(lambda);
+    hclib::async_await( [=]() {
         *(hclib_get_curr_task_local()) = dtp;
-	lambda_mv();
+        (*lambda_ptr)();
+        delete lambda_ptr;
         auto task_local = static_cast<diamond_task_params_t<void*>*>(*hclib_get_curr_task_local());
         if(task_local->index == 0) {
           if(future1 != nullptr)

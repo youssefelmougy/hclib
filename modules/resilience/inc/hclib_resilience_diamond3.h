@@ -17,7 +17,10 @@ async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
 
     HASSERT_STATIC(N<=N_CNT, "Currently only supports double and triple redudancy\n");
 
-    hclib::async_await([=, lambda_mv1 = std::move(lambda)]() {
+    typedef typename std::remove_reference<T>::type U;
+    U* lambda_ptr = new U(lambda);
+
+    hclib::async_await([=]() {
       //dtp_arr is used to pass around required data of each replica
       auto dtp_arr = new diamond_task_params_t<void*>[N];
       //put_vec is used to collect all the put() operations
@@ -28,16 +31,17 @@ async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
       //so that they can be released later if third task is not created
       auto rel_vec = new future_vector<void*>();
 
-      hclib::finish([=, lambda_mv2 = std::move(lambda_mv1)]() {
+      hclib::finish([=]() {
         //create N tasks and give each of it dtp_arr[i]
         for(int i=0; i<N; i++) {
             dtp_arr[i].index = i;
             dtp_arr[i].put_vec = put_vec;
             dtp_arr[i].rel_vec = rel_vec;
             *(hclib_get_curr_task_local()) = &dtp_arr[i];
-            async_await(lambda_mv2, f1, f2, f3, f4);
+            async_await(*lambda_ptr, f1, f2, f3, f4);
         }
       });
+      delete lambda_ptr;
 
       *(hclib_get_curr_task_local()) = nullptr;
       int index = check_result(put_vec);
