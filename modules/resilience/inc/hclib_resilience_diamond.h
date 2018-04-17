@@ -168,7 +168,7 @@ inline int check_result(promise_vector<T>* put_vec) {
         return -1;
 }
 
-inline int get_replica_index() {
+inline int get_index() {
   auto task_local = static_cast<diamond_task_params_t<void*>*>(*hclib_get_curr_task_local());
   assert(is_diamond_task(task_local));
   return task_local->index;

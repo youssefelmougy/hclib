@@ -59,7 +59,7 @@ int main(int argc, char ** argv) {
                     vec->clear();
                     int* signal = prom->get_future()->get();
                     assert(*signal == SIGNAL_VALUE);
-                    printf("Value1 %d replay %d\n", *signal, replay::get_replay_index());
+                    printf("Value1 %d replay %d\n", *signal, replay::get_index());
 
 		    replay::async_await( [=]() {
                         int_obj *n2 = new int_obj();
