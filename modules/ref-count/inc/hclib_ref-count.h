@@ -35,6 +35,7 @@ Type erased deleter
 
 class deleter_t {
   public:
+   virtual ~deleter_t() {}
    virtual void operator()( void* ) = 0;
 };
 
