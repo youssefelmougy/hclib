@@ -67,6 +67,7 @@ class safe_vector {
 } // namespace resilience
 } // namespace hclib
 
+#include "hclib_resilience_promise.h"
 #include "hclib_resilience_diamond.h"
 #include "hclib_resilience_replay.h"
 #include "hclib_resilience_abft.h"

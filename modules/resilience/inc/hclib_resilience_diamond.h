@@ -1,8 +1,6 @@
 #ifndef HCLIB_RESILIENCE_DIAMOND_H
 #define HCLIB_RESILIENCE_DIAMOND_H
 
-#define N_CNT 3
-
 namespace ref_count = hclib::ref_count;
 
 namespace hclib {
@@ -13,6 +11,8 @@ inline bool is_diamond_task(void *ptr)
 {
     return nullptr != ptr;
 }
+
+#ifndef USE_RESILIENT_PROMISE
 
 /*
 Reslient Future and Promise for pointer type data
@@ -60,11 +60,10 @@ class promise_t<T*>: public ref_count::promise_t<T*> {
         return static_cast<future_t<T*>*>( hclib::promise_t<T*>::get_future());
     }
 
-    void put_actual(int replica_index) {
-        for(int i=0; i<N_CNT; i++)
-          if( i!=replica_index )
-             (* ref_count::promise_t<T*>::deleter)(tmp_data[i]);
-        hclib::promise_t<T*>::put(tmp_data[replica_index]);
+    void put_actual(const int index) {
+        for(int i=index+1; i<index+N_CNT; i++)
+             (* ref_count::promise_t<T*>::deleter)(tmp_data[i%N_CNT]);
+        hclib::promise_t<T*>::put(tmp_data[index]);
     }
 
     bool equal(int i, int j) {
@@ -139,6 +138,8 @@ inline void promise_t<T*>::put(T* datum) {
         hclib::promise_t<T*>::put(datum);
     }
 }
+
+#endif // USE_RESILIENT_PROMISE
 
 /*
 Resilient async_await

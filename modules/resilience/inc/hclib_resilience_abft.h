@@ -12,6 +12,8 @@ inline bool is_abft_task(void *ptr)
     return nullptr != ptr;
 }
 
+#ifndef USE_RESILIENT_PROMISE
+
 /*
 Reslient Future and Promise for pointer type data
 */
@@ -59,7 +61,7 @@ class promise_t<T*>: public ref_count::promise_t<T*> {
         return static_cast<future_t<T*>*>( hclib::promise_t<T*>::get_future());
     }
 
-    void put_actual() {
+    void put_actual(int index) {
         hclib::promise_t<T*>::put(tmp_data);
     }
 
@@ -132,6 +134,8 @@ void promise_t<T*>::put(T* datum) {
     }
 }
 
+#endif // USE_RESILIENT_PROMISE
+
 inline int get_index() {
   auto task_local = static_cast<abft_task_params_t<void*>*>(*hclib_get_curr_task_local());
   assert(is_abft_task(task_local));
@@ -152,18 +156,22 @@ inline void async_await(T&& lambda, hclib_future_t *future1,
         *(hclib_get_curr_task_local()) = atp;
         (*lambda_ptr)();
         delete lambda_ptr;
-        if(future1 != nullptr)
-            //static_cast<future_t<void*>*>(future1)->release();
-            static_cast<future_t<void*>*>(future1)->add_future_vector();
-        if(future2 != nullptr)
-            //static_cast<future_t<void*>*>(future2)->release();
-            static_cast<future_t<void*>*>(future2)->add_future_vector();
-        if(future3 != nullptr)
-            //static_cast<future_t<void*>*>(future3)->release();
-            static_cast<future_t<void*>*>(future3)->add_future_vector();
-        if(future4 != nullptr)
-            //static_cast<future_t<void*>*>(future4)->release();
-            static_cast<future_t<void*>*>(future4)->add_future_vector();
+        auto task_local = static_cast<abft_task_params_t<void*>*>(*hclib_get_curr_task_local());
+        //TODO: assuming the same future will be used in all replays
+        if(task_local->index == 0) {
+          if(future1 != nullptr)
+              //static_cast<future_t<void*>*>(future1)->release();
+              static_cast<future_t<void*>*>(future1)->add_future_vector();
+          if(future2 != nullptr)
+              //static_cast<future_t<void*>*>(future2)->release();
+              static_cast<future_t<void*>*>(future2)->add_future_vector();
+          if(future3 != nullptr)
+              //static_cast<future_t<void*>*>(future3)->release();
+              static_cast<future_t<void*>*>(future3)->add_future_vector();
+          if(future4 != nullptr)
+              //static_cast<future_t<void*>*>(future4)->release();
+              static_cast<future_t<void*>*>(future4)->add_future_vector();
+        }
     }, future1, future2, future3, future4);
 }
 
@@ -184,6 +192,7 @@ void async_await_check(T1&& lambda, hclib::promise_t<int> *prom_check,
 	atp->put_vec = new promise_vector<void*>();
 	atp->rel_vec = new future_vector<void*>();
         bool result = false;
+        int index = 0;
 
         assert(*(hclib_get_curr_task_local()) ==  nullptr);
         {
@@ -196,6 +205,7 @@ void async_await_check(T1&& lambda, hclib::promise_t<int> *prom_check,
             //ran with errors
             if(result == 0){
                 atp->index = 1;
+                index = 1;
                 (*abft_lambda_ptr)();
                 result = error_check_fn(params);
             }
@@ -208,7 +218,7 @@ void async_await_check(T1&& lambda, hclib::promise_t<int> *prom_check,
         if(result) {
             //perform the actual put
             for(auto && elem: *(atp->put_vec))
-                elem->put_actual();
+                elem->put_actual(index);
             //perform the release
             for(auto && elem: *(atp->rel_vec))
                 elem->release();
