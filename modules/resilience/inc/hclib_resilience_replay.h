@@ -130,6 +130,12 @@ void promise_t<T*>::put(T* datum) {
 
 #endif // USE_RESILIENT_PROMISE
 
+inline int get_index() {
+  auto task_local = static_cast<replay_task_params_t<void*>*>(*hclib_get_curr_task_local());
+  assert(is_replay_task(task_local));
+  return task_local->index;
+}
+
 template <typename T>
 inline void async_await(T&& lambda, hclib_future_t *future1,
         hclib_future_t *future2=nullptr, hclib_future_t *future3=nullptr,
@@ -163,14 +169,9 @@ inline void async_await(T&& lambda, hclib_future_t *future1,
     }, future1, future2, future3, future4);
 }
 
-inline int get_index() {
-  auto task_local = static_cast<replay_task_params_t<void*>*>(*hclib_get_curr_task_local());
-  assert(is_replay_task(task_local));
-  return task_local->index;
-}
-
-template <int N=2, typename T>
-void async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
+template <int LEAF, int N=2, typename T>
+std::enable_if_t< LEAF==0, void>
+async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
         std::function<int(void*)> error_check_fn, void * params,
         hclib_future_t *f1, hclib_future_t *f2=nullptr,
         hclib_future_t *f3=nullptr, hclib_future_t *f4=nullptr) {
@@ -231,6 +232,90 @@ void async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
     }, f1, f2, f3, f4);
 }
 
+template <typename T>
+inline void async_await_sync(T* lambda, hclib_future_t *future1,
+        hclib_future_t *future2=nullptr, hclib_future_t *future3=nullptr,
+        hclib_future_t *future4=nullptr) {
+
+        (*lambda)();
+	auto task_local = static_cast<replay_task_params_t<void*>*>(*hclib_get_curr_task_local());
+	//TODO: assuming the same future will be used in all replays
+        if(task_local->index == 0) {
+          if(future1 != nullptr)
+              //static_cast<future_t<void*>*>(future1)->release();
+              static_cast<future_t<void*>*>(future1)->add_future_vector();
+          if(future2 != nullptr)
+              //static_cast<future_t<void*>*>(future2)->release();
+              static_cast<future_t<void*>*>(future2)->add_future_vector();
+          if(future3 != nullptr)
+              //static_cast<future_t<void*>*>(future3)->release();
+              static_cast<future_t<void*>*>(future3)->add_future_vector();
+          if(future4 != nullptr)
+              //static_cast<future_t<void*>*>(future4)->release();
+              static_cast<future_t<void*>*>(future4)->add_future_vector();
+	}
+}
+
+template <int LEAF=1, int N=2, typename T>
+std::enable_if_t< LEAF==1, void>
+async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
+        std::function<int(void*)> error_check_fn, void * params,
+        hclib_future_t *f1, hclib_future_t *f2=nullptr,
+        hclib_future_t *f3=nullptr, hclib_future_t *f4=nullptr) {
+
+#ifdef USE_RESILIENT_PROMISE
+    HASSERT_STATIC(N>=2 && N<=N_CNT, "Currently only supports double and triple replay\n");
+#endif
+
+    typedef typename std::remove_reference<T>::type U;
+    U* lambda_ptr = new U(lambda);
+
+    hclib::async_await([=]() {
+        auto rtp = new replay_task_params_t<void*>();;
+	rtp->put_vec = new promise_vector<void*>();
+	rtp->rel_vec = new future_vector<void*>();
+        bool result = false;
+        int index = -1;
+
+        assert(*(hclib_get_curr_task_local()) ==  nullptr);
+	for(int i=0; i<N; i++) {
+            rtp->index = i;
+	    *(hclib_get_curr_task_local()) = rtp;
+	    async_await_sync(lambda_ptr, f1, f2, f3, f4);
+
+            //ran successfully without errors
+	    if(error_check_fn(params) == 1)
+	    {
+                result = true;
+                index = rtp->index;
+                break;
+            }
+            for(auto && elem: *(rtp->put_vec))
+               elem->tmp_delete();
+            //rtp->put_vec->clear();
+            //rtp->rel_vec->clear();
+	}
+        delete lambda_ptr;
+
+        *(hclib_get_curr_task_local()) = nullptr;
+
+        if(result) {
+            //perform the actual put
+            for(auto && elem: *(rtp->put_vec))
+                elem->put_actual(index);
+            //perform the release
+            for(auto && elem: *(rtp->rel_vec))
+                elem->release();
+            prom_check->put(1);
+        }
+	else {
+	    prom_check->put(0);
+	}
+	delete rtp->put_vec;
+	delete rtp->rel_vec;
+        delete rtp;;
+    }, f1, f2, f3, f4);
+}
 } // namespace replay
 } // namespace resilience
 } // namespace hclib

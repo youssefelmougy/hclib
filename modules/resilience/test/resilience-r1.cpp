@@ -8,6 +8,8 @@ using namespace std;
 
 namespace replay = hclib::resilience::replay;
 
+enum TASK_STATE {NON_LEAF, LEAF};
+
 //int_obj is not required for replay promises, base types can be used.
 //Here it is just used to print inside constructor/destructor
 class int_obj {
@@ -55,7 +57,7 @@ int main(int argc, char ** argv) {
  
             //This could be an array, vector, hash table or anything
             auto vec = new vector<void*>();
-            replay::async_await_check( [=]() {
+            replay::async_await_check<NON_LEAF>( [=]() {
                     vec->clear();
                     int* signal = prom->get_future()->get();
                     assert(*signal == SIGNAL_VALUE);
