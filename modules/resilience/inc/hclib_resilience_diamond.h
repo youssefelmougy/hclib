@@ -170,9 +170,9 @@ inline int check_result(promise_vector<T>* put_vec) {
 }
 
 inline int get_index() {
-  auto task_local = static_cast<diamond_task_params_t<void*>*>(*hclib_get_curr_task_local());
-  assert(is_diamond_task(task_local));
-  return task_local->index;
+    auto task_local = static_cast<diamond_task_params_t<void*>*>(*hclib_get_curr_task_local());
+    assert(is_diamond_task(task_local));
+    return task_local->index;
 }
 
 template <typename T>
@@ -191,18 +191,18 @@ inline void async_await(T&& lambda, hclib_future_t *future1,
         delete lambda_ptr;
         auto task_local = static_cast<diamond_task_params_t<void*>*>(*hclib_get_curr_task_local());
         if(task_local->index == 0) {
-          if(future1 != nullptr)
-              //static_cast<future_t<void*>*>(future1)->release();
-              static_cast<future_t<void*>*>(future1)->add_future_vector();
-          if(future2 != nullptr)
-              //static_cast<future_t<void*>*>(future2)->release();
-              static_cast<future_t<void*>*>(future2)->add_future_vector();
-          if(future3 != nullptr)
-              //static_cast<future_t<void*>*>(future3)->release();
-              static_cast<future_t<void*>*>(future3)->add_future_vector();
-          if(future4 != nullptr)
-              //static_cast<future_t<void*>*>(future4)->release();
-              static_cast<future_t<void*>*>(future4)->add_future_vector();
+            if(future1 != nullptr)
+                //static_cast<future_t<void*>*>(future1)->release();
+                static_cast<future_t<void*>*>(future1)->add_future_vector();
+            if(future2 != nullptr)
+                //static_cast<future_t<void*>*>(future2)->release();
+                static_cast<future_t<void*>*>(future2)->add_future_vector();
+            if(future3 != nullptr)
+                //static_cast<future_t<void*>*>(future3)->release();
+                static_cast<future_t<void*>*>(future3)->add_future_vector();
+            if(future4 != nullptr)
+                //static_cast<future_t<void*>*>(future4)->release();
+                static_cast<future_t<void*>*>(future4)->add_future_vector();
         }
     }, future1, future2, future3, future4);
 }

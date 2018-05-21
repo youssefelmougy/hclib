@@ -59,8 +59,8 @@ class promise_t<T*>: public ref_count::promise_t<T*> {
     }
 
     void put_actual(const int index) {
-	for(int i=index+1; i<index+N_CNT; i++)
-		(* ref_count::promise_t<T*>::deleter)(tmp_data[i%N_CNT]);
+    for(int i=index+1; i<index+N_CNT; i++)
+        (* ref_count::promise_t<T*>::deleter)(tmp_data[i%N_CNT]);
         hclib::promise_t<T*>::put(tmp_data[index]);
     }
 
@@ -132,7 +132,7 @@ inline void promise_t<T*>::put(T* datum) {
     if(is_resilient_task(task_local)){
         tmp_data[task_local->index] = datum;
 
-	//TODO: assuming the same promise will be called for put in all replays
+        //TODO: assuming the same promise will be called for put in all replays
         if(task_local->index==0)
             task_local->put_vec->push_back(this);
     }

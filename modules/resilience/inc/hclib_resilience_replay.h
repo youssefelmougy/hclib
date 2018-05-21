@@ -151,22 +151,22 @@ inline void async_await(T&& lambda, hclib_future_t *future1,
         *(hclib_get_curr_task_local()) = rtp;
         (*lambda_ptr)();
         delete lambda_ptr;
-	auto task_local = static_cast<replay_task_params_t<void*>*>(*hclib_get_curr_task_local());
-	//TODO: assuming the same future will be used in all replays
+        auto task_local = static_cast<replay_task_params_t<void*>*>(*hclib_get_curr_task_local());
+        //TODO: assuming the same future will be used in all replays
         if(task_local->index == 0) {
-          if(future1 != nullptr)
-              //static_cast<future_t<void*>*>(future1)->release();
-              static_cast<future_t<void*>*>(future1)->add_future_vector();
-          if(future2 != nullptr)
-              //static_cast<future_t<void*>*>(future2)->release();
-              static_cast<future_t<void*>*>(future2)->add_future_vector();
-          if(future3 != nullptr)
-              //static_cast<future_t<void*>*>(future3)->release();
-              static_cast<future_t<void*>*>(future3)->add_future_vector();
-          if(future4 != nullptr)
-              //static_cast<future_t<void*>*>(future4)->release();
-              static_cast<future_t<void*>*>(future4)->add_future_vector();
-	}
+            if(future1 != nullptr)
+                //static_cast<future_t<void*>*>(future1)->release();
+                static_cast<future_t<void*>*>(future1)->add_future_vector();
+            if(future2 != nullptr)
+                //static_cast<future_t<void*>*>(future2)->release();
+                static_cast<future_t<void*>*>(future2)->add_future_vector();
+            if(future3 != nullptr)
+                //static_cast<future_t<void*>*>(future3)->release();
+                static_cast<future_t<void*>*>(future3)->add_future_vector();
+            if(future4 != nullptr)
+                //static_cast<future_t<void*>*>(future4)->release();
+                static_cast<future_t<void*>*>(future4)->add_future_vector();
+        }
     }, future1, future2, future3, future4);
 }
 
@@ -182,8 +182,8 @@ inline void async_await(T&& lambda, std::vector<hclib_future_t *> *futures) {
         *(hclib_get_curr_task_local()) = rtp;
         (*lambda_ptr)();
         delete lambda_ptr;
-	auto task_local = static_cast<replay_task_params_t<void*>*>(*hclib_get_curr_task_local());
-	//TODO: assuming the same future will be used in all replays
+        auto task_local = static_cast<replay_task_params_t<void*>*>(*hclib_get_curr_task_local());
+        //TODO: assuming the same future will be used in all replays
         if(task_local->index == 0) {
             for(auto && elem: *(futures))
                 static_cast<future_t<void*>*>(elem)->add_future_vector();
@@ -197,22 +197,22 @@ inline void async_await_sync(T* lambda, hclib_future_t *future1,
         hclib_future_t *future4=nullptr) {
 
         (*lambda)();
-	auto task_local = static_cast<replay_task_params_t<void*>*>(*hclib_get_curr_task_local());
-	//TODO: assuming the same future will be used in all replays
-        if(task_local->index == 0) {
-          if(future1 != nullptr)
-              //static_cast<future_t<void*>*>(future1)->release();
-              static_cast<future_t<void*>*>(future1)->add_future_vector();
-          if(future2 != nullptr)
-              //static_cast<future_t<void*>*>(future2)->release();
-              static_cast<future_t<void*>*>(future2)->add_future_vector();
-          if(future3 != nullptr)
-              //static_cast<future_t<void*>*>(future3)->release();
-              static_cast<future_t<void*>*>(future3)->add_future_vector();
-          if(future4 != nullptr)
-              //static_cast<future_t<void*>*>(future4)->release();
-              static_cast<future_t<void*>*>(future4)->add_future_vector();
-	}
+    auto task_local = static_cast<replay_task_params_t<void*>*>(*hclib_get_curr_task_local());
+    //TODO: assuming the same future will be used in all replays
+    if(task_local->index == 0) {
+        if(future1 != nullptr)
+            //static_cast<future_t<void*>*>(future1)->release();
+            static_cast<future_t<void*>*>(future1)->add_future_vector();
+        if(future2 != nullptr)
+            //static_cast<future_t<void*>*>(future2)->release();
+            static_cast<future_t<void*>*>(future2)->add_future_vector();
+        if(future3 != nullptr)
+            //static_cast<future_t<void*>*>(future3)->release();
+            static_cast<future_t<void*>*>(future3)->add_future_vector();
+        if(future4 != nullptr)
+            //static_cast<future_t<void*>*>(future4)->release();
+            static_cast<future_t<void*>*>(future4)->add_future_vector();
+    }
 }
 
 template <typename T>

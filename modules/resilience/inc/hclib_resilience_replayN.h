@@ -23,21 +23,21 @@ async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
 
     hclib::async_await([=]() {
         auto rtp = new replay_task_params_t<void*>();;
-	rtp->put_vec = new promise_vector<void*>();
-	rtp->rel_vec = new future_vector<void*>();
+        rtp->put_vec = new promise_vector<void*>();
+        rtp->rel_vec = new future_vector<void*>();
         bool result = false;
         int index = -1;
 
         assert(*(hclib_get_curr_task_local()) ==  nullptr);
-	for(int i=0; i<N; i++) {
-	    hclib::finish([=]() {
-              rtp->index = i;
-	      *(hclib_get_curr_task_local()) = rtp;
-	      async_await(*lambda_ptr, f1, f2, f3, f4);
-	    });
-            //ran successfully without errors
-	    if(error_check_fn(params) == 1)
-	    {
+        for(int i=0; i<N; i++) {
+            hclib::finish([=]() {
+                rtp->index = i;
+                *(hclib_get_curr_task_local()) = rtp;
+                async_await(*lambda_ptr, f1, f2, f3, f4);
+            });
+                //ran successfully without errors
+            if(error_check_fn(params) == 1)
+            {
                 result = true;
                 index = rtp->index;
                 break;
@@ -48,7 +48,7 @@ async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
                 data[i]->tmp_delete();
             //rtp->put_vec->clear();
             //rtp->rel_vec->clear();
-	}
+        }
         delete lambda_ptr;
 
         *(hclib_get_curr_task_local()) = nullptr;
@@ -58,11 +58,11 @@ async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
             rtp->rel_vec->do_releases();
             prom_check->put(1);
         }
-	else {
-	    prom_check->put(0);
-	}
-	delete rtp->put_vec;
-	delete rtp->rel_vec;
+        else {
+            prom_check->put(0);
+        }
+        delete rtp->put_vec;
+        delete rtp->rel_vec;
         delete rtp;;
     }, f1, f2, f3, f4);
 }
@@ -83,20 +83,20 @@ async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
 
     hclib::async_await([=]() {
         auto rtp = new replay_task_params_t<void*>();;
-	rtp->put_vec = new promise_vector<void*>();
-	rtp->rel_vec = new future_vector<void*>();
+        rtp->put_vec = new promise_vector<void*>();
+        rtp->rel_vec = new future_vector<void*>();
         bool result = false;
         int index = -1;
 
         assert(*(hclib_get_curr_task_local()) ==  nullptr);
-	for(int i=0; i<N; i++) {
+        for(int i=0; i<N; i++) {
             rtp->index = i;
-	    *(hclib_get_curr_task_local()) = rtp;
-	    async_await_sync(lambda_ptr, f1, f2, f3, f4);
+            *(hclib_get_curr_task_local()) = rtp;
+            async_await_sync(lambda_ptr, f1, f2, f3, f4);
 
             //ran successfully without errors
-	    if(error_check_fn(params) == 1)
-	    {
+            if(error_check_fn(params) == 1)
+            {
                 result = true;
                 index = rtp->index;
                 break;
@@ -108,7 +108,7 @@ async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
                 data[i]->tmp_delete();
             //rtp->put_vec->clear();
             //rtp->rel_vec->clear();
-	}
+        }
         delete lambda_ptr;
 
         *(hclib_get_curr_task_local()) = nullptr;
@@ -118,11 +118,11 @@ async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
             rtp->rel_vec->do_releases();
             prom_check->put(1);
         }
-	else {
-	    prom_check->put(0);
-	}
-	delete rtp->put_vec;
-	delete rtp->rel_vec;
+        else {
+            prom_check->put(0);
+        }
+        delete rtp->put_vec;
+        delete rtp->rel_vec;
         delete rtp;;
     }, f1, f2, f3, f4);
 }
@@ -142,24 +142,24 @@ async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
 
     hclib::async_await([=]() {
         auto rtp = new replay_task_params_t<void*>();;
-	rtp->put_vec = new promise_vector<void*>();
-	rtp->rel_vec = new future_vector<void*>();
+        rtp->put_vec = new promise_vector<void*>();
+        rtp->rel_vec = new future_vector<void*>();
         bool result = false;
         int index = -1;
 
         assert(*(hclib_get_curr_task_local()) ==  nullptr);
-	for(int i=0; i<N; i++) {
-	    hclib::finish([=]() {
-              rtp->index = i;
-	      *(hclib_get_curr_task_local()) = rtp;
-	      async_await(*lambda_ptr, futures);
-	    });
-            //ran successfully without errors
-	    if(error_check_fn(params) == 1)
-	    {
-                result = true;
-                index = rtp->index;
-                break;
+        for(int i=0; i<N; i++) {
+            hclib::finish([=]() {
+                rtp->index = i;
+                *(hclib_get_curr_task_local()) = rtp;
+                async_await(*lambda_ptr, futures);
+            });
+            ///ran successfully without errors
+            if(error_check_fn(params) == 1)
+            {
+                 result = true;
+                 index = rtp->index;
+                 break;
             }
             auto data = rtp->put_vec->data();
             auto size = rtp->put_vec->size();
@@ -167,7 +167,7 @@ async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
                 data[i]->tmp_delete();
             //rtp->put_vec->clear();
             //rtp->rel_vec->clear();
-	}
+        }
         delete lambda_ptr;
 
         *(hclib_get_curr_task_local()) = nullptr;
@@ -177,11 +177,11 @@ async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
             rtp->rel_vec->do_releases();
             prom_check->put(1);
         }
-	else {
-	    prom_check->put(0);
-	}
-	delete rtp->put_vec;
-	delete rtp->rel_vec;
+        else {
+            prom_check->put(0);
+        }
+        delete rtp->put_vec;
+        delete rtp->rel_vec;
         delete rtp;;
     }, futures);
 }
@@ -201,20 +201,20 @@ async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
 
     hclib::async_await([=]() {
         auto rtp = new replay_task_params_t<void*>();;
-	rtp->put_vec = new promise_vector<void*>();
-	rtp->rel_vec = new future_vector<void*>();
+        rtp->put_vec = new promise_vector<void*>();
+        rtp->rel_vec = new future_vector<void*>();
         bool result = false;
         int index = -1;
 
         assert(*(hclib_get_curr_task_local()) ==  nullptr);
-	for(int i=0; i<N; i++) {
+        for(int i=0; i<N; i++) {
             rtp->index = i;
-	    *(hclib_get_curr_task_local()) = rtp;
-	    async_await_sync(lambda_ptr, futures);
+            *(hclib_get_curr_task_local()) = rtp;
+            async_await_sync(lambda_ptr, futures);
 
             //ran successfully without errors
-	    if(error_check_fn(params) == 1)
-	    {
+            if(error_check_fn(params) == 1)
+            {
                 result = true;
                 index = rtp->index;
                 break;
@@ -226,7 +226,7 @@ async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
                 data[i]->tmp_delete();
             //rtp->put_vec->clear();
             //rtp->rel_vec->clear();
-	}
+        }
         delete lambda_ptr;
 
         *(hclib_get_curr_task_local()) = nullptr;
@@ -236,14 +236,15 @@ async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
             rtp->rel_vec->do_releases();
             prom_check->put(1);
         }
-	else {
-	    prom_check->put(0);
-	}
-	delete rtp->put_vec;
-	delete rtp->rel_vec;
+        else {
+            prom_check->put(0);
+        }
+        delete rtp->put_vec;
+        delete rtp->rel_vec;
         delete rtp;;
     }, futures);
 }
+
 } // namespace replay
 } // namespace resilience
 } // namespace hclib
