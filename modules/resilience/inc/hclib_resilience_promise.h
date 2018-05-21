@@ -82,10 +82,10 @@ class promise_t<T*>: public ref_count::promise_t<T*> {
 safe vector of promises and futures
 */
 template<typename T>
-using promise_vector = hclib::resilience::util::safe_vector<promise_t<T>*>;
+using promise_vector = hclib::resilience::util::safe_promise_vector<promise_t<T>*>;
 
 template<typename T>
-using future_vector = hclib::resilience::util::safe_vector<future_t<T>*>;
+using future_vector = hclib::resilience::util::safe_future_vector<future_t<T>*>;
 
 /*
 metadata that is passed between tasks created within each replica

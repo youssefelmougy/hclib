@@ -90,4 +90,6 @@ HASSERT_STATIC(sizeof(future_t<void*>) == sizeof(hclib_future_t),
 
 }
 
+hclib_future_t* future_nullptr = (hclib_future_t*)nullptr;
+
 #endif

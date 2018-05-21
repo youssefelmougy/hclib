@@ -41,24 +41,48 @@ class safe_vector {
         vec.push_back(std::forward<T>(value));
     }
 
-    auto begin() noexcept -> decltype(vec.begin()) {
-        return vec.begin();
-    }
-
-    auto end() noexcept -> decltype(vec.end()) {
-        return vec.end();
-    }
-
-    auto size() const noexcept -> decltype(vec.size()){
+    size_t size() const noexcept {
         return vec.size();
     }
 
-    auto data() noexcept -> decltype(vec.data()) {
+    T* data() noexcept {
         return vec.data();
     }
 
-    auto clear() noexcept -> decltype(vec.clear()) {
+    void clear() noexcept {
         vec.clear();
+    }
+
+    //auto begin() noexcept -> decltype(vec.begin()) {
+    //    return vec.begin();
+    //}
+
+    //auto end() noexcept -> decltype(vec.end()) {
+    //    return vec.end();
+    //}
+};
+
+template<typename T>
+class safe_promise_vector : public safe_vector<T> {
+  public:
+    void do_puts(int index) {
+        //perform the actual put
+        auto data_var = safe_vector<T>::data();
+        auto size_var = safe_vector<T>::size();
+        for(int i=0; i<size_var; i++)
+            data_var[i]->put_actual(index);
+    }
+};
+
+template<typename T>
+class safe_future_vector : public safe_vector<T> {
+  public:
+    void do_releases() {
+        //perform the release
+        auto data_var = safe_vector<T>::data();
+        auto size_var = safe_vector<T>::size();
+        for(int i=0; i<size_var; i++)
+            data_var[i]->release();
     }
 };
 

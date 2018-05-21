@@ -1,12 +1,11 @@
 #ifndef HCLIB_RESILIENCE_DIAMOND_H
 #define HCLIB_RESILIENCE_DIAMOND_H
 
-namespace ref_count = hclib::ref_count;
-
 namespace hclib {
 namespace resilience {
 namespace diamond {
 
+//TODO: make the check stronger
 inline bool is_diamond_task(void *ptr)
 {
     return nullptr != ptr;
@@ -81,10 +80,10 @@ class promise_t<T*>: public ref_count::promise_t<T*> {
 safe vector of promises and futures
 */
 template<typename T>
-using promise_vector = hclib::resilience::util::safe_vector<promise_t<T>*>;
+using promise_vector = hclib::resilience::util::safe_promise_vector<promise_t<T>*>;
 
 template<typename T>
-using future_vector = hclib::resilience::util::safe_vector<future_t<T>*>;
+using future_vector = hclib::resilience::util::safe_future_vector<future_t<T>*>;
 
 /*
 metadata that is passed between tasks created within each replica
@@ -148,9 +147,10 @@ Resilient async_await
 template<typename T>
 inline bool check_result_helper(promise_vector<T>* put_vec,
         int replica1, int replica2) {
-
-    for(auto && elem: *put_vec) {
-        if(!elem->equal(replica1, replica2))
+    auto data = put_vec->data();
+    auto size = put_vec->size();
+    for(int i=0; i<size; i++) {
+        if(!data[i]->equal(replica1, replica2))
             return false;
     }
     return true;
@@ -205,6 +205,26 @@ inline void async_await(T&& lambda, hclib_future_t *future1,
               static_cast<future_t<void*>*>(future4)->add_future_vector();
         }
     }, future1, future2, future3, future4);
+}
+
+template <typename T>
+inline void async_await(T&& lambda, std::vector<hclib_future_t *> *futures) {
+
+    //fetch the diamond_task_parameters from task local and pass is to the async
+    auto dtp = *hclib_get_curr_task_local();
+
+    typedef typename std::remove_reference<T>::type U;
+    U* lambda_ptr = new U(lambda);
+    hclib::async_await( [=]() {
+        *(hclib_get_curr_task_local()) = dtp;
+        (*lambda_ptr)();
+        delete lambda_ptr;
+        auto task_local = static_cast<diamond_task_params_t<void*>*>(*hclib_get_curr_task_local());
+        if(task_local->index == 0) {
+            for(auto && elem: *(futures))
+                static_cast<future_t<void*>*>(elem)->add_future_vector();
+        }
+    }, futures);
 }
 
 } // namespace diamond

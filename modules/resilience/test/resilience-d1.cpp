@@ -40,7 +40,7 @@ int main(int argc, char ** argv) {
                    n[0] = SIGNAL_VALUE;
                    prom->put(n);
 		   prom2->put(n);
-            }, nullptr);
+            }, future_nullptr);
 
 	    hclib::ref_count::async_await( [=]() {
                     int_obj *n2_tmp = prom1->get_future()->get();

@@ -11,6 +11,8 @@ using namespace std;
 namespace diamond = hclib::resilience::diamond;
 namespace replay = hclib::resilience::replay;
 
+enum TASK_STATE {NON_LEAF, LEAF};
+
 //int_obj is not required for replay promises, base types can be used.
 //Here it is just used to print inside constructor/destructor
 class int_obj {
@@ -50,7 +52,7 @@ int main(int argc, char ** argv) {
                    int *n= (int*) malloc(sizeof(int));
                    *n = SIGNAL_VALUE;
                    prom->put(n);
-            }, nullptr);
+            }, future_nullptr);
 
 	    hclib::async_await( [=]() {
                     int_obj *n2_tmp = prom1->get_future()->get();
@@ -60,18 +62,18 @@ int main(int argc, char ** argv) {
  
             //This could be an array, vector, hash table or anything
             auto vec = new vector<void*>();
-            replay::async_await_check( [=]() {
+            replay::async_await_check<NON_LEAF>( [=]() {
                     vec->clear();
                     int* signal = prom->get_future()->get();
                     assert(*signal == SIGNAL_VALUE);
                     printf("Value1 %d replay %d\n", *signal, replay::get_index());
 
-		    replay::async_await( [=]() {
+                    replay::async_await( [=]() {
                         int_obj *n2 = new int_obj();
                         n2->n = 22;
-		        prom1->put(n2);
+                        prom1->put(n2);
                         vec->push_back(&(n2->n));
-		    }, nullptr);
+		    }, future_nullptr);
             }, prom_res, check, vec, prom->get_future());
 
             hclib::async_await( [=]() {

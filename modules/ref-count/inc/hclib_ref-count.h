@@ -154,6 +154,21 @@ inline void async_await(T&& lambda, hclib_future_t *future1,
     }, future1, future2, future3, future4);
 }
 
+template <typename T>
+inline void async_await(T&& lambda, std::vector<hclib_future_t *> *futures){
+
+    typedef typename std::remove_reference<T>::type U;
+    U* lambda_ptr = new U(lambda);
+
+    hclib::async_await( [=]() {
+        (*lambda_ptr)();
+        delete lambda_ptr;
+
+        for(auto && elem: *(futures))
+            static_cast<future_t<void*>*>(elem)->release();
+    }, futures);
+}
+
 } // namespace ref_count
 } // namespace hclib
 

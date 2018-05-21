@@ -22,6 +22,7 @@ int main(int argc, char ** argv) {
     hclib::promise_t<int*> **promise_list = new hclib::promise_t<int*> *[n+1];
     const char *deps[] = { "system" };
     hclib::launch(deps, 1, [=]() {
+        //std::vector<hclib_future_t*> *f_arr = new std::vector<hclib_future_t*>();
         hclib::finish([=]() {
             int index = 0;
             // Create asyncs
@@ -38,15 +39,26 @@ int main(int argc, char ** argv) {
                 std::vector<hclib_future_t*> f_arr;
                 f_arr.push_back(promise_list[index-1]->get_future());
                 hclib::async_await([=]() {
-                    printf("Running async %d\n", index);
+                    printf("Running async with reference%d\n", index);
                     hclib::future_t<int*> *future = promise_list[index - 1]->get_future();
                     int *input = (int *)future->get();
                     assert(*input == index - 1);
 
-                    printf("Async %d putting in promise %d @ %p\n", index, index,
+                    printf("Async reference %d putting in promise %d @ %p\n", index, index,
+                            promise_list[index]);
+                    //promise_list[index]->put(new int(index));
+                }, f_arr); //std::vector<hclib_future_t*>{promise_list[index-1]->get_future()});
+
+                hclib::async_await([=]() {
+                    printf("Running async with pointer %d\n", index);
+                    hclib::future_t<int*> *future = promise_list[index - 1]->get_future();
+                    int *input = (int *)future->get();
+                    assert(*input == index - 1);
+
+                    printf("Async pointer %d putting in promise %d @ %p\n", index, index,
                             promise_list[index]);
                     promise_list[index]->put(new int(index));
-                }, f_arr); //std::vector<hclib_future_t*>{promise_list[index-1]->get_future()});
+                }, &f_arr);
             }
 
             printf("Putting in promise 0\n");

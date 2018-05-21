@@ -36,7 +36,7 @@ int main(int argc, char ** argv) {
                    int *n= (int*) malloc(sizeof(int));
                    *n = SIGNAL_VALUE;
                    prom->put(n);
-            }, nullptr);
+            }, future_nullptr);
 
 	    hclib::async_await( [=]() {
                     int_obj *n2_tmp = prom1->get_future()->get();
@@ -53,7 +53,7 @@ int main(int argc, char ** argv) {
                         int_obj *n2 = new int_obj();
                         n2->n = 22;
 		        prom1->put(n2);
-		    }, nullptr);
+		    }, future_nullptr);
             }, prom_res, prom->get_future());
 
             hclib::async_await( [=]() {

@@ -6,7 +6,7 @@ namespace hclib {
 namespace resilience {
 namespace abft {
 
-
+//TODO: make the check stronger
 inline bool is_abft_task(void *ptr)
 {
     return nullptr != ptr;
@@ -74,10 +74,10 @@ class promise_t<T*>: public ref_count::promise_t<T*> {
 safe vector of promises and futures
 */
 template<typename T>
-using promise_vector = hclib::resilience::util::safe_vector<promise_t<T>*>;
+using promise_vector = hclib::resilience::util::safe_promise_vector<promise_t<T>*>;
 
 template<typename T>
-using future_vector = hclib::resilience::util::safe_vector<future_t<T>*>;
+using future_vector = hclib::resilience::util::safe_future_vector<future_t<T>*>;
 
 /*
 metadata that is passed between tasks created within each run
@@ -175,6 +175,27 @@ inline void async_await(T&& lambda, hclib_future_t *future1,
     }, future1, future2, future3, future4);
 }
 
+template <typename T>
+inline void async_await(T&& lambda, std::vector<hclib_future_t *> *futures) {
+
+    //fetch the abft_task_parameters from task local and pass is to the async
+    auto atp = *hclib_get_curr_task_local();
+
+    typedef typename std::remove_reference<T>::type U;
+    U* lambda_ptr = new U(lambda);
+    hclib::async_await( [=] () {
+        *(hclib_get_curr_task_local()) = atp;
+        (*lambda_ptr)();
+        delete lambda_ptr;
+        auto task_local = static_cast<abft_task_params_t<void*>*>(*hclib_get_curr_task_local());
+        //TODO: assuming the same future will be used in all replays
+        if(task_local->index == 0) {
+            for(auto && elem: *(futures))
+                static_cast<future_t<void*>*>(elem)->add_future_vector();
+        }
+    }, futures);
+}
+
 template <typename T1, typename T2>
 void async_await_check(T1&& lambda, hclib::promise_t<int> *prom_check,
         std::function<int(void*)> error_check_fn, void * params,
@@ -216,12 +237,8 @@ void async_await_check(T1&& lambda, hclib::promise_t<int> *prom_check,
         *(hclib_get_curr_task_local()) = nullptr;
 
         if(result) {
-            //perform the actual put
-            for(auto && elem: *(atp->put_vec))
-                elem->put_actual(index);
-            //perform the release
-            for(auto && elem: *(atp->rel_vec))
-                elem->release();
+            atp->put_vec->do_puts(index);
+            atp->rel_vec->do_releases();
             prom_check->put(1);
         }
 	else {
@@ -233,6 +250,58 @@ void async_await_check(T1&& lambda, hclib::promise_t<int> *prom_check,
     }, f1, f2, f3, f4);
 }
 
+template <typename T1, typename T2>
+void async_await_check(T1&& lambda, hclib::promise_t<int> *prom_check,
+        std::function<int(void*)> error_check_fn, void * params,
+        T2&& abft_lambda,
+        std::vector<hclib_future_t *> *futures) {
+
+    typedef typename std::remove_reference<T1>::type U1;
+    U1* lambda_ptr = new U1(lambda);
+    typedef typename std::remove_reference<T2>::type U2;
+    U2* abft_lambda_ptr = new U2(abft_lambda);
+
+    hclib::async_await([=]() {
+        auto atp = new abft_task_params_t<void*>();;
+	atp->put_vec = new promise_vector<void*>();
+	atp->rel_vec = new future_vector<void*>();
+        bool result = false;
+        int index = 0;
+
+        assert(*(hclib_get_curr_task_local()) ==  nullptr);
+        {
+	    hclib::finish([=]() {
+              atp->index = 0;
+	      *(hclib_get_curr_task_local()) = atp;
+	      async_await(*lambda_ptr, futures);
+	    });
+            result = error_check_fn(params);
+            //ran with errors
+            if(result == 0){
+                atp->index = 1;
+                index = 1;
+                (*abft_lambda_ptr)();
+                result = error_check_fn(params);
+            }
+	}
+        delete lambda_ptr;
+        delete abft_lambda_ptr;
+
+        *(hclib_get_curr_task_local()) = nullptr;
+
+        if(result) {
+            atp->put_vec->do_puts(index);
+            atp->rel_vec->do_releases();
+            prom_check->put(1);
+        }
+	else {
+	    prom_check->put(0);
+	}
+	delete atp->put_vec;
+	delete atp->rel_vec;
+        delete atp;;
+    }, futures);
+}
 } // namespace abft
 } // namespace resilience
 } // namespace hclib
