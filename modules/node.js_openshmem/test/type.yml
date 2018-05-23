@@ -1,0 +1,12 @@
+
+arrays:
+
+- name: first
+  type: float
+  size: 4
+  count: 4
+
+- name: second
+  type: int
+  size: 4
+  count: 6

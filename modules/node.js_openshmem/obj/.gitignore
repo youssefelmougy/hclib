@@ -1,0 +1,6 @@
+*.o
+build
+etc
+node_modules
+package-lock.json
+
