@@ -119,9 +119,11 @@ void promise_t<T*>::put(T* datum) {
 
     //if called from replay task, save to a temp and delay the put
     //also add it to the vector that captures all put opertations
-    if(is_replay_task(task_local) && task_local->index == 0){
+    if(is_replay_task(task_local)) {
         tmp_data = datum;
-        task_local->put_vec->push_back(this);
+        //TODO: assuming the same promise will be used in all replays
+        if(task_local->index == 0)
+            task_local->put_vec->push_back(this);
     }
     //if called from non-replay task, just perform the put
     else {
