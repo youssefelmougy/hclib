@@ -25,11 +25,11 @@ class int_obj {
 //set count to -1 for error
 //set count to  0 for replay
 //set count to  1 for no replay
-int count = 0;
+int count_val = 0;
 
 int check(void *args) {
-    if(count <= 0 ) {
-      count++;
+    if(count_val <= 0 ) {
+      count_val++;
       return 0;
     }
     auto ptr = (vector<void*>*)args;
