@@ -1,0 +1,6 @@
+
+How to run.
+
+oshcc file.cc
+oshrun -n 3 ./a.out
+

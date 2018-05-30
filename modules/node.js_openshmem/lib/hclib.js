@@ -43,6 +43,61 @@ my_rank: function(){
 
 num_ranks: function(){
     return addon.num_ranks();
+},
+
+get_value: function(src, index) {
+    return addon.get_value(src, index);
+},
+
+put_value:function(dest, val, index) {
+    return addon.put_value(dest, val, index);
+},
+
+malloc_sync: function(size) {
+    return addon.malloc_sync(size);
+},
+
+free_sync: function(ptr) {
+    return addon.free_sync(ptr);
+},
+
+long_g_sync: function(src, pe) {
+    return addon.long_g_sync(src, pe);
+},
+
+long_p_sync: function(dest, val, pe) {
+    return addon.long_p_sync(dest, val, pe);
+},
+
+barrier_all_sync: function() {
+    return addon.barrier_all_sync();
+},
+
+set_lock_sync: function(ptr) {
+    return addon.set_lock_sync(ptr);
+},
+
+clear_lock_sync: function(ptr) {
+    return addon.clear_lock_sync(ptr);
+},
+
+broadcast64_sync: function(dest, src, nelems, PE_root, PE_start, logPE_stride, PE_size, pSync) {
+    return addon.broadcast64_sync(dest, src, nelems, PE_root, PE_start, logPE_stride, PE_size, pSync);
+},
+
+int_sum_to_all_sync: function(dest, src, nreduce, PE_start, logPE_stride, PE_size, pWrk, pSync) {
+    return addon.int_sum_to_all_sync(dest, src, nreduce, PE_start, logPE_stride, PE_size, pWrk, pSync);
+},
+
+longlong_sum_to_all_sync: function(dest, src, nreduce, PE_start, logPE_stride, PE_size, pWrk, pSync) {
+    return addon.int_sum_to_all_sync(dest, src, nreduce, PE_start, logPE_stride, PE_size, pWrk, pSync);
 }
 
 };
+
+module.exports.SHMEM_BCAST_SYNC_SIZE = addon.get_SHMEM_BCAST_SYNC_SIZE();
+module.exports.SHMEM_BARRIER_SYNC_SIZE = addon.get_SHMEM_BARRIER_SYNC_SIZE();
+module.exports.SHMEM_REDUCE_SYNC_SIZE = addon.get_SHMEM_REDUCE_SYNC_SIZE();
+module.exports.SHMEM_REDUCE_MIN_WRKDATA_SIZE = addon.get_SHMEM_REDUCE_MIN_WRKDATA_SIZE();
+module.exports.SHMEM_SYNC_VALUE = addon.get_SHMEM_SYNC_VALUE();
+

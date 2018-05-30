@@ -1,0 +1,5 @@
+
+How to run.
+
+../bin/node_run 3 get_put.js type.pml
+
