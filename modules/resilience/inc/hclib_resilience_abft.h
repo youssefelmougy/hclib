@@ -42,7 +42,7 @@ class promise_t: public ref_count::promise_t<T> {
 template<typename T>
 class promise_t<T*>: public ref_count::promise_t<T*> {
 
-    static const int TYPE = ref_count::promise_t<T*>::TYPE+2;
+    static const int TYPE = ref_count::promise_t<T*>::TYPE+3;
 
     //datum is stored in tmp_data when put is performed
     //and later at the end of actual/abft task it performs actual put

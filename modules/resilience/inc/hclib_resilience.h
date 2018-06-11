@@ -139,6 +139,7 @@ class safe_future_vector : public safe_vector<T> {
 #include "hclib_resilience_diamond.h"
 #include "hclib_resilience_replay.h"
 #include "hclib_resilience_abft.h"
+#include "hclib_resilience_checkpoint.h"
 
 #endif
 
