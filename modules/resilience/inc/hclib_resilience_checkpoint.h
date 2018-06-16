@@ -69,7 +69,7 @@ inline bool is_checkpoint_task(void *ptr)
     return nullptr != ptr;
 }
 
-#ifndef USE_RESILIENT_PROMISE
+//#ifndef USE_RESILIENT_PROMISE
 
 /*
 Reslient Future and Promise for pointer type data
@@ -213,7 +213,7 @@ void promise_t<T*>::put(T* datum) {
     }
 }
 
-#endif // USE_RESILIENT_PROMISE
+//#endif // USE_RESILIENT_PROMISE
 
 inline int get_index() {
   auto task_local = static_cast<checkpoint_task_params_t<void*>*>(*hclib_get_curr_task_local());

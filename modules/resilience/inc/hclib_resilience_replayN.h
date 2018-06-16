@@ -8,10 +8,11 @@ namespace replay {
 
 template <int LEAF, int N=2, typename T>
 std::enable_if_t< LEAF==0, void>
-async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
+async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
         std::function<int(void*)> error_check_fn, void * params,
-        hclib_future_t *f1, hclib_future_t *f2=nullptr,
-        hclib_future_t *f3=nullptr, hclib_future_t *f4=nullptr) {
+        hclib_future_t *f1, hclib_future_t *f2,
+        hclib_future_t *f3, hclib_future_t *f4,
+        hclib_locale_t *locale) {
 
 
 #ifdef USE_RESILIENT_PROMISE
@@ -21,7 +22,7 @@ async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
     typedef typename std::remove_reference<T>::type U;
     U* lambda_ptr = new U(lambda);
 
-    hclib::async_await([=]() {
+    hclib::async_await_at([=]() {
         auto rtp = new replay_task_params_t<void*>();;
         rtp->put_vec = new promise_vector<void*>();
         rtp->rel_vec = new future_vector<void*>();
@@ -33,7 +34,7 @@ async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
             hclib::finish([=]() {
                 rtp->index = i;
                 *(hclib_get_curr_task_local()) = rtp;
-                async_await(*lambda_ptr, f1, f2, f3, f4);
+                async_await_at(*lambda_ptr, f1, f2, f3, f4, locale);
             });
                 //ran successfully without errors
             if(error_check_fn(params) == 1)
@@ -64,15 +65,16 @@ async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
         delete rtp->put_vec;
         delete rtp->rel_vec;
         delete rtp;;
-    }, f1, f2, f3, f4);
+    }, f1, f2, f3, f4, locale);
 }
 
 template <int LEAF=1, int N=2, typename T>
 std::enable_if_t< LEAF==1, void>
-async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
+async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
         std::function<int(void*)> error_check_fn, void * params,
-        hclib_future_t *f1, hclib_future_t *f2=nullptr,
-        hclib_future_t *f3=nullptr, hclib_future_t *f4=nullptr) {
+        hclib_future_t *f1, hclib_future_t *f2,
+        hclib_future_t *f3, hclib_future_t *f4,
+        hclib_locale_t *locale) {
 
 #ifdef USE_RESILIENT_PROMISE
     HASSERT_STATIC(N>=2 && N<=N_CNT, "Currently only supports double and triple replay\n");
@@ -81,7 +83,7 @@ async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
     typedef typename std::remove_reference<T>::type U;
     U* lambda_ptr = new U(lambda);
 
-    hclib::async_await([=]() {
+    hclib::async_await_at([=]() {
         auto rtp = new replay_task_params_t<void*>();;
         rtp->put_vec = new promise_vector<void*>();
         rtp->rel_vec = new future_vector<void*>();
@@ -124,14 +126,23 @@ async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
         delete rtp->put_vec;
         delete rtp->rel_vec;
         delete rtp;;
-    }, f1, f2, f3, f4);
+    }, f1, f2, f3, f4, locale);
+}
+
+template <int LEAF=1, int N=2, typename T>
+inline void async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
+        std::function<int(void*)> error_check_fn, void * params,
+        hclib_future_t *f1, hclib_future_t *f2=nullptr,
+        hclib_future_t *f3=nullptr, hclib_future_t *f4=nullptr) {
+    async_await_check_at<LEAF, N>(lambda, prom_check,
+        error_check_fn, params, f1, f2, f3, f4, nullptr);
 }
 
 template <int LEAF, int N=2, typename T>
 std::enable_if_t< LEAF==0, void>
-async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
+async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
         std::function<int(void*)> error_check_fn, void * params,
-        std::vector<hclib_future_t *> *futures) {
+        std::vector<hclib_future_t *> *futures, hclib_locale_t *locale) {
 
 #ifdef USE_RESILIENT_PROMISE
     HASSERT_STATIC(N>=2 && N<=N_CNT, "Currently only supports double and triple replay\n");
@@ -140,7 +151,7 @@ async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
     typedef typename std::remove_reference<T>::type U;
     U* lambda_ptr = new U(lambda);
 
-    hclib::async_await([=]() {
+    hclib::async_await_at([=]() {
         auto rtp = new replay_task_params_t<void*>();;
         rtp->put_vec = new promise_vector<void*>();
         rtp->rel_vec = new future_vector<void*>();
@@ -152,7 +163,7 @@ async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
             hclib::finish([=]() {
                 rtp->index = i;
                 *(hclib_get_curr_task_local()) = rtp;
-                async_await(*lambda_ptr, futures);
+                async_await_at(*lambda_ptr, futures, locale);
             });
             ///ran successfully without errors
             if(error_check_fn(params) == 1)
@@ -183,14 +194,14 @@ async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
         delete rtp->put_vec;
         delete rtp->rel_vec;
         delete rtp;;
-    }, futures);
+    }, futures, locale);
 }
 
 template <int LEAF=1, int N=2, typename T>
 std::enable_if_t< LEAF==1, void>
-async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
+async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
         std::function<int(void*)> error_check_fn, void * params,
-        std::vector<hclib_future_t *> *futures) {
+        std::vector<hclib_future_t *> *futures, hclib_locale_t *locale) {
 
 #ifdef USE_RESILIENT_PROMISE
     HASSERT_STATIC(N>=2 && N<=N_CNT, "Currently only supports double and triple replay\n");
@@ -199,7 +210,7 @@ async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
     typedef typename std::remove_reference<T>::type U;
     U* lambda_ptr = new U(lambda);
 
-    hclib::async_await([=]() {
+    hclib::async_await_at([=]() {
         auto rtp = new replay_task_params_t<void*>();;
         rtp->put_vec = new promise_vector<void*>();
         rtp->rel_vec = new future_vector<void*>();
@@ -242,7 +253,15 @@ async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
         delete rtp->put_vec;
         delete rtp->rel_vec;
         delete rtp;;
-    }, futures);
+    }, futures, locale);
+}
+
+template <int LEAF=1, int N=2, typename T>
+inline void async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
+        std::function<int(void*)> error_check_fn, void * params,
+        std::vector<hclib_future_t *> *futures) {
+    async_await_check_at<LEAF, N>(lambda, prom_check,
+        error_check_fn, params, futures, nullptr);
 }
 
 } // namespace replay

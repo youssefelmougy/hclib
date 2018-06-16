@@ -10,14 +10,15 @@ duplicates the task and checks for equivalence of all puts
 */
 template <int N=N_CNT-1, typename T>
 std::enable_if_t< N==N_CNT-1, void>
-async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
-        hclib_future_t *f1, hclib_future_t *f2=nullptr,
-        hclib_future_t *f3=nullptr, hclib_future_t *f4=nullptr) {
+async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
+        hclib_future_t *f1, hclib_future_t *f2,
+        hclib_future_t *f3, hclib_future_t *f4,
+        hclib_locale_t *locale) {
 
     typedef typename std::remove_reference<T>::type U;
     U* lambda_ptr = new U(lambda);
 
-    hclib::async_await([=]() {
+    hclib::async_await_at([=]() {
         //dtp_arr is used to pass around required data of each replica
         auto dtp_arr = new diamond_task_params_t<void*>[N+1];
         //put_vec is used to collect all the put() operations
@@ -34,7 +35,7 @@ async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
                 dtp_arr[i].put_vec = put_vec;
                 dtp_arr[i].rel_vec = rel_vec;
                 *(hclib_get_curr_task_local()) = &dtp_arr[i];
-                async_await(*lambda_ptr, f1, f2, f3, f4);
+                async_await_at(*lambda_ptr, f1, f2, f3, f4, locale);
             }
         });
 
@@ -53,7 +54,7 @@ async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
                 dtp_arr[N].put_vec = put_vec;
                 dtp_arr[N].rel_vec = rel_vec;
                 *(hclib_get_curr_task_local()) = &dtp_arr[N];
-                async_await(*lambda_ptr, f1, f2, f3, f4);
+                async_await_at(*lambda_ptr, f1, f2, f3, f4, locale);
             });
 
             *(hclib_get_curr_task_local()) = nullptr;
@@ -79,18 +80,18 @@ async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
         delete put_vec;
         delete rel_vec;
         delete[] dtp_arr;
-    }, f1, f2, f3, f4);
+    }, f1, f2, f3, f4, locale);
 }
 
 template <int N=N_CNT-1, typename T>
 std::enable_if_t< N==N_CNT-1, void>
-async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
-        std::vector<hclib_future_t *> *futures) {
+async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
+        std::vector<hclib_future_t *> *futures, hclib_locale_t *locale) {
 
     typedef typename std::remove_reference<T>::type U;
     U* lambda_ptr = new U(lambda);
 
-    hclib::async_await([=]() {
+    hclib::async_await_at([=]() {
         //dtp_arr is used to pass around required data of each replica
         auto dtp_arr = new diamond_task_params_t<void*>[N+1];
         //put_vec is used to collect all the put() operations
@@ -107,7 +108,7 @@ async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
                 dtp_arr[i].put_vec = put_vec;
                 dtp_arr[i].rel_vec = rel_vec;
                 *(hclib_get_curr_task_local()) = &dtp_arr[i];
-                async_await(*lambda_ptr, futures);
+                async_await_at(*lambda_ptr, futures, locale);
             }
         });
 
@@ -126,7 +127,7 @@ async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
                 dtp_arr[N].put_vec = put_vec;
                 dtp_arr[N].rel_vec = rel_vec;
                 *(hclib_get_curr_task_local()) = &dtp_arr[N];
-                async_await(*lambda_ptr, futures);
+                async_await_at(*lambda_ptr, futures, locale);
             });
 
             *(hclib_get_curr_task_local()) = nullptr;
@@ -153,7 +154,7 @@ async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
         delete put_vec;
         delete rel_vec;
         delete[] dtp_arr;
-    }, futures);
+    }, futures, locale);
 }
 
 } // namespace diamond

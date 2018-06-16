@@ -143,16 +143,16 @@ inline int get_index() {
 }
 
 template <typename T>
-inline void async_await(T&& lambda, hclib_future_t *future1,
-        hclib_future_t *future2=nullptr, hclib_future_t *future3=nullptr,
-        hclib_future_t *future4=nullptr) {
+inline void async_await_at(T&& lambda, hclib_future_t *future1,
+        hclib_future_t *future2, hclib_future_t *future3,
+        hclib_future_t *future4, hclib_locale_t *locale) {
 
     //fetch the abft_task_parameters from task local and pass is to the async
     auto atp = *hclib_get_curr_task_local();
 
     typedef typename std::remove_reference<T>::type U;
     U* lambda_ptr = new U(lambda);
-    hclib::async_await( [=] () {
+    hclib::async_await_at( [=] () {
         *(hclib_get_curr_task_local()) = atp;
         (*lambda_ptr)();
         delete lambda_ptr;
@@ -172,18 +172,25 @@ inline void async_await(T&& lambda, hclib_future_t *future1,
                 //static_cast<future_t<void*>*>(future4)->release();
                 static_cast<future_t<void*>*>(future4)->add_future_vector();
         }
-    }, future1, future2, future3, future4);
+    }, future1, future2, future3, future4, locale);
 }
 
 template <typename T>
-inline void async_await(T&& lambda, std::vector<hclib_future_t *> *futures) {
+inline void async_await(T&& lambda, hclib_future_t *future1,
+        hclib_future_t *future2=nullptr, hclib_future_t *future3=nullptr,
+        hclib_future_t *future4=nullptr) {
+    async_await_at(lambda, future1, future2, future3, future4, nullptr);
+}
+
+template <typename T>
+inline void async_await_at(T&& lambda, std::vector<hclib_future_t *> *futures, hclib_locale_t *locale) {
 
     //fetch the abft_task_parameters from task local and pass is to the async
     auto atp = *hclib_get_curr_task_local();
 
     typedef typename std::remove_reference<T>::type U;
     U* lambda_ptr = new U(lambda);
-    hclib::async_await( [=] () {
+    hclib::async_await_at( [=] () {
         *(hclib_get_curr_task_local()) = atp;
         (*lambda_ptr)();
         delete lambda_ptr;
@@ -193,73 +200,90 @@ inline void async_await(T&& lambda, std::vector<hclib_future_t *> *futures) {
             for(auto && elem: *(futures))
                 static_cast<future_t<void*>*>(elem)->add_future_vector();
         }
-    }, futures);
+    }, futures, locale);
+}
+
+template <typename T>
+inline void async_await(T&& lambda, std::vector<hclib_future_t *> *futures) {
+    async_await_at(lambda, futures, nullptr);
 }
 
 template <typename T1, typename T2>
-void async_await_check(T1&& lambda, hclib::promise_t<int> *prom_check,
+void async_await_check_at(T1&& lambda, hclib::promise_t<int> *prom_check,
+        std::function<int(void*)> error_check_fn, void * params,
+        T2&& abft_lambda,
+        hclib_future_t *f1, hclib_future_t *f2,
+        hclib_future_t *f3, hclib_future_t *f4,
+        hclib_locale_t *locale) {
+
+    typedef typename std::remove_reference<T1>::type U1;
+    U1* lambda_ptr = new U1(lambda);
+    typedef typename std::remove_reference<T2>::type U2;
+    U2* abft_lambda_ptr = new U2(abft_lambda);
+
+    hclib::async_await_at([=]() {
+        auto atp = new abft_task_params_t<void*>();;
+        atp->put_vec = new promise_vector<void*>();
+        atp->rel_vec = new future_vector<void*>();
+        bool result = false;
+        int index = 0;
+
+        assert(*(hclib_get_curr_task_local()) ==  nullptr);
+        hclib::finish([=]() {
+            atp->index = 0;
+            *(hclib_get_curr_task_local()) = atp;
+            async_await_at(*lambda_ptr, f1, f2, f3, f4, locale);
+        });
+        result = error_check_fn(params);
+        //ran with errors
+        if(result == 0){
+            atp->index = 1;
+            index = 1;
+            (*abft_lambda_ptr)();
+            result = error_check_fn(params);
+        }
+        delete lambda_ptr;
+        delete abft_lambda_ptr;
+
+        *(hclib_get_curr_task_local()) = nullptr;
+
+        if(result) {
+            atp->put_vec->do_puts(index);
+            atp->rel_vec->do_releases();
+            prom_check->put(1);
+        }
+        else {
+            prom_check->put(0);
+        }
+        delete atp->put_vec;
+        delete atp->rel_vec;
+        delete atp;;
+    }, f1, f2, f3, f4, locale);
+}
+
+template <typename T1, typename T2>
+inline void async_await_check(T1&& lambda, hclib::promise_t<int> *prom_check,
         std::function<int(void*)> error_check_fn, void * params,
         T2&& abft_lambda,
         hclib_future_t *f1, hclib_future_t *f2=nullptr,
         hclib_future_t *f3=nullptr, hclib_future_t *f4=nullptr) {
-
-    typedef typename std::remove_reference<T1>::type U1;
-    U1* lambda_ptr = new U1(lambda);
-    typedef typename std::remove_reference<T2>::type U2;
-    U2* abft_lambda_ptr = new U2(abft_lambda);
-
-    hclib::async_await([=]() {
-        auto atp = new abft_task_params_t<void*>();;
-        atp->put_vec = new promise_vector<void*>();
-        atp->rel_vec = new future_vector<void*>();
-        bool result = false;
-        int index = 0;
-
-        assert(*(hclib_get_curr_task_local()) ==  nullptr);
-        hclib::finish([=]() {
-            atp->index = 0;
-            *(hclib_get_curr_task_local()) = atp;
-            async_await(*lambda_ptr, f1, f2, f3, f4);
-        });
-        result = error_check_fn(params);
-        //ran with errors
-        if(result == 0){
-            atp->index = 1;
-            index = 1;
-            (*abft_lambda_ptr)();
-            result = error_check_fn(params);
-        }
-        delete lambda_ptr;
-        delete abft_lambda_ptr;
-
-        *(hclib_get_curr_task_local()) = nullptr;
-
-        if(result) {
-            atp->put_vec->do_puts(index);
-            atp->rel_vec->do_releases();
-            prom_check->put(1);
-        }
-        else {
-            prom_check->put(0);
-        }
-        delete atp->put_vec;
-        delete atp->rel_vec;
-        delete atp;;
-    }, f1, f2, f3, f4);
+    async_await_check_at(lambda, prom_check, error_check_fn, params,
+        abft_lambda, f1, f2, f3, f4, nullptr);
 }
 
 template <typename T1, typename T2>
-void async_await_check(T1&& lambda, hclib::promise_t<int> *prom_check,
+void async_await_check_at(T1&& lambda, hclib::promise_t<int> *prom_check,
         std::function<int(void*)> error_check_fn, void * params,
         T2&& abft_lambda,
-        std::vector<hclib_future_t *> *futures) {
+        std::vector<hclib_future_t *> *futures,
+        hclib_locale_t *locale) {
 
     typedef typename std::remove_reference<T1>::type U1;
     U1* lambda_ptr = new U1(lambda);
     typedef typename std::remove_reference<T2>::type U2;
     U2* abft_lambda_ptr = new U2(abft_lambda);
 
-    hclib::async_await([=]() {
+    hclib::async_await_at([=]() {
         auto atp = new abft_task_params_t<void*>();;
         atp->put_vec = new promise_vector<void*>();
         atp->rel_vec = new future_vector<void*>();
@@ -270,7 +294,7 @@ void async_await_check(T1&& lambda, hclib::promise_t<int> *prom_check,
         hclib::finish([=]() {
             atp->index = 0;
             *(hclib_get_curr_task_local()) = atp;
-            async_await(*lambda_ptr, futures);
+            async_await_at(*lambda_ptr, futures, locale);
         });
         result = error_check_fn(params);
         //ran with errors
@@ -297,7 +321,16 @@ void async_await_check(T1&& lambda, hclib::promise_t<int> *prom_check,
         delete atp->put_vec;
         delete atp->rel_vec;
         delete atp;;
-    }, futures);
+    }, futures, locale);
+}
+
+template <typename T1, typename T2>
+inline void async_await_check(T1&& lambda, hclib::promise_t<int> *prom_check,
+        std::function<int(void*)> error_check_fn, void * params,
+        T2&& abft_lambda,
+        std::vector<hclib_future_t *> *futures) {
+    async_await_check_at(lambda, prom_check, error_check_fn, params,
+        abft_lambda, futures, nullptr);
 }
 
 } // namespace abft

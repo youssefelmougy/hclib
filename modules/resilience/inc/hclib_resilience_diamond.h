@@ -176,16 +176,16 @@ inline int get_index() {
 }
 
 template <typename T>
-inline void async_await(T&& lambda, hclib_future_t *future1,
-        hclib_future_t *future2=nullptr, hclib_future_t *future3=nullptr,
-        hclib_future_t *future4=nullptr) {
+inline void async_await_at(T&& lambda, hclib_future_t *future1,
+        hclib_future_t *future2, hclib_future_t *future3,
+        hclib_future_t *future4, hclib_locale_t *locale) {
 
     //fetch the diamond_task_parameters from task local and pass is to the async
     auto dtp = *hclib_get_curr_task_local();
 
     typedef typename std::remove_reference<T>::type U;
     U* lambda_ptr = new U(lambda);
-    hclib::async_await( [=]() {
+    hclib::async_await_at( [=]() {
         *(hclib_get_curr_task_local()) = dtp;
         (*lambda_ptr)();
         delete lambda_ptr;
@@ -204,18 +204,25 @@ inline void async_await(T&& lambda, hclib_future_t *future1,
                 //static_cast<future_t<void*>*>(future4)->release();
                 static_cast<future_t<void*>*>(future4)->add_future_vector();
         }
-    }, future1, future2, future3, future4);
+    }, future1, future2, future3, future4, locale);
 }
 
 template <typename T>
-inline void async_await(T&& lambda, std::vector<hclib_future_t *> *futures) {
+inline void async_await(T&& lambda, hclib_future_t *future1,
+        hclib_future_t *future2=nullptr, hclib_future_t *future3=nullptr,
+        hclib_future_t *future4=nullptr) {
+    async_await_at(lambda, future1, future2, future3, future4, nullptr);
+}
+
+template <typename T>
+inline void async_await_at(T&& lambda, std::vector<hclib_future_t *> *futures, hclib_locale_t *locale) {
 
     //fetch the diamond_task_parameters from task local and pass is to the async
     auto dtp = *hclib_get_curr_task_local();
 
     typedef typename std::remove_reference<T>::type U;
     U* lambda_ptr = new U(lambda);
-    hclib::async_await( [=]() {
+    hclib::async_await_at( [=]() {
         *(hclib_get_curr_task_local()) = dtp;
         (*lambda_ptr)();
         delete lambda_ptr;
@@ -224,7 +231,12 @@ inline void async_await(T&& lambda, std::vector<hclib_future_t *> *futures) {
             for(auto && elem: *(futures))
                 static_cast<future_t<void*>*>(elem)->add_future_vector();
         }
-    }, futures);
+    }, futures, locale);
+}
+
+template <typename T>
+inline void async_await(T&& lambda, std::vector<hclib_future_t *> *futures) {
+    async_await_at(lambda, futures, nullptr);
 }
 
 } // namespace diamond
