@@ -36,7 +36,9 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
                 *(hclib_get_curr_task_local()) = rtp;
                 async_await_at(*lambda_ptr, f1, f2, f3, f4, locale);
             });
-                //ran successfully without errors
+            *(hclib_get_curr_task_local()) = nullptr;
+
+            //ran successfully without errors
             if(error_check_fn(params) == 1)
             {
                 result = true;
@@ -51,8 +53,6 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
             //rtp->rel_vec->clear();
         }
         delete lambda_ptr;
-
-        *(hclib_get_curr_task_local()) = nullptr;
 
         if(result) {
             rtp->put_vec->do_puts(index);
@@ -96,6 +96,8 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
             *(hclib_get_curr_task_local()) = rtp;
             async_await_sync(lambda_ptr, f1, f2, f3, f4);
 
+            *(hclib_get_curr_task_local()) = nullptr;
+
             //ran successfully without errors
             if(error_check_fn(params) == 1)
             {
@@ -112,8 +114,6 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
             //rtp->rel_vec->clear();
         }
         delete lambda_ptr;
-
-        *(hclib_get_curr_task_local()) = nullptr;
 
         if(result) {
             rtp->put_vec->do_puts(index);
@@ -165,6 +165,9 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
                 *(hclib_get_curr_task_local()) = rtp;
                 async_await_at(*lambda_ptr, futures, locale);
             });
+
+            *(hclib_get_curr_task_local()) = nullptr;
+
             ///ran successfully without errors
             if(error_check_fn(params) == 1)
             {
@@ -180,8 +183,6 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
             //rtp->rel_vec->clear();
         }
         delete lambda_ptr;
-
-        *(hclib_get_curr_task_local()) = nullptr;
 
         if(result) {
             rtp->put_vec->do_puts(index);
@@ -223,6 +224,8 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
             *(hclib_get_curr_task_local()) = rtp;
             async_await_sync(lambda_ptr, futures);
 
+            *(hclib_get_curr_task_local()) = nullptr;
+
             //ran successfully without errors
             if(error_check_fn(params) == 1)
             {
@@ -239,8 +242,6 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
             //rtp->rel_vec->clear();
         }
         delete lambda_ptr;
-
-        *(hclib_get_curr_task_local()) = nullptr;
 
         if(result) {
             rtp->put_vec->do_puts(index);

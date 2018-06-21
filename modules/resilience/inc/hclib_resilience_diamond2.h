@@ -39,10 +39,10 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
             }
         });
 
+        *(hclib_get_curr_task_local()) = nullptr;
         bool result = check_result_helper(put_vec, 0, 1);
         //it all puts in both replica are same then do the actual put
         if(result) {
-            *(hclib_get_curr_task_local()) = nullptr;
             put_vec->do_puts(0);
             rel_vec->do_releases();
             prom_check->put(1);
@@ -112,10 +112,10 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
             }
         });
 
+        *(hclib_get_curr_task_local()) = nullptr;
         bool result = check_result_helper(put_vec, 0, 1);
         //it all puts in both replica are same then do the actual put
         if(result) {
-            *(hclib_get_curr_task_local()) = nullptr;
             put_vec->do_puts(0);
             rel_vec->do_releases();
             prom_check->put(1);

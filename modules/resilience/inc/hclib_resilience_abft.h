@@ -234,18 +234,20 @@ void async_await_check_at(T1&& lambda, hclib::promise_t<int> *prom_check,
             *(hclib_get_curr_task_local()) = atp;
             async_await_at(*lambda_ptr, f1, f2, f3, f4, locale);
         });
+
+        *(hclib_get_curr_task_local()) = nullptr;
         result = error_check_fn(params);
         //ran with errors
         if(result == 0){
             atp->index = 1;
             index = 1;
+            *(hclib_get_curr_task_local()) = atp;
             (*abft_lambda_ptr)();
+            *(hclib_get_curr_task_local()) = nullptr;
             result = error_check_fn(params);
         }
         delete lambda_ptr;
         delete abft_lambda_ptr;
-
-        *(hclib_get_curr_task_local()) = nullptr;
 
         if(result) {
             atp->put_vec->do_puts(index);
@@ -296,12 +298,16 @@ void async_await_check_at(T1&& lambda, hclib::promise_t<int> *prom_check,
             *(hclib_get_curr_task_local()) = atp;
             async_await_at(*lambda_ptr, futures, locale);
         });
+
+        *(hclib_get_curr_task_local()) = nullptr;
         result = error_check_fn(params);
         //ran with errors
         if(result == 0){
             atp->index = 1;
             index = 1;
+            *(hclib_get_curr_task_local()) = atp;
             (*abft_lambda_ptr)();
+            *(hclib_get_curr_task_local()) = nullptr;
             result = error_check_fn(params);
         }
 

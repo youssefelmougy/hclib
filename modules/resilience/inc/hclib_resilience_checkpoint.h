@@ -337,6 +337,7 @@ async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
             *(hclib_get_curr_task_local()) = ctp;
             async_await_sync(lambda_ptr, f1, f2, f3, f4);
             assert(ctp->checkpoint_run == 0);
+            *(hclib_get_curr_task_local()) = nullptr;
 
             //ran successfully without errors
             if(error_check_fn(params) == 1)
@@ -358,13 +359,13 @@ async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
             ctp->index = N;
             ctp->checkpoint_run = 1;
             index = N;
+            *(hclib_get_curr_task_local()) = ctp;
             async_await_sync(lambda_ptr, f1, f2, f3, f4);
+            *(hclib_get_curr_task_local()) = nullptr;
             result = error_check_fn(params);
         }
 
         delete lambda_ptr;
-
-        *(hclib_get_curr_task_local()) = nullptr;
 
         if(result) {
             ctp->put_vec->do_puts(index);
