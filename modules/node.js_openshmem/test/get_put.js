@@ -27,6 +27,9 @@ for (i = 0; i < addon.SHMEM_REDUCE_SYNC_SIZE; i++){
 }
 
 if(rank == 0) {
+    addon.put_value(ptr, 29);
+    var val1 = addon.get_value(ptr);
+    console.log("local value get " + val1);
     addon.long_p_sync(ptr, 33, 1);
     addon.long_p_sync(src_bcast, 37, 0);
     addon.barrier_all_sync();

@@ -55,7 +55,7 @@ Napi::Number shmem_num_ranks_fn(const Napi::CallbackInfo& info) {
 Napi::Number get_value_fn(const Napi::CallbackInfo& info) {
     Napi::Env env = info.Env();
     long *ptr = (long*) info[0].As<Napi::Number>().Int64Value();
-    int index = info[0].As<Napi::Number>().Int64Value();
+    int index = info[1].As<Napi::Number>().Int64Value();
     return Napi::Number::New(env, ptr[index]);
 }
 
