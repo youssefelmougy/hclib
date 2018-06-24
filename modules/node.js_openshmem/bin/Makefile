@@ -4,8 +4,8 @@ include $(HCLIB_ROOT)/include/hclib.mak
 include $(HCLIB_ROOT)/../modules/system/inc/hclib_system.post.mak
 include $(HCLIB_ROOT)/../modules/node.js_openshmem/inc/hclib_node.js_openshmem.post.mak
 
-NODEINC=$(NODE_HOME)/INSTALL/include/node
-NODELIB=$(NODE_HOME)/INSTALL/lib/node
+NODEINC=$(NODE_HOME)/include/node
+NODELIB=$(NODE_HOME)/lib/node
 NODELIBS=-lnode
 
 node_run: ../src/node_run.cpp
