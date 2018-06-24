@@ -2,7 +2,7 @@
 //const oshmem = require(process.env.HCLIB_HOME+'/modules/node.js_openshmem/lib/node_hclib_openshmem.node');
 const addon = require('./hclib_node.js_openshmem.node');
 //const yaml = require('js-yaml');
-const fs = require('fs');
+//const fs = require('fs');
 
 var promFlush;
 var ptr_array = new Object();
@@ -45,12 +45,20 @@ num_ranks: function(){
     return addon.num_ranks();
 },
 
-get_value: function(src, index) {
+get_value_at: function(src, index) {
     return addon.get_value(src, index);
 },
 
-put_value:function(dest, val, index) {
+put_value_at:function(dest, val, index) {
     return addon.put_value(dest, val, index);
+},
+
+get_value: function(src) {
+    return addon.get_value(src, 0);
+},
+
+put_value:function(dest, val) {
+    return addon.put_value(dest, val, 0);
 },
 
 malloc_sync: function(size) {
@@ -100,4 +108,9 @@ module.exports.SHMEM_BARRIER_SYNC_SIZE = addon.get_SHMEM_BARRIER_SYNC_SIZE();
 module.exports.SHMEM_REDUCE_SYNC_SIZE = addon.get_SHMEM_REDUCE_SYNC_SIZE();
 module.exports.SHMEM_REDUCE_MIN_WRKDATA_SIZE = addon.get_SHMEM_REDUCE_MIN_WRKDATA_SIZE();
 module.exports.SHMEM_SYNC_VALUE = addon.get_SHMEM_SYNC_VALUE();
+
+module.exports.SIZEOF_64_t = 8;
+module.exports.at = function(ptr, i) {
+    return ptr + module.exports.SIZEOF_64_t*i;
+};
 

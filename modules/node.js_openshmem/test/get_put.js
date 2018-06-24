@@ -19,11 +19,11 @@ var pSync_reduce = addon.malloc_sync(sizeof_long * addon.SHMEM_REDUCE_SYNC_SIZE)
 var ipWrk = addon.malloc_sync(sizeof_long * addon.SHMEM_REDUCE_MIN_WRKDATA_SIZE);
 
 for (i = 0; i < addon.SHMEM_BCAST_SYNC_SIZE; i++){
-    addon.put_value(pSync_bcast, addon.SHMEM_SYNC_VALUE, i);
+    addon.put_value_at(pSync_bcast, addon.SHMEM_SYNC_VALUE, i);
 }
 
 for (i = 0; i < addon.SHMEM_REDUCE_SYNC_SIZE; i++){
-    addon.put_value(pSync_reduce, addon.SHMEM_SYNC_VALUE, i);
+    addon.put_value_at(pSync_reduce, addon.SHMEM_SYNC_VALUE, i);
 }
 
 if(rank == 0) {

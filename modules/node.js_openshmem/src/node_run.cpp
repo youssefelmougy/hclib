@@ -1,6 +1,5 @@
 #include "hclib_cpp.h"
 #include "hclib_node.js_openshmem.h"
-#include "hclib_system.h"
 #include "node.h"
 
 #include <iostream>
