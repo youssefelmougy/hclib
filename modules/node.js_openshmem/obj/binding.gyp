@@ -5,7 +5,11 @@
       "cflags!": [ "-fno-exceptions" ],
       "cflags_cc!": [ "-fno-exceptions" ],
       "cflags": [ "-fPIC" ],
-      "sources": [ "../src/addon_hclib_node.js_openshmem.cpp" ],
+      "sources": [
+        "../src/addon_hclib_node.js_openshmem_util.cpp",
+        "../src/addon_hclib_node.js_openshmem_sync.cpp",
+        "../src/addon_hclib_node.js_openshmem.cpp"
+      ],
       "include_dirs": [
         "<!@(node -p \"require('node-addon-api').include\")",
         "<!(echo $HCLIB_ROOT)/include",
