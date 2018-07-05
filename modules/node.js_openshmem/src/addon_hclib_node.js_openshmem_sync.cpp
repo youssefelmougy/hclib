@@ -31,12 +31,12 @@ Napi::Number shmem_free_sync_fn(const Napi::CallbackInfo& info) {
 
 Napi::Number shmem_long_g_sync_fn(const Napi::CallbackInfo& info) {
     Napi::Env env = info.Env();
-    void *src = (void*) info[0].As<Napi::Number>().Int64Value();
-    int pe = info[1].As<Napi::Number>().Int64Value();
-    long *val = (long *)malloc(sizeof(long));
+    long *src = (long*) info[0].As<Napi::Number>().Int64Value();
+    int64_t pe = info[1].As<Napi::Number>().Int64Value();
+    long *val = (long*)malloc(sizeof(long));
     hclib::finish([=] () {
         hclib::async_nb_at([=] () {
-            *val = shmem_long_g((long*)src, pe);
+            *val = shmem_long_g(src, pe);
         }, nic);
     });
     long val_tmp = *val;
@@ -46,12 +46,40 @@ Napi::Number shmem_long_g_sync_fn(const Napi::CallbackInfo& info) {
 
 Napi::Number shmem_long_p_sync_fn(const Napi::CallbackInfo& info) {
     Napi::Env env = info.Env();
-    void *dest = (void*) info[0].As<Napi::Number>().Int64Value();
+    long *dest = (long*) info[0].As<Napi::Number>().Int64Value();
     long val = info[1].As<Napi::Number>().Int64Value();
-    int pe = info[2].As<Napi::Number>().Int64Value();
+    int64_t pe = info[2].As<Napi::Number>().Int64Value();
     hclib::finish([=] () {
         hclib::async_nb_at([=] () {
-            shmem_long_p((long*)dest, val, pe);
+            shmem_long_p(dest, val, pe);
+        }, nic);
+    });
+    return Napi::Number::New(env, 1);
+}
+
+Napi::Number shmem_double_g_sync_fn(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    double *src = (double*) info[0].As<Napi::Number>().Int64Value();
+    int64_t pe = info[1].As<Napi::Number>().Int64Value();
+    double *val = (double*)malloc(sizeof(long));
+    hclib::finish([=] () {
+        hclib::async_nb_at([=] () {
+            *val = shmem_double_g(src, pe);
+        }, nic);
+    });
+    double val_tmp = *val;
+    free(val);
+    return Napi::Number::New(env, val_tmp);
+}
+
+Napi::Number shmem_double_p_sync_fn(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    double *dest = (double*) info[0].As<Napi::Number>().Int64Value();
+    double val = info[1].As<Napi::Number>().DoubleValue();
+    int64_t pe = info[2].As<Napi::Number>().Int64Value();
+    hclib::finish([=] () {
+        hclib::async_nb_at([=] () {
+            shmem_double_p(dest, val, pe);
         }, nic);
     });
     return Napi::Number::New(env, 1);
@@ -112,39 +140,39 @@ Napi::Number shmem_broadcast64_sync_fn(const Napi::CallbackInfo& info) {
     return Napi::Number::New(env, 1);
 }
 
-Napi::Number shmem_int_sum_to_all_sync_fn(const Napi::CallbackInfo& info) {
+Napi::Number shmem_long_sum_to_all_sync_fn(const Napi::CallbackInfo& info) {
     Napi::Env env = info.Env();
-    int *dest = (int*) info[0].As<Napi::Number>().Int64Value();
-    int *src = (int*) info[1].As<Napi::Number>().Int64Value();
+    long *dest = (long*) info[0].As<Napi::Number>().Int64Value();
+    long *src  = (long*) info[1].As<Napi::Number>().Int64Value();
     int nreduce = info[2].As<Napi::Number>().Int64Value();
     int PE_start = info[3].As<Napi::Number>().Int64Value();
     int logPE_stride = info[4].As<Napi::Number>().Int64Value();
     int PE_size = info[5].As<Napi::Number>().Int64Value();
-    int *pWrk = (int*) info[6].As<Napi::Number>().Int64Value();
+    long *pWrk = (long*) info[6].As<Napi::Number>().Int64Value();
     long *pSync = (long*) info[7].As<Napi::Number>().Int64Value();
 
     hclib::finish([=] () {
         hclib::async_nb_at([=] () {
-            shmem_int_sum_to_all(dest, src, nreduce, PE_start, logPE_stride, PE_size, pWrk, pSync);
+            shmem_long_sum_to_all(dest, src, nreduce, PE_start, logPE_stride, PE_size, pWrk, pSync);
         }, nic);
     });
     return Napi::Number::New(env, 1);
 }
 
-Napi::Number shmem_longlong_sum_to_all_sync_fn(const Napi::CallbackInfo& info) {
+Napi::Number shmem_double_sum_to_all_sync_fn(const Napi::CallbackInfo& info) {
     Napi::Env env = info.Env();
-    long long *dest = (long long*) info[0].As<Napi::Number>().Int64Value();
-    long long *src = (long long*) info[1].As<Napi::Number>().Int64Value();
+    double *dest = (double*) info[0].As<Napi::Number>().Int64Value();
+    double *src  = (double*) info[1].As<Napi::Number>().Int64Value();
     int nreduce = info[2].As<Napi::Number>().Int64Value();
     int PE_start = info[3].As<Napi::Number>().Int64Value();
     int logPE_stride = info[4].As<Napi::Number>().Int64Value();
     int PE_size = info[5].As<Napi::Number>().Int64Value();
-    long long *pWrk = (long long*) info[6].As<Napi::Number>().Int64Value();
+    double *pWrk = (double*) info[6].As<Napi::Number>().Int64Value();
     long *pSync = (long*) info[7].As<Napi::Number>().Int64Value();
 
     hclib::finish([=] () {
         hclib::async_nb_at([=] () {
-            shmem_longlong_sum_to_all(dest, src, nreduce, PE_start, logPE_stride, PE_size, pWrk, pSync);
+            shmem_double_sum_to_all(dest, src, nreduce, PE_start, logPE_stride, PE_size, pWrk, pSync);
         }, nic);
     });
     return Napi::Number::New(env, 1);
@@ -160,6 +188,10 @@ Napi::Value Init_sync(Napi::Env env, Napi::Object exports) {
               Napi::Function::New(env, shmem_long_g_sync_fn));
   exports.Set(Napi::String::New(env, "long_p_sync"),
               Napi::Function::New(env, shmem_long_p_sync_fn));
+  exports.Set(Napi::String::New(env, "double_g_sync"),
+              Napi::Function::New(env, shmem_double_g_sync_fn));
+  exports.Set(Napi::String::New(env, "double_p_sync"),
+              Napi::Function::New(env, shmem_double_p_sync_fn));
   exports.Set(Napi::String::New(env, "barrier_all_sync"),
               Napi::Function::New(env, shmem_barrier_all_sync_fn));
   exports.Set(Napi::String::New(env, "set_lock_sync"),
@@ -168,10 +200,10 @@ Napi::Value Init_sync(Napi::Env env, Napi::Object exports) {
               Napi::Function::New(env, shmem_clear_lock_sync_fn));
   exports.Set(Napi::String::New(env, "broadcast64_sync"),
               Napi::Function::New(env, shmem_broadcast64_sync_fn));
-  exports.Set(Napi::String::New(env, "int_sum_to_all_sync"),
-              Napi::Function::New(env, shmem_int_sum_to_all_sync_fn));
-  exports.Set(Napi::String::New(env, "longlong_sum_to_all_sync"),
-              Napi::Function::New(env, shmem_longlong_sum_to_all_sync_fn));
+  exports.Set(Napi::String::New(env, "long_sum_to_all_sync"),
+              Napi::Function::New(env, shmem_long_sum_to_all_sync_fn));
+  exports.Set(Napi::String::New(env, "double_sum_to_all_sync"),
+              Napi::Function::New(env, shmem_double_sum_to_all_sync_fn));
   return Napi::Number::New(env, 1);
 }
 

@@ -45,20 +45,36 @@ num_ranks: function(){
     return addon.num_ranks();
 },
 
-get_value_at: function(src, index) {
-    return addon.get_value(src, index);
+get_long_value_at: function(src, index) {
+    return addon.get_long_value(src, index);
 },
 
-put_value_at:function(dest, val, index) {
-    return addon.put_value(dest, val, index);
+put_long_value_at:function(dest, val, index) {
+    return addon.put_long_value(dest, val, index);
 },
 
-get_value: function(src) {
-    return addon.get_value(src, 0);
+get_long_value: function(src) {
+    return addon.get_long_value(src, 0);
 },
 
-put_value:function(dest, val) {
-    return addon.put_value(dest, val, 0);
+put_long_value:function(dest, val) {
+    return addon.put_long_value(dest, val, 0);
+},
+
+get_double_value_at: function(src, index) {
+    return addon.get_double_value(src, index);
+},
+
+put_double_value_at:function(dest, val, index) {
+    return addon.put_double_value(dest, val, index);
+},
+
+get_double_value: function(src) {
+    return addon.get_double_value(src, 0);
+},
+
+put_double_value:function(dest, val) {
+    return addon.put_double_value(dest, val, 0);
 },
 
 malloc_sync: function(size) {
@@ -77,6 +93,14 @@ long_p_sync: function(dest, val, pe) {
     return addon.long_p_sync(dest, val, pe);
 },
 
+double_g_sync: function(src, pe) {
+    return addon.double_g_sync(src, pe);
+},
+
+double_p_sync: function(dest, val, pe) {
+    return addon.double_p_sync(dest, val, pe);
+},
+
 barrier_all_sync: function() {
     return addon.barrier_all_sync();
 },
@@ -93,12 +117,12 @@ broadcast64_sync: function(dest, src, nelems, PE_root, PE_start, logPE_stride, P
     return addon.broadcast64_sync(dest, src, nelems, PE_root, PE_start, logPE_stride, PE_size, pSync);
 },
 
-int_sum_to_all_sync: function(dest, src, nreduce, PE_start, logPE_stride, PE_size, pWrk, pSync) {
-    return addon.int_sum_to_all_sync(dest, src, nreduce, PE_start, logPE_stride, PE_size, pWrk, pSync);
+long_sum_to_all_sync: function(dest, src, nreduce, PE_start, logPE_stride, PE_size, pWrk, pSync) {
+    return addon.long_sum_to_all_sync(dest, src, nreduce, PE_start, logPE_stride, PE_size, pWrk, pSync);
 },
 
-longlong_sum_to_all_sync: function(dest, src, nreduce, PE_start, logPE_stride, PE_size, pWrk, pSync) {
-    return addon.int_sum_to_all_sync(dest, src, nreduce, PE_start, logPE_stride, PE_size, pWrk, pSync);
+double_sum_to_all_sync: function(dest, src, nreduce, PE_start, logPE_stride, PE_size, pWrk, pSync) {
+    return addon.double_sum_to_all_sync(dest, src, nreduce, PE_start, logPE_stride, PE_size, pWrk, pSync);
 }
 
 };
