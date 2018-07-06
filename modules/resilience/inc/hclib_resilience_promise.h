@@ -142,6 +142,12 @@ inline void promise_t<T*>::put(T* datum) {
     }
 }
 
+inline int get_index() {
+    auto task_local = static_cast<resilient_task_params_t<void*>*>(*hclib_get_curr_task_local());
+    assert(is_resilient_task(task_local));
+    return task_local->index;
+}
+
 template<typename T>
 using diamond_task_params_t = resilient_task_params_t<T>;
 

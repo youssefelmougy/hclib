@@ -8,6 +8,7 @@
 
 using namespace std;
 
+namespace resilience = hclib::resilience;
 namespace diamond = hclib::resilience::diamond;
 namespace replay = hclib::resilience::replay;
 
@@ -44,7 +45,13 @@ int main(int argc, char ** argv) {
     hclib::launch(deps, 1, [=]() {
         hclib::finish([=]() {
             hclib::promise_t<int*> *prom = new hclib::promise_t<int*>();
-            diamond::promise_t<int_obj*> *prom1 = new diamond::promise_t<int_obj*>(1);
+            resilience::promise_t<int_obj*> *prom1 = new resilience::promise_t<int_obj*>(1);
+            //OR
+            //diamond::promise_t<int_obj*> *prom1 = new diamond::promise_t<int_obj*>(1);
+            //OR
+            //replay::promise_t<int_obj*> *prom1 = new replay::::promise_t<int_obj*>(1);
+            //replay::promise_t and diamond::promise_t maps to resilience::promise_t
+            //and therefore any of it can be used interchangably
             hclib::promise_t<int>* prom_res = new hclib::promise_t<int>();
 
             hclib::async_await( [=]() {
@@ -66,7 +73,7 @@ int main(int argc, char ** argv) {
                     vec->clear();
                     int* signal = prom->get_future()->get();
                     assert(*signal == SIGNAL_VALUE);
-                    printf("Value1 %d replay %d\n", *signal, replay::get_index());
+                    printf("Value1 %d replay %d resilient %d\n", *signal, replay::get_index(), resilience::get_index());
 
                     replay::async_await( [=]() {
                         int_obj *n2 = new int_obj();
