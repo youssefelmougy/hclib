@@ -9,7 +9,7 @@ NODELIB=$(NODE_HOME)/lib/node
 NODELIBS=-lnode
 
 node_run: ../src/node_run.cpp
-	$(OPENSHMEM_INSTALL)/bin/oshcc -std=c++11 $^ -I$(HCLIB_ROOT)/include \
+	g++ -std=c++11 $^ -I$(HCLIB_ROOT)/include \
 		-I$(HCLIB_ROOT)/../modules/node.js_openshmem/inc \
 		-I$(NODEINC) -L$(NODELIB) $(NODELIBS) \
 		-lstdc++ -lhclib -lhclib_node.js_openshmem \
