@@ -4,7 +4,7 @@
       "target_name": "hclib_openshmem",
       "cflags!": [ "-fno-exceptions" ],
       "cflags_cc!": [ "-fno-exceptions" ],
-      "cflags": [ "-fPIC" ],
+      "cflags": [ "-fPIC", "-DUSE_OFFLOAD" ],
       "sources": [
         "../src/addon_hclib_node.js_openshmem_util.cpp",
         "../src/addon_hclib_node.js_openshmem_sync.cpp",
