@@ -123,6 +123,10 @@ long_sum_to_all_sync: function(dest, src, nreduce, PE_start, logPE_stride, PE_si
 
 double_sum_to_all_sync: function(dest, src, nreduce, PE_start, logPE_stride, PE_size, pWrk, pSync) {
     return addon.double_sum_to_all_sync(dest, src, nreduce, PE_start, logPE_stride, PE_size, pWrk, pSync);
+},
+
+int64_atomic_xor_sync: function(dest, val, pe) {
+    return addon.int64_atomic_xor_sync(dest, val, pe);
 }
 
 };
