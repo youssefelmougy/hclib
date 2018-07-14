@@ -11,10 +11,10 @@
     ],
     "pop_paths": {
         "default": ["L1_$(id)", "sysmem"],
-        0: ["L1_$(id)", "sysmem", "Interconnect"]
+        1: ["L1_$(id)", "sysmem", "Interconnect"]
     },
     "steal_paths": {
         "default": ["L1_$(id)", "sysmem"],
-        0: ["L1_$(id)", "sysmem", "Interconnect"]
+        1: ["L1_$(id)", "sysmem", "Interconnect"]
     }
 }

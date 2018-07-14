@@ -8,6 +8,7 @@
       "sources": [
         "../src/addon_hclib_node.js_openshmem_util.cpp",
         "../src/addon_hclib_node.js_openshmem_sync.cpp",
+        "../src/addon_hclib_node.js_openshmem_async.cpp",
         "../src/addon_hclib_node.js_openshmem.cpp"
       ],
       "include_dirs": [

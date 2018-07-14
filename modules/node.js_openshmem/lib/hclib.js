@@ -11,7 +11,6 @@ module.exports = {
 
 init_hc : function (filename) {
 
-  addon.init();
   //const type_arr = yaml.safeLoad(fs.readFileSync(filename, 'utf8'));
   //const indentedJson = JSON.stringify(type_arr, null, 4);
   //console.log(indentedJson);
@@ -24,12 +23,11 @@ init_hc : function (filename) {
   //}
 
   promFlush = setInterval(() => {
-    //addon.clear_put_promises();
+    addon.clear_put_promises();
   }, 500);
 },
 
 finalize_hc : function () {
-  addon.finalize();
   clearInterval(promFlush);
 },
 
@@ -127,6 +125,14 @@ double_sum_to_all_sync: function(dest, src, nreduce, PE_start, logPE_stride, PE_
 
 int64_atomic_xor_sync: function(dest, val, pe) {
     return addon.int64_atomic_xor_sync(dest, val, pe);
+},
+
+long_g_async: function(src, pe) {
+    return addon.long_g_async(src, pe);
+},
+
+double_g_async: function(src, pe) {
+    return addon.double_g_async(src, pe);
 }
 
 };
