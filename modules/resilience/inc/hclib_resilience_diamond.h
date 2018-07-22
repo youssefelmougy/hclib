@@ -102,6 +102,11 @@ struct diamond_task_params_t {
 
     //vector which capture task dependencies
     future_vector<T> *rel_vec;
+
+#ifdef FINISH_WORKAROUND
+    volatile int *count;
+    hclib::promise_t<int> *finish_prom;
+#endif
 };
 
 /*
@@ -244,6 +249,7 @@ inline void async_await(T&& lambda, std::vector<hclib_future_t *> *futures) {
 } // namespace hclib
 
 #include "hclib_resilience_diamond2.h"
+#include "hclib_resilience_diamond2_leaf.h"
 #include "hclib_resilience_diamond3.h"
 
 #endif

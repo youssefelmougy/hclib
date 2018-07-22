@@ -19,6 +19,9 @@
 #error No data container for resilient promises specified
 #endif
 
+//TODO: Assumes lambdas provided to tasks are non mutable.
+//Need to find out what happens it not?
+
 namespace hclib {
 namespace resilience {
 

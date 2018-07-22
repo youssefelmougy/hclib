@@ -2,6 +2,7 @@
 #define HCLIB_RESILIENCE_PROMISE_H
 
 #define N_CNT 3
+#define FINISH_WORKAROUND
 
 namespace hclib {
 namespace resilience {
@@ -104,6 +105,12 @@ struct resilient_task_params_t {
 
     //vector which capture task dependencies
     future_vector<T> *rel_vec;
+
+#ifdef FINISH_WORKAROUND
+    volatile int *count;
+    hclib::promise_t<int> *finish_prom;
+#endif
+
 };
 
 /*

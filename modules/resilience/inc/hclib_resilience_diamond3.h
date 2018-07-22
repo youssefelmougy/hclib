@@ -8,7 +8,9 @@ namespace diamond {
 /*
 triplicates the task and checks for equivalence of all puts
 */
-template <int N, typename T>
+//TODO: For now only both leaf task and non leaf task behave the same.
+//Create an optimized version for leaf tasks.
+template <int LEAF, int N, typename T>
 std::enable_if_t< N>=N_CNT, void>
 //typename std::enable_if< N>=3, void>::type
 async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
@@ -60,7 +62,7 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
     }, f1, f2, f3, f4, locale);
 }
 
-template <int N, typename T>
+template <int LEAF, int N, typename T>
 std::enable_if_t< N>=N_CNT, void>
 //typename std::enable_if< N>=3, void>::type
 async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
@@ -110,17 +112,17 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
     }, futures, locale);
 }
 
-template <int N=N_CNT-1, typename T>
+template <int LEAF=1, int N=N_CNT-1, typename T>
 inline void async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
         hclib_future_t *f1, hclib_future_t *f2=nullptr,
         hclib_future_t *f3=nullptr, hclib_future_t *f4=nullptr) {
-    async_await_check_at<N>(lambda, prom_check, f1, f2, f3, f4, nullptr);
+    async_await_check_at<LEAF, N>(lambda, prom_check, f1, f2, f3, f4, nullptr);
 }
 
-template <int N=N_CNT-1, typename T>
+template <int LEAF=1, int N=N_CNT-1, typename T>
 inline void async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
         std::vector<hclib_future_t *> *futures) {
-    async_await_check_at<N>(lambda, prom_check, futures, nullptr);
+    async_await_check_at<LEAF, N>(lambda, prom_check, futures, nullptr);
 }
 
 } // namespace diamond

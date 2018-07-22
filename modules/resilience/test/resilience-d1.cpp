@@ -6,6 +6,8 @@
 namespace ref_count = hclib::ref_count;
 namespace diamond = hclib::resilience::diamond;
 
+enum TASK_STATE {NON_LEAF, LEAF};
+
 class int_obj : public hclib::resilience::obj {
   public:
     int n;
@@ -47,7 +49,7 @@ int main(int argc, char ** argv) {
                     printf("Value2 %d\n", n2_tmp->n);
             }, prom1->get_future(), prom2->get_future());
            
-            diamond::async_await_check<3>( [=]() {
+            diamond::async_await_check<NON_LEAF, 3>( [=]() {
                     int* signal = prom->get_future()->get();
                     assert(*signal == SIGNAL_VALUE);
                     printf("Value1 %d replica %d\n", *signal, diamond::get_index());
