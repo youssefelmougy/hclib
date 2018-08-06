@@ -22,12 +22,14 @@ init_hc : function (filename) {
     //ptr_array[one_type.name] = addon.shmem_malloc(size);
   //}
 
+  addon.init();
   promFlush = setInterval(() => {
-    addon.clear_put_promises();
-  }, 500);
+   // addon.clear_put_promises();
+  }, 100);
 },
 
 finalize_hc : function () {
+  addon.finalize();
   clearInterval(promFlush);
 },
 
@@ -133,6 +135,30 @@ long_g_async: function(src, pe) {
 
 double_g_async: function(src, pe) {
     return addon.double_g_async(src, pe);
+},
+
+set_lock_async: function(ptr) {
+    return addon.set_lock_async(ptr);
+},
+
+set_lock_async_callback: function(ptr, cb) {
+    return addon.set_lock_async_callback(ptr, cb);
+},
+
+clear_lock_async: function(ptr) {
+    return addon.clear_lock_async(ptr);
+},
+
+clear_lock_async_noreturn: function(ptr) {
+    return addon.clear_lock_async_noreturn(ptr);
+},
+
+clear_lock_async_finish: function(ptr) {
+    return addon.clear_lock_async_finish(ptr);
+},
+
+clear_lock_async_callback: function(ptr) {
+    return addon.clear_lock_async_callback(ptr);
 }
 
 };

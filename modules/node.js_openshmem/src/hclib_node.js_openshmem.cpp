@@ -12,7 +12,16 @@ HCLIB_MODULE_INITIALIZATION_FUNC(nodejs_openshmem_pre_initialize) {
 }
 
 HCLIB_MODULE_INITIALIZATION_FUNC(nodejs_openshmem_post_initialize) {
-    ::shmem_init();
+    int major, minor;
+    shmem_info_get_version(&major, &minor);
+    if(major>=1 && minor>=4) {
+        int ret = ::shmem_init_thread(SHMEM_THREAD_MULTIPLE);
+        assert(ret == SHMEM_THREAD_MULTIPLE);
+    }
+    else {
+        ::shmem_init();
+        //::shmem_init_thread(SHMEM_THREAD_MULTIPLE);
+    }
 
     int n_nics;
     hclib::locale_t **nics = hclib::get_all_locales_of_type(nic_locale_id,

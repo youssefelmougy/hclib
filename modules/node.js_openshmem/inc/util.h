@@ -15,7 +15,7 @@ class safe_vector {
     //TODO: can this take both lvalue and rvalue?
     void push_back(T &&value) {
         std::lock_guard<std::mutex> lkg(mtx);
-        vec.push_back(value);
+        vec.push_back(std::forward<T>(value));
     }
 
     auto begin() noexcept -> decltype(vec.begin()) {

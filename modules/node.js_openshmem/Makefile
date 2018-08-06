@@ -5,11 +5,11 @@ TARGETS=lib/libhclib_node.js_openshmem.so node_run node_addon
 all: $(TARGETS)
 
 lib/libhclib_node.js_openshmem.so: obj/hclib_node.js_openshmem.o
-	$(OSHCC) -shared $(HCLIB_LDFLAGS) $(HCLIB_LDLIBS) -o $@ $^
+	$(OSHCC) -O3 -shared $(HCLIB_LDFLAGS) $(HCLIB_LDLIBS) -o $@ $^
 	cp $@ $(HCLIB_ROOT)/lib
 
 obj/hclib_node.js_openshmem.o: src/hclib_node.js_openshmem.cpp
-	$(OSHCC) -c -std=c++11 -fPIC -Iinc $^ -o $@ $(HCLIB_CFLAGS)
+	$(OSHCC) -O3 -c -std=c++11 -fPIC -Iinc $^ -o $@ $(HCLIB_CFLAGS)
 
 node_run:
 	cd bin && $(MAKE) $@
