@@ -32,14 +32,14 @@ Napi::Number get_SHMEM_SYNC_VALUE_fn(const Napi::CallbackInfo& info) {
 Napi::Number init_fn(const Napi::CallbackInfo& info) {
     Napi::Env env = info.Env();
     //shmem_init();
-    init_async_helper(env);
+    init_async_helper(info);
     return Napi::Number::New(env, 1);
 }
 
 Napi::Number finalize_fn(const Napi::CallbackInfo& info) {
     Napi::Env env = info.Env();
     //shmem_finalize();
-    finalize_async_helper(env);
+    finalize_async_helper(info);
     return Napi::Number::New(env, 1);
 }
 

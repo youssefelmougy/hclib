@@ -19,8 +19,8 @@ HCLIB_MODULE_INITIALIZATION_FUNC(nodejs_openshmem_post_initialize) {
         assert(ret == SHMEM_THREAD_MULTIPLE);
     }
     else {
-        ::shmem_init();
-        //::shmem_init_thread(SHMEM_THREAD_MULTIPLE);
+        //::shmem_init();
+        ::shmem_init_thread(SHMEM_THREAD_MULTIPLE);
     }
 
     int n_nics;

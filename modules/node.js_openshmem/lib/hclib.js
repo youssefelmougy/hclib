@@ -22,7 +22,7 @@ init_hc : function (filename) {
     //ptr_array[one_type.name] = addon.shmem_malloc(size);
   //}
 
-  addon.init();
+  addon.init(function(){});
   promFlush = setInterval(() => {
    // addon.clear_put_promises();
   }, 100);
@@ -133,8 +133,16 @@ long_g_async: function(src, pe) {
     return addon.long_g_async(src, pe);
 },
 
+long_g_async_callback: function(src, pe, cb) {
+    return addon.long_g_async_callback(src, pe, cb);
+},
+
 double_g_async: function(src, pe) {
     return addon.double_g_async(src, pe);
+},
+
+double_g_async_callback: function(src, pe) {
+    return addon.double_g_async_callback(src, pe);
 },
 
 set_lock_async: function(ptr) {
