@@ -553,7 +553,7 @@ void try_schedule_async(hclib_task_t *async_task, hclib_worker_state *ws) {
 #endif
 
 #ifdef HCLIB_STATS
-    worker_stats[ws->id].spawned_tasks++;
+    //worker_stats[ws->id].spawned_tasks++;
 #endif
 
     if (is_eligible_to_schedule(async_task)) {
@@ -590,6 +590,10 @@ void spawn_handler(hclib_task_t *task, hclib_locale_t *locale,
 
 #ifdef VERBOSE
     fprintf(stderr, "spawn_handler: task=%p escaping=%d\n", task, escaping);
+#endif
+
+#ifdef HCLIB_STATS
+        worker_stats[ws->id].spawned_tasks++;
 #endif
 
     try_schedule_async(task, ws);
