@@ -129,6 +129,10 @@ int64_atomic_xor_sync: function(dest, val, pe) {
     return addon.int64_atomic_xor_sync(dest, val, pe);
 },
 
+int64_atomic_add_sync: function(dest, val, pe) {
+    return addon.int64_atomic_add_sync(dest, val, pe);
+},
+
 long_g_async: function(src, pe) {
     return addon.long_g_async(src, pe);
 },
@@ -143,6 +147,10 @@ double_g_async: function(src, pe) {
 
 double_g_async_callback: function(src, pe) {
     return addon.double_g_async_callback(src, pe);
+},
+
+int64_atomic_add_async: function(dest, val, pe) {
+    return addon.int64_atomic_add_async(dest, val, pe);
 },
 
 set_lock_async: function(ptr) {

@@ -587,6 +587,28 @@ Napi::Value shmem_clear_lock_async_callback_fn(const Napi::CallbackInfo& info) {
     return Napi::Value();
 }
 
+Napi::Promise shmem_int64_atomic_add_async_fn(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    int64_t *dest = (int64_t*) info[0].As<Napi::Number>().Int64Value();
+    int64_t val  = (int64_t) info[1].As<Napi::Number>().Int64Value();
+    int64_t pe = info[2].As<Napi::Number>().Int64Value();
+    Napi::Promise::Deferred * prom_ptr = new Napi::Promise::Deferred(env);
+
+    hclib::async_nb_at([=] () {
+        shmem_int64_atomic_add(dest, val, pe);
+#ifndef USE_UV_LOOP
+        auto ret = new promise_data<long>(prom_ptr, 1);
+        const napi_status status = napi_call_threadsafe_function(long_promise_ts_fn, ret, napi_tsfn_nonblocking);
+        assert(status == napi_ok);
+#else
+        prom_vec_long.push_back(std::make_pair(prom_ptr, 1));
+        uv_async_send(&async_var_prom_long);
+#endif
+    }, nic);
+
+    return prom_ptr->Promise();
+}
+
 Napi::Value Init_async(Napi::Env env, Napi::Object exports) {
 
     exports.Set(Napi::String::New(env, "long_g_async"),
@@ -609,6 +631,8 @@ Napi::Value Init_async(Napi::Env env, Napi::Object exports) {
             Napi::Function::New(env, shmem_clear_lock_async_finish_fn));
     exports.Set(Napi::String::New(env, "clear_lock_async_callback"),
             Napi::Function::New(env, shmem_clear_lock_async_callback_fn));
+    exports.Set(Napi::String::New(env, "int64_atomic_add_async"),
+            Napi::Function::New(env, shmem_int64_atomic_add_async_fn));
 
 #ifdef USE_UV_LOOP
     exports.Set(Napi::String::New(env, "clear_put_promises"),

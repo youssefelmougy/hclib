@@ -244,6 +244,24 @@ Napi::Number shmem_int64_atomic_xor_sync_fn(const Napi::CallbackInfo& info) {
     return Napi::Number::New(env, 1);
 }
 
+Napi::Number shmem_int64_atomic_add_sync_fn(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    int64_t *dest = (int64_t*) info[0].As<Napi::Number>().Int64Value();
+    int64_t val  = (int64_t) info[1].As<Napi::Number>().Int64Value();
+    int64_t pe = info[2].As<Napi::Number>().Int64Value();
+
+#ifdef USE_OFFLOAD
+    hclib::finish([=] () {
+        hclib::async_nb_at([=] () {
+#endif
+            shmem_int64_atomic_add(dest, val, pe);
+#ifdef USE_OFFLOAD
+        }, nic);
+    });
+#endif
+    return Napi::Number::New(env, 1);
+}
+
 Napi::Value Init_sync(Napi::Env env, Napi::Object exports) {
 
   exports.Set(Napi::String::New(env, "malloc_sync"),
@@ -272,6 +290,8 @@ Napi::Value Init_sync(Napi::Env env, Napi::Object exports) {
               Napi::Function::New(env, shmem_double_sum_to_all_sync_fn));
   exports.Set(Napi::String::New(env, "int64_atomic_xor_sync"),
               Napi::Function::New(env, shmem_int64_atomic_xor_sync_fn));
+  exports.Set(Napi::String::New(env, "int64_atomic_add_sync"),
+              Napi::Function::New(env, shmem_int64_atomic_add_sync_fn));
   return Napi::Number::New(env, 1);
 }
 
