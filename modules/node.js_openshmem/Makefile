@@ -1,15 +1,20 @@
 include $(HCLIB_ROOT)/include/hclib.mak
 
-TARGETS=lib/libhclib_node.js_openshmem.so node_run node_addon
+TARGETS=flags lib/libhclib_node.js_openshmem.so node_run node_addon
 
 all: $(TARGETS)
+
+flags:
+ifeq ($(findstring tr7, tr${CRAY_SHMEM_VER}),tr7)
+  SHMEM_FLAG += -DUSE_CRAY_SHMEM_7
+endif
 
 lib/libhclib_node.js_openshmem.so: obj/hclib_node.js_openshmem.o
 	$(OSHCC) -O3 -shared $(HCLIB_LDFLAGS) $(HCLIB_LDLIBS) -o $@ $^
 	cp $@ $(HCLIB_ROOT)/lib
 
 obj/hclib_node.js_openshmem.o: src/hclib_node.js_openshmem.cpp
-	$(OSHCC) -O3 -c -std=c++11 -fPIC -Iinc $^ -o $@ $(HCLIB_CFLAGS)
+	$(OSHCC) -O3 -c $(SHMEM_FLAG) -std=c++11 -fPIC -Iinc $^ -o $@ $(HCLIB_CFLAGS)
 
 node_run:
 	cd bin && $(MAKE) $@
