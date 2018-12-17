@@ -24,5 +24,5 @@ node_addon: src/addon_hclib_node.js_openshmem.cpp
 	cp obj/build/Release/hclib_openshmem.node lib/hclib_node.js_openshmem.node
 
 clean:
-	rm -rf lib/*.so lib/*.node obj/*.o obj/build obj/etc obj/node_modules obj/package-lock.json
+	rm -rf lib/*.so lib/*.node obj/*.o obj/build obj/etc obj/package-lock.json
 	cd bin && $(MAKE) $@
