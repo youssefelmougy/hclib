@@ -52,6 +52,11 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <stdlib.h>
 
+#ifndef FEATURE_RESILIENCE
+#define FEATURE_RESILIENCE
+#endif
+
+
 /**
  * @file User Interface to HCLIB's futures and promises.
  */
@@ -59,7 +64,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 /*
  * The maximum number of future objects a task can wait on.
  */
-#define MAX_NUM_WAITS 4
+#ifndef MAX_NUM_WAITS
+#define MAX_NUM_WAITS 8
+#endif
 
 /**
  * @brief Opaque type for promises.
@@ -74,6 +81,9 @@ struct hclib_task_t;
 
 // We define a typedef in this unit for convenience
 typedef struct hclib_promise_st {
+#ifdef FEATURE_RESILIENCE
+    int type;
+#endif
     hclib_future_t future;
     volatile int satisfied;
     void *volatile datum;

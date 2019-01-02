@@ -56,6 +56,9 @@ static inline hclib_task_t **_next_waiting_task(hclib_task_t *t) {
  * Initialize a pre-Allocated promise.
  */
 void hclib_promise_init(hclib_promise_t *promise) {
+#ifdef FEATURE_RESILIENCE
+    promise->type = 1;
+#endif
     promise->satisfied = 0;
     promise->datum = UNINITIALIZED_PROMISE_DATA_PTR;
     promise->wait_list_head = SENTINEL_FUTURE_WAITLIST_PTR;

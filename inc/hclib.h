@@ -239,6 +239,13 @@ void hclib_get_curr_task_info(void (**fp_out)(void *), void **args_out);
  */
 void hclib_print_runtime_stats(FILE *fp);
 
+#ifdef FEATURE_RESILIENCE
+/*
+ * Return the task local data
+ */
+void** hclib_get_curr_task_local();
+#endif
+
 /**
  * @}
  */

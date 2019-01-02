@@ -85,6 +85,11 @@ typedef struct _per_worker_stats {
     size_t count_steals;
     size_t stolen_tasks;
     size_t *stolen_tasks_per_thread;
+#ifdef LOCAL_STEAL_STATS
+    size_t local_count_steals;
+    size_t local_stolen_tasks;
+    size_t *local_stolen_tasks_per_thread;
+#endif
 
     /*
      * Blocking operations that imply context creation and switching, which can
@@ -363,6 +368,11 @@ static void hclib_entrypoint(const char **module_dependencies,
         worker_stats[i].stolen_tasks_per_thread = (size_t *)calloc(
                 hc_context->nworkers, sizeof(size_t));
         HASSERT(worker_stats[i].stolen_tasks_per_thread);
+#ifdef LOCAL_STEAL_STATS
+        worker_stats[i].local_stolen_tasks_per_thread = (size_t *)calloc(
+                hc_context->nworkers, sizeof(size_t));
+        HASSERT(worker_stats[i].local_stolen_tasks_per_thread);
+#endif
     }
 #endif
 
@@ -522,7 +532,7 @@ static inline void rt_schedule_async(hclib_task_t *async_task,
 static inline int is_eligible_to_schedule(hclib_task_t *async_task) {
 #ifdef VERBOSE
     fprintf(stderr, "is_eligible_to_schedule: async_task=%p singleton_future_0=%p\n",
-            async_task, async_task->singleton_future_0);
+            async_task, async_task);
 #endif
     // If any futures are non-null, the first must be non-null
     if (async_task->waiting_on[0]) {
@@ -543,7 +553,7 @@ void try_schedule_async(hclib_task_t *async_task, hclib_worker_state *ws) {
 #endif
 
 #ifdef HCLIB_STATS
-    worker_stats[ws->id].spawned_tasks++;
+    //worker_stats[ws->id].spawned_tasks++;
 #endif
 
     if (is_eligible_to_schedule(async_task)) {
@@ -580,6 +590,10 @@ void spawn_handler(hclib_task_t *task, hclib_locale_t *locale,
 
 #ifdef VERBOSE
     fprintf(stderr, "spawn_handler: task=%p escaping=%d\n", task, escaping);
+#endif
+
+#ifdef HCLIB_STATS
+        worker_stats[ws->id].spawned_tasks++;
 #endif
 
     try_schedule_async(task, ws);
@@ -629,6 +643,13 @@ static hclib_task_t *find_and_run_task(hclib_worker_state *ws,
                 worker_stats[ws->id].count_steals++;
                 worker_stats[ws->id].stolen_tasks += nstolen;
                 worker_stats[ws->id].stolen_tasks_per_thread[victim] += nstolen;
+#ifdef LOCAL_STEAL_STATS
+                if(ws->paths->last_successful_steal_locale == 0) {
+                  worker_stats[ws->id].local_count_steals++;
+                  worker_stats[ws->id].local_stolen_tasks += nstolen;
+                  worker_stats[ws->id].local_stolen_tasks_per_thread[victim] += nstolen;
+                }
+#endif
 #endif
                 task = stolen[0];
                 for (int i = 1; i < nstolen; i++) {
@@ -1135,6 +1156,13 @@ void hclib_yield(hclib_locale_t *locale) {
                 worker_stats[ws->id].count_steals++;
                 worker_stats[ws->id].stolen_tasks += nstolen;
                 worker_stats[ws->id].stolen_tasks_per_thread[victim] += nstolen;
+#ifdef LOCAL_STEAL_STATS
+                if(ws->paths->last_successful_steal_locale == 0) {
+                  worker_stats[ws->id].local_count_steals++;
+                  worker_stats[ws->id].local_stolen_tasks += nstolen;
+                  worker_stats[ws->id].local_stolen_tasks_per_thread[victim] += nstolen;
+                }
+#endif
 #endif
                 task = stolen[0];
                 for (int i = 1; i < nstolen; i++) {
@@ -1344,13 +1372,24 @@ void hclib_print_runtime_stats(FILE *fp) {
     for (i = 0; i < hc_context->nworkers; i++) {
         printf("  Worker %d: %lu tasks executed, %lu tasks spawned, "
                 "%lu tasks scheduled, %lu steals, %lu stolen tasks, "
+#ifdef LOCAL_STEAL_STATS
+                "%lu remote stolen tasks, "
+#endif
                 "%f tasks per steal, stolen from = [ ", i,
                 worker_stats[i].executed_tasks, worker_stats[i].spawned_tasks,
                 worker_stats[i].scheduled_tasks, worker_stats[i].count_steals,
                 worker_stats[i].stolen_tasks,
+#ifdef LOCAL_STEAL_STATS
+                worker_stats[i].stolen_tasks - worker_stats[i].local_stolen_tasks,
+#endif
                 (double)worker_stats[i].stolen_tasks / (double)worker_stats[i].count_steals);
         for (int j = 0; j < hc_context->nworkers; j++) {
-            printf("%lu ", worker_stats[i].stolen_tasks_per_thread[j]);
+#ifdef LOCAL_STEAL_STATS
+            printf("%5lu/%-5lu ", worker_stats[i].stolen_tasks_per_thread[j],
+            worker_stats[i].stolen_tasks_per_thread[j]-worker_stats[i].local_stolen_tasks_per_thread[j]);
+#else
+            printf("%5lu ", worker_stats[i].stolen_tasks_per_thread[j]);
+#endif
         }
         printf("]\n");
         sum_end_finishes += worker_stats[i].count_end_finishes;

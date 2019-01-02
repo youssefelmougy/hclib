@@ -38,6 +38,9 @@ typedef struct hclib_task_t {
     hclib_locale_t *locale;
     int non_blocking;
     struct hclib_task_t *next_waiter;
+#ifdef FEATURE_RESILIENCE
+    void *task_local;
+#endif
 } hclib_task_t;
 
 /** @struct loop_domain_t
