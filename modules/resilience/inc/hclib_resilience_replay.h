@@ -95,6 +95,13 @@ struct replay_task_params_t {
 
     //vector which capture task dependencies
     future_vector<T> *rel_vec;
+
+    replay_task_params_t(bool create) {
+        if(create == true) {
+            put_vec = new promise_vector<T>();
+            rel_vec = new future_vector<T>();
+        }
+    }
 };
 
 /*

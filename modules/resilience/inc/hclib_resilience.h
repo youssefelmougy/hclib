@@ -4,6 +4,7 @@
 #include "hclib_cpp.h"
 #include "hclib_ref-count.h"
 
+#define MPI_COMMUNICATION
 #define USE_STD_VEC
 //#define USE_C_ARRAY_WITH_ATOMIC
 //#define USE_C_ARRAY_WITH_LOCK
@@ -17,6 +18,32 @@
 #include <mutex>
 #else
 #error No data container for resilient promises specified
+#endif
+
+#ifdef MPI_COMMUNICATION
+#include<mpi.h>
+enum MPI_FUNC_LABELS {
+    MPI_Send_lbl,
+    MPI_Recv_lbl
+};
+
+struct mpi_data {
+    MPI_FUNC_LABELS type;
+    const void *buf;
+    int count;
+    MPI_Datatype datatype;
+    int src_dest;
+    int tag;
+    MPI_Comm comm;
+    MPI_Status *status;
+
+    mpi_data(MPI_FUNC_LABELS type, const void *buf, int count, MPI_Datatype datatype, int src_dest, int tag, MPI_Comm comm, MPI_Status *status=nullptr)
+        :type(type), buf(buf), count(count), datatype(datatype), src_dest(src_dest), tag(tag), comm(comm), status(status) {}
+
+    inline int send() {
+        return ::MPI_Send(buf, count, datatype, src_dest, tag, comm);
+    }
+};
 #endif
 
 //TODO: Assumes lambdas provided to tasks are non mutable.
@@ -55,6 +82,11 @@ class safe_vector {
     void push_back(T&& value) {
         std::lock_guard<std::mutex> lkg(mtx);
         vec.push_back(std::forward<T>(value));
+    }
+
+    void push_back(T& value) {
+        std::lock_guard<std::mutex> lkg(mtx);
+        vec.push_back(value);
     }
 
     size_t size() const noexcept {
@@ -139,6 +171,22 @@ class safe_future_vector : public safe_vector<T> {
             data_var[i]->release();
     }
 };
+
+#ifdef MPI_COMMUNICATION
+template<typename T>
+class safe_mpi_data_vector : public safe_vector<T> {
+  public:
+    void do_sends() {
+        //perform the actual send
+        auto data_var = safe_vector<T>::data();
+        auto size_var = safe_vector<T>::size();
+        for(int i=0; i<size_var; i++) {
+            data_var[i]->send();
+            delete data_var[i];
+        }
+    }
+};
+#endif
 
 } // namespace util
 

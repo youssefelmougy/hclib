@@ -23,9 +23,7 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
     U* lambda_ptr = new U(lambda);
 
     hclib::async_await_at([=]() {
-        auto rtp = new replay_task_params_t<void*>();;
-        rtp->put_vec = new promise_vector<void*>();
-        rtp->rel_vec = new future_vector<void*>();
+        auto rtp = new replay_task_params_t<void*>(true);
         bool result = false;
         int index = -1;
 
@@ -57,6 +55,7 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
         if(result) {
             rtp->put_vec->do_puts(index);
             rtp->rel_vec->do_releases();
+            rtp->mpi_send_vec->do_sends();
             prom_check->put(1);
         }
         else {
@@ -84,9 +83,7 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
     U* lambda_ptr = new U(lambda);
 
     hclib::async_await_at([=]() {
-        auto rtp = new replay_task_params_t<void*>();;
-        rtp->put_vec = new promise_vector<void*>();
-        rtp->rel_vec = new future_vector<void*>();
+        auto rtp = new replay_task_params_t<void*>(true);
         bool result = false;
         int index = -1;
 
@@ -118,6 +115,7 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
         if(result) {
             rtp->put_vec->do_puts(index);
             rtp->rel_vec->do_releases();
+            rtp->mpi_send_vec->do_sends();
             prom_check->put(1);
         }
         else {
@@ -152,9 +150,7 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
     U* lambda_ptr = new U(lambda);
 
     hclib::async_await_at([=]() {
-        auto rtp = new replay_task_params_t<void*>();;
-        rtp->put_vec = new promise_vector<void*>();
-        rtp->rel_vec = new future_vector<void*>();
+        auto rtp = new replay_task_params_t<void*>(true);
         bool result = false;
         int index = -1;
 
@@ -187,6 +183,7 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
         if(result) {
             rtp->put_vec->do_puts(index);
             rtp->rel_vec->do_releases();
+            rtp->mpi_send_vec->do_sends();
             prom_check->put(1);
         }
         else {
@@ -212,9 +209,7 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
     U* lambda_ptr = new U(lambda);
 
     hclib::async_await_at([=]() {
-        auto rtp = new replay_task_params_t<void*>();;
-        rtp->put_vec = new promise_vector<void*>();
-        rtp->rel_vec = new future_vector<void*>();
+        auto rtp = new replay_task_params_t<void*>(true);
         bool result = false;
         int index = -1;
 
@@ -246,6 +241,7 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
         if(result) {
             rtp->put_vec->do_puts(index);
             rtp->rel_vec->do_releases();
+            rtp->mpi_send_vec->do_sends();
             prom_check->put(1);
         }
         else {

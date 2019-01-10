@@ -107,6 +107,15 @@ struct diamond_task_params_t {
     volatile int *count;
     hclib::promise_t<int> *finish_prom;
 #endif
+
+    diamond_task_params_t() {}
+
+    diamond_task_params_t(bool create) {
+        if(create == true) {
+            put_vec = new promise_vector<T>();
+            rel_vec = new future_vector<T>();
+        }
+    }
 };
 
 /*

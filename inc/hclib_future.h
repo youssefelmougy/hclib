@@ -77,7 +77,8 @@ HASSERT_STATIC(sizeof(future_t<void*>) == sizeof(hclib_future_t),
 }
 
 #ifdef FEATURE_RESILIENCE
-hclib_future_t* future_nullptr = (hclib_future_t*)nullptr;
+//hclib_future_t* future_nullptr = (hclib_future_t*)nullptr;
+#define future_nullptr ((hclib_future_t*)nullptr)
 #endif
 
 #endif

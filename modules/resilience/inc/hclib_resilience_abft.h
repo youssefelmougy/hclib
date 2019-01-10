@@ -95,6 +95,13 @@ struct abft_task_params_t {
 
     //vector which capture task dependencies
     future_vector<T> *rel_vec;
+
+    abft_task_params_t(bool create) {
+        if(create == true) {
+            put_vec = new promise_vector<T>();
+            rel_vec = new future_vector<T>();
+        }
+    }
 };
 
 /*
@@ -222,9 +229,7 @@ void async_await_check_at(T1&& lambda, hclib::promise_t<int> *prom_check,
     U2* abft_lambda_ptr = new U2(abft_lambda);
 
     hclib::async_await_at([=]() {
-        auto atp = new abft_task_params_t<void*>();;
-        atp->put_vec = new promise_vector<void*>();
-        atp->rel_vec = new future_vector<void*>();
+        auto atp = new abft_task_params_t<void*>(true);
         bool result = false;
         int index = 0;
 
@@ -286,9 +291,7 @@ void async_await_check_at(T1&& lambda, hclib::promise_t<int> *prom_check,
     U2* abft_lambda_ptr = new U2(abft_lambda);
 
     hclib::async_await_at([=]() {
-        auto atp = new abft_task_params_t<void*>();;
-        atp->put_vec = new promise_vector<void*>();
-        atp->rel_vec = new future_vector<void*>();
+        auto atp = new abft_task_params_t<void*>(true);
         bool result = false;
         int index = 0;
 

@@ -158,6 +158,13 @@ struct checkpoint_task_params_t {
 
     //vector which capture task dependencies
     future_vector<T> *rel_vec;
+
+    checkpoint_task_params_t(bool create) {
+        if(create == true) {
+            put_vec = new promise_vector<T>();
+            rel_vec = new future_vector<T>();
+        }
+    }
 };
 
 /*
@@ -324,9 +331,7 @@ async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
     U* lambda_ptr = new U(lambda);
 
     hclib::async_await([=]() {
-        auto ctp = new checkpoint_task_params_t<void*>();;
-        ctp->put_vec = new promise_vector<void*>();
-        ctp->rel_vec = new future_vector<void*>();
+        auto ctp = new checkpoint_task_params_t<void*>(true);
         ctp->checkpoint_run = 0;
         bool result = false;
         int index = 0;

@@ -88,6 +88,10 @@ using promise_vector = hclib::resilience::util::safe_promise_vector<promise_t<T>
 template<typename T>
 using future_vector = hclib::resilience::util::safe_future_vector<future_t<T>*>;
 
+#ifdef MPI_COMMUNICATION
+using mpi_data_vector = hclib::resilience::util::safe_mpi_data_vector<mpi_data*>;
+#endif
+
 /*
 metadata that is passed between tasks created within each replica
 
@@ -111,6 +115,35 @@ struct resilient_task_params_t {
     hclib::promise_t<int> *finish_prom;
 #endif
 
+#ifdef MPI_COMMUNICATION
+    mpi_data_vector *mpi_send_vec;
+#endif
+
+    resilient_task_params_t() {}
+
+    resilient_task_params_t(bool create) {
+        if(create == true) {
+            put_vec = new promise_vector<T>();
+            rel_vec = new future_vector<T>();
+#ifdef MPI_COMMUNICATION
+            mpi_send_vec = new mpi_data_vector();
+#endif
+        }
+    }
+
+    ~resilient_task_params_t() {
+        //delete put_vec;
+        //delete rel_vec;
+
+#ifdef FINISH_WORKAROUND
+        delete count;
+        delete finish_prom;
+#endif
+
+#ifdef MPI_COMMUNICATION
+        delete mpi_send_vec;
+#endif
+    }
 };
 
 /*
