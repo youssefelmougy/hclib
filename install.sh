@@ -63,6 +63,8 @@ mkdir -p `dirname ${HCLIB_ENV_SETUP_SCRIPT}`
 cat > "${HCLIB_ENV_SETUP_SCRIPT}" <<EOI
 # HClib environment setup
 export HCLIB_ROOT='${INSTALL_PREFIX}'
+export HCLIB_HOME='${REPO_ROOT}'
+export HCLIB_LOCALITY_FILE='${REPO_ROOT}/locality_graphs/node.json'
 
 MY_OS=\$(uname -s)
 if [ \${MY_OS} = "Darwin" ]; then

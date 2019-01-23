@@ -13,7 +13,7 @@ node_run: ../src/node_run.cpp
 		-I$(HCLIB_ROOT)/../modules/node.js_openshmem/inc \
 		-I$(NODEINC) -L$(NODELIB) $(NODELIBS) \
 		-lstdc++ -lhclib -lhclib_node.js_openshmem \
-		-L$(HCLIB_ROOT)/lib -L../lib $(JSMN_HOME)/libjsmn.a -o $@
+		-L$(HCLIB_ROOT)/lib -o $@
 
 clean:
 	rm -f node_run
