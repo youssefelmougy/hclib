@@ -6,6 +6,7 @@
 #include <unordered_map>
 #include <deque>
 #include <shmem.h>
+#include <uv.h>
 
 //#define USE_MIX_SYNC_ASYNC_STYLE
 //#define USE_UV_LOOP
@@ -26,6 +27,7 @@ std::mutex lock_queue_mtx;
 std::unordered_map<long*, bool> lock_is_async;
 #endif
 
+#ifndef USE_UV_LOOP
 napi_threadsafe_function long_promise_ts_fn, long_callback_ts_fn;
 napi_threadsafe_function double_promise_ts_fn, double_callback_ts_fn;
 napi_threadsafe_function lock_promise_ts_fn, lock_callback_ts_fn;
@@ -97,6 +99,169 @@ void finalize_async_helper(const Napi::CallbackInfo& info) {
     napi_release_threadsafe_function(lock_callback_ts_fn, napi_tsfn_release);
 }
 
+#else // USE_UV_LOOP
+
+safe_vector<promise_data<long>> prom_vec_long;
+safe_vector<promise_data<double>> prom_vec_double;
+safe_vector<callback_data<long>> callback_vec_long;
+safe_vector<callback_data<double>> callback_vec_double;
+safe_vector<Napi::Promise::Deferred *> prom_vec_lock;
+safe_vector<Napi::FunctionReference *> callback_vec_lock;
+
+template<typename T>
+inline safe_vector<promise_data<T>>* get_prom_vec() {assert(false); return &prom_vec_long; }
+
+template<>
+inline safe_vector<promise_data<long>>* get_prom_vec() { return &prom_vec_long; }
+
+template<>
+inline safe_vector<promise_data<double>>* get_prom_vec() { return &prom_vec_double; }
+
+template<typename T>
+inline safe_vector<callback_data<T>>* get_callback_vec() {assert(false); return &callback_vec_long; }
+
+template<>
+inline safe_vector<callback_data<long>>* get_callback_vec() { return &callback_vec_long; }
+
+template<>
+inline safe_vector<callback_data<double>>* get_callback_vec() { return &callback_vec_double; }
+
+uv_async_t async_var_prom_long, async_var_prom_double;
+uv_async_t async_var_callback_long, async_var_callback_double;
+uv_async_t async_var_prom_lock, async_var_callback_lock;
+Napi::ObjectReference env_ref;
+
+//From https://github.com/nodejs/node-addon-api/issues/223
+struct CallbackScope {
+    napi_env env;
+    napi_handle_scope handle_scope;
+    napi_callback_scope callback_scope;
+
+    CallbackScope(napi_env env) : env(env) {
+        napi_status status;
+        napi_async_context context;
+        napi_value resource_name, resource_object;
+
+        status = napi_open_handle_scope(env, &handle_scope);
+        status = napi_create_string_utf8(env, "threaded_callback_resolve", NAPI_AUTO_LENGTH, &resource_name);
+        status = napi_create_object(env, &resource_object);
+        status = napi_async_init(env, resource_object, resource_name, &context);
+        status = napi_open_callback_scope(env, resource_object, context, &callback_scope);
+    }
+
+    ~CallbackScope() {
+        napi_status status;
+        status = napi_close_callback_scope(env, callback_scope);
+        status = napi_close_handle_scope(env, handle_scope);
+    }
+};
+
+template<typename T>
+void promise_resolve_fn_helper(Napi::Env env) {
+    auto prom_vec = get_prom_vec<T>();
+    std::lock_guard<std::mutex> lkg(prom_vec->mtx);
+    for(auto && elem:*prom_vec) {
+        elem.first->Resolve(Napi::Number::New(env,elem.second));
+        delete elem.first;
+    }
+    prom_vec->clear();
+}
+
+template<typename T>
+void promise_resolve_fn(uv_async_t* handle) {
+    Napi::Env env = env_ref.Env();
+    //Napi::HandleScope scope(env);
+    CallbackScope scope(env);
+    promise_resolve_fn_helper<T>(env);
+}
+
+template<typename T>
+void callback_fn_helper(Napi::Env env) {
+    auto callback_vec = get_callback_vec<T>();
+    std::lock_guard<std::mutex> lkg(callback_vec->mtx);
+    for(auto && elem:*callback_vec) {
+        elem.first->Call({Napi::Number::New(env,elem.second)});
+        delete elem.first;
+    }
+    callback_vec->clear();
+}
+
+template<typename T>
+void callback_fn(uv_async_t* handle) {
+    Napi::Env env = env_ref.Env();
+    Napi::HandleScope scope(env);
+    //CallbackScope scope(env);
+    callback_fn_helper<T>(env);
+}
+
+void promise_resolve_lock_fn_helper(Napi::Env env) {
+    //Napi::Value undefined = env.Undefined();
+    std::lock_guard<std::mutex> lkg(prom_vec_lock.mtx);
+    for(auto && elem: prom_vec_lock) {
+        elem->Resolve(Napi::Number::New(env,1));
+        delete elem;
+    }
+    prom_vec_lock.clear();
+}
+
+void promise_resolve_lock_fn(uv_async_t* handle) {
+    Napi::Env env = env_ref.Env();
+    //Napi::HandleScope scope(env);
+    CallbackScope scope(env);
+    promise_resolve_lock_fn_helper(env);
+}
+
+void callback_lock_fn_helper(Napi::Env env) {
+    Napi::Value undefined = env.Undefined();
+    std::lock_guard<std::mutex> lkg(callback_vec_lock.mtx);
+    for(auto && elem: callback_vec_lock) {
+        elem->Call({undefined});
+        delete elem;
+    }
+    callback_vec_lock.clear();
+}
+
+void callback_lock_fn(uv_async_t* handle) {
+    Napi::Env env = env_ref.Env();
+    Napi::HandleScope scope(env);
+    //CallbackScope scope(env);
+    callback_lock_fn_helper(env);
+}
+
+void init_async_helper(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    env_ref = Napi::Persistent(Napi::Object::New(env));
+    env_ref.SuppressDestruct();
+    uv_async_init(uv_default_loop(), &async_var_prom_long, promise_resolve_fn<long>);
+    uv_async_init(uv_default_loop(), &async_var_prom_double, promise_resolve_fn<double>);
+    uv_async_init(uv_default_loop(), &async_var_callback_long, callback_fn<long>);
+    uv_async_init(uv_default_loop(), &async_var_callback_double, callback_fn<double>);
+    uv_async_init(uv_default_loop(), &async_var_prom_lock, promise_resolve_lock_fn);
+    uv_async_init(uv_default_loop(), &async_var_callback_lock, callback_lock_fn);
+}
+
+void finalize_async_helper(const Napi::CallbackInfo& info) {
+    uv_close((uv_handle_t*) &async_var_prom_long, nullptr);
+    uv_close((uv_handle_t*) &async_var_prom_double, nullptr);
+    uv_close((uv_handle_t*) &async_var_callback_long, nullptr);
+    uv_close((uv_handle_t*) &async_var_callback_double, nullptr);
+    uv_close((uv_handle_t*) &async_var_prom_lock, nullptr);
+    uv_close((uv_handle_t*) &async_var_callback_lock, nullptr);
+}
+
+Napi::Value clear_put_promises_fn(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    promise_resolve_fn_helper<long>(env);
+    promise_resolve_fn_helper<double>(env);
+    callback_fn_helper<long>(env);
+    callback_fn_helper<double>(env);
+    promise_resolve_lock_fn_helper(env);
+    callback_lock_fn_helper(env);
+    return Napi::Value();
+}
+
+#endif // USE_UV_LOOP
+
 Napi::Promise shmem_long_g_async_fn(const Napi::CallbackInfo& info) {
     Napi::Env env = info.Env();
     long *src = (long*) info[0].As<Napi::Number>().Int64Value();
@@ -105,9 +270,14 @@ Napi::Promise shmem_long_g_async_fn(const Napi::CallbackInfo& info) {
 
     hclib::async_nb_at([=] () {
         long val = shmem_long_g(src, pe);
+#ifndef USE_UV_LOOP
         auto ret = new promise_data<long>(prom_ptr, val);
         const napi_status status = napi_call_threadsafe_function(long_promise_ts_fn, ret, napi_tsfn_nonblocking);
         assert(status == napi_ok);
+#else
+        prom_vec_long.push_back(std::make_pair(prom_ptr, val));
+        uv_async_send(&async_var_prom_long);
+#endif
     }, nic);
 
     return prom_ptr->Promise();
@@ -121,9 +291,14 @@ Napi::Value shmem_long_g_async_callback_fn(const Napi::CallbackInfo& info) {
 
     hclib::async_nb_at([=] () {
         long val = shmem_long_g(src, pe);
+#ifndef USE_UV_LOOP
         auto ret = new callback_data<long>(cb_ptr, val);
         const napi_status status = napi_call_threadsafe_function(long_callback_ts_fn, ret, napi_tsfn_nonblocking);
         assert(status == napi_ok);
+#else
+        callback_vec_long.push_back(std::make_pair(cb_ptr, val));
+        uv_async_send(&async_var_callback_long);
+#endif
     }, nic);
 
     return Napi::Value();
@@ -137,9 +312,14 @@ Napi::Promise shmem_double_g_async_fn(const Napi::CallbackInfo& info) {
 
     hclib::async_nb_at([=] () {
         double val = shmem_double_g(src, pe);
+#ifndef USE_UV_LOOP
         auto ret = new promise_data<double>(prom_ptr, val);
         const napi_status status = napi_call_threadsafe_function(double_promise_ts_fn, ret, napi_tsfn_nonblocking);
         assert(status == napi_ok);
+#else
+        prom_vec_double.push_back(std::make_pair(prom_ptr, val));
+        uv_async_send(&async_var_prom_double);
+#endif
     }, nic);
 
     return prom_ptr->Promise();
@@ -153,9 +333,14 @@ Napi::Value shmem_double_g_async_callback_fn(const Napi::CallbackInfo& info) {
 
     hclib::async_nb_at([=] () {
         double val = shmem_double_g(src, pe);
+#ifndef USE_UV_LOOP
         auto ret = new callback_data<double>(cb_ptr, val);
         const napi_status status = napi_call_threadsafe_function(double_callback_ts_fn, ret, napi_tsfn_nonblocking);
         assert(status == napi_ok);
+#else
+        callback_vec_double.push_back(std::make_pair(cb_ptr, val));
+        uv_async_send(&async_var_callback_double);
+#endif
     }, nic);
 
     return Napi::Value();
@@ -175,8 +360,13 @@ Napi::Promise shmem_set_lock_async_fn(const Napi::CallbackInfo& info) {
         lock_queue_mtx.unlock();
         hclib::async_nb_at([=] () {
             shmem_set_lock(ptr);
+#ifndef USE_UV_LOOP
             const napi_status status = napi_call_threadsafe_function(lock_promise_ts_fn, prom_ptr, napi_tsfn_nonblocking);
             assert(status == napi_ok);
+#else
+            prom_vec_lock.push_back((Napi::Promise::Deferred*)prom_ptr);
+            uv_async_send(&async_var_prom_lock);
+#endif
         }, nic);
 #ifdef USE_MIX_SYNC_ASYNC_STYLE
         lock_is_async[ptr] = true;
@@ -208,8 +398,13 @@ Napi::Value shmem_set_lock_async_callback_fn(const Napi::CallbackInfo& info) {
         lock_queue_mtx.unlock();
         hclib::async_nb_at([=] () {
             shmem_set_lock(ptr);
+#ifndef USE_UV_LOOP
             const napi_status status = napi_call_threadsafe_function(lock_callback_ts_fn, cbr, napi_tsfn_nonblocking);
             assert(status == napi_ok);
+#else
+            callback_vec_lock.push_back((Napi::FunctionReference*)cbr);
+            uv_async_send(&async_var_callback_lock);
+#endif
         }, nic);
     }
     else {
@@ -231,8 +426,13 @@ Napi::Promise shmem_clear_lock_async_fn(const Napi::CallbackInfo& info) {
 
     hclib::async_nb_at([=] () {
         shmem_clear_lock(ptr);
+#ifndef USE_UV_LOOP
         const napi_status status = napi_call_threadsafe_function(lock_promise_ts_fn, prom_ptr, napi_tsfn_nonblocking);
         assert(status == napi_ok);
+#else
+        prom_vec_lock.push_back((Napi::Promise::Deferred*)prom_ptr);
+        uv_async_send(&async_var_prom_lock);
+#endif
 
         //if there is additional set_lock_async calls, then they will be queued.
         //invoke set_lock if there are additional calls made from JS.
@@ -248,8 +448,13 @@ Napi::Promise shmem_clear_lock_async_fn(const Napi::CallbackInfo& info) {
             lock_queue_mtx.unlock();
 
             shmem_set_lock(ptr);
+#ifndef USE_UV_LOOP
             const napi_status status = napi_call_threadsafe_function(lock_promise_ts_fn, prom_ptr_next, napi_tsfn_nonblocking);
             assert(status == napi_ok);
+#else
+            prom_vec_lock.push_back((Napi::Promise::Deferred*)prom_ptr_next);
+            uv_async_send(&async_var_prom_lock);
+#endif
         }
         else {
             lock_queue_mtx.unlock();
@@ -281,8 +486,13 @@ Napi::Value shmem_clear_lock_async_noreturn_fn(const Napi::CallbackInfo& info) {
             lock_queue_mtx.unlock();
 
             shmem_set_lock(ptr);
+#ifndef USE_UV_LOOP
             const napi_status status = napi_call_threadsafe_function(lock_promise_ts_fn, prom_ptr_next, napi_tsfn_nonblocking);
             assert(status == napi_ok);
+#else
+            prom_vec_lock.push_back((Napi::Promise::Deferred*)prom_ptr_next);
+            uv_async_send(&async_var_prom_lock);
+#endif
         }
         else {
             lock_queue_mtx.unlock();
@@ -361,8 +571,13 @@ Napi::Value shmem_clear_lock_async_callback_fn(const Napi::CallbackInfo& info) {
             lock_queue_mtx.unlock();
 
             shmem_set_lock(ptr);
+#ifndef USE_UV_LOOP
             const napi_status status = napi_call_threadsafe_function(lock_callback_ts_fn, callback_next, napi_tsfn_nonblocking);
             assert(status == napi_ok);
+#else
+            callback_vec_lock.push_back((Napi::FunctionReference*)callback_next);
+            uv_async_send(&async_var_callback_lock);
+#endif
         }
         else {
             lock_queue_mtx.unlock();
@@ -381,9 +596,14 @@ Napi::Promise shmem_int64_atomic_add_async_fn(const Napi::CallbackInfo& info) {
 
     hclib::async_nb_at([=] () {
         shmem_int64_atomic_add(dest, val, pe);
+#ifndef USE_UV_LOOP
         auto ret = new promise_data<long>(prom_ptr, 1);
         const napi_status status = napi_call_threadsafe_function(long_promise_ts_fn, ret, napi_tsfn_nonblocking);
         assert(status == napi_ok);
+#else
+        prom_vec_long.push_back(std::make_pair(prom_ptr, 1));
+        uv_async_send(&async_var_prom_long);
+#endif
     }, nic);
 
     return prom_ptr->Promise();
@@ -414,6 +634,10 @@ Napi::Value Init_async(Napi::Env env, Napi::Object exports) {
     exports.Set(Napi::String::New(env, "int64_atomic_add_async"),
             Napi::Function::New(env, shmem_int64_atomic_add_async_fn));
 
+#ifdef USE_UV_LOOP
+    exports.Set(Napi::String::New(env, "clear_put_promises"),
+            Napi::Function::New(env, clear_put_promises_fn));
+#endif
     return Napi::Number::New(env, 1);
 
 }

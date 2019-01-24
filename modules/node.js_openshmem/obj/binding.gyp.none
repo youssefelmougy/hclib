@@ -15,7 +15,6 @@
       "include_dirs": [
         "<!@(node -p \"require('node-addon-api').include\")",
         "<!(echo $HCLIB_ROOT)/include",
-        "<!(echo $HCLIB_HOME)/modules/system/inc",
         "<!(echo $HCLIB_HOME)/modules/node.js_openshmem/inc",
 #        "<!(echo $OPENSHMEM_INSTALL)/include",
       ],
@@ -25,7 +24,6 @@
         ],
         "library_dirs": [
           "<!(echo $HCLIB_ROOT)/lib",
-          "<!(echo $HCLIB_HOME)/modules/system/lib",
           "<!(echo $HCLIB_HOME)/modules/node.js_openshmem/lib",
 #          "<!(echo $OPENSHMEM_INSTALL)/lib",
         ],
