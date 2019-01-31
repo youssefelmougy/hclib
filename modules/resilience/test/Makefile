@@ -11,7 +11,8 @@ TARGETS=resilience-d0 resilience-d1 resilience-r0 resilience-r1 resilience-a0 re
 all: $(TARGETS)
 
 %: %.cpp
-	$(CXX) -g -O0 -std=c++14 $(HCLIB_CFLAGS) $(HCLIB_LDFLAGS) -o $@ $^ $(HCLIB_LDLIBS)
+	#$(CXX) -g -O0 -std=c++14 $(HCLIB_CFLAGS) $(HCLIB_LDFLAGS) -o $@ $^ $(HCLIB_LDLIBS)
+	mpicc -g -O0 -std=c++14 $(HCLIB_CFLAGS) $(HCLIB_LDFLAGS) -o $@ $^ $(HCLIB_LDLIBS)
 
 test:
 	for target in $(TARGETS); do ./$$target ; done

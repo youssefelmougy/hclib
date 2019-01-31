@@ -37,16 +37,18 @@ int main(int argc, char ** argv) {
     int SIGNAL_VALUE = 42;
     const char *deps[] = { "system"};
     //MPI_Init(&argc, &argv);
-    int provided;
-    MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &provided);
-    assert(provided == MPI_THREAD_MULTIPLE);
-    int rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    //int provided;
+    //MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &provided);
+    //assert(provided == MPI_THREAD_MULTIPLE);
     hclib::launch(deps, 1, [=]() {
+        int rank;
+        MPI_Comm_rank(MPI_COMM_WORLD, &rank);
         hclib::finish([=]() {
             hclib::promise_t<int*> *prom = new hclib::promise_t<int*>();
             replay::promise_t<int_obj*> *prom1 = new replay::promise_t<int_obj*>(1);
             hclib::promise_t<int>* prom_res = new hclib::promise_t<int>();
+            hclib::promise_t<void*>* prom_recv = new hclib::promise_t<void*>();
+            hclib::promise_t<void*>* prom_send = new hclib::promise_t<void*>();
 
             hclib::async_await( [=]() {
                    sleep(1);
@@ -61,6 +63,17 @@ int main(int argc, char ** argv) {
                     prom1->get_future()->release();
             }, prom1->get_future());
  
+            if(rank == 0)
+                hclib::async_await( [=]() {
+                        void *send_tmp =  prom_send->get_future()->get();
+                        printf("Value send %d\n", *(int*)send_tmp);
+                }, prom_send->get_future()); 
+            else if(rank == 1)
+                hclib::async_await( [=]() {
+                      void *recv_tmp = prom_recv->get_future()->get();
+                      printf("Value Recv %d\n", *(int*)recv_tmp);
+                }, prom_recv->get_future());
+
             //This could be an array, vector, hash table or anything
             int *args = (int*)malloc(sizeof(int)*1);
             replay::async_await_check<NON_LEAF>( [=]() {
@@ -74,13 +87,15 @@ int main(int argc, char ** argv) {
                         prom1->put(n2);
                         *args = n2->n;
                         if(rank == 0) {
-                            replay::MPI_Send(&(n2->n), 1, MPI_INT, 1, 1, MPI_COMM_WORLD);
+                            //replay::Send(&(n2->n), sizeof(int), 1, 1, 0);
+                            replay::Isend(&(n2->n), sizeof(int), 1, 1, 0, prom_send);
                         }
                     }, future_nullptr);
 
                     if(rank == 1) {
-                        int buf;
-                        replay::MPI_Recv(&buf, 1, MPI_INT, 0, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                        int buf=6;
+                        //replay::Recv(&buf, sizeof(int), 0, 1, MPI_STATUS_IGNORE);
+                        replay::Irecv(sizeof(int), 0, 1, prom_recv);
                         printf("Received %d in rank %d\n", buf, rank);
                     }
             }, prom_res, check, args, prom->get_future());
@@ -92,8 +107,8 @@ int main(int argc, char ** argv) {
             }, prom_res->get_future());
         });
     });
-    printf("Going to Exiting %d\n", rank); fflush(stdout);
-    MPI_Finalize();
+    printf("Going to Exiting\n");
+    //MPI_Finalize();
     printf("Exiting...\n");
     return 0;
 }

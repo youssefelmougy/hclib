@@ -111,8 +111,8 @@ struct resilient_task_params_t {
     future_vector<T> *rel_vec;
 
 #ifdef FINISH_WORKAROUND
-    volatile int *count;
-    hclib::promise_t<int> *finish_prom;
+    volatile int *count = nullptr;
+    hclib::promise_t<int> *finish_prom = nullptr;
 #endif
 
 #ifdef MPI_COMMUNICATION

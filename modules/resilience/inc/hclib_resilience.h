@@ -24,24 +24,36 @@
 #include<mpi.h>
 enum MPI_FUNC_LABELS {
     MPI_Send_lbl,
-    MPI_Recv_lbl
+    MPI_Isend_lbl
 };
+
+int Isend_helper(void *buf, int count, MPI_Datatype datatype, int dest, int tag, hclib::promise_t<void*> *prom, MPI_Comm comm);
 
 struct mpi_data {
     MPI_FUNC_LABELS type;
-    const void *buf;
+    void *buf;
     int count;
     MPI_Datatype datatype;
     int src_dest;
     int tag;
+    int do_free;
+    hclib_promise_t *prom;
     MPI_Comm comm;
-    MPI_Status *status;
 
-    mpi_data(MPI_FUNC_LABELS type, const void *buf, int count, MPI_Datatype datatype, int src_dest, int tag, MPI_Comm comm, MPI_Status *status=nullptr)
-        :type(type), buf(buf), count(count), datatype(datatype), src_dest(src_dest), tag(tag), comm(comm), status(status) {}
+    mpi_data(MPI_FUNC_LABELS type, void *buf, int count, MPI_Datatype datatype, int src_dest, int tag, int do_free, hclib_promise_t *prom, MPI_Comm comm)
+        :type(type), buf(buf), count(count), datatype(datatype), src_dest(src_dest), tag(tag), do_free(do_free), prom(prom), comm(comm) {}
 
     inline int send() {
-        return ::MPI_Send(buf, count, datatype, src_dest, tag, comm);
+        assert(type == MPI_Isend_lbl);
+        //blocking APIs are used only for debugging non-error executions
+        //if(type == MPI_Send_lbl)
+        //    return ::MPI_Send(buf, count, datatype, src_dest, tag, comm);
+        //else 
+            return ::Isend_helper(buf, count, datatype, src_dest, tag, (hclib::promise_t<void*>*)prom, comm);
+    }
+
+    inline void tmp_delete() {
+        if(do_free == 1) free(buf);
     }
 };
 #endif
@@ -101,13 +113,13 @@ class safe_vector {
         vec.clear();
     }
 
-    //auto begin() noexcept -> decltype(vec.begin()) {
-    //    return vec.begin();
-    //}
+    auto begin() noexcept -> decltype(vec.begin()) {
+        return vec.begin();
+    }
 
-    //auto end() noexcept -> decltype(vec.end()) {
-    //    return vec.end();
-    //}
+    auto end() noexcept -> decltype(vec.end()) {
+        return vec.end();
+    }
 #elif defined (USE_C_ARRAY_WITH_ATOMIC) || defined (USE_C_ARRAY_WITH_LOCK)
 #ifndef SAFE_VECTOR_CAPACITY
 #define SAFE_VECTOR_CAPACITY 128
