@@ -32,9 +32,31 @@ Napi::Number shmem_malloc_sync_fn(const Napi::CallbackInfo& info) {
     return Napi::Number::New(env, (uintptr_t)ptr);
 }
 
+Napi::ArrayBuffer shmem_malloc_ab_sync_fn(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    int64_t size = info[0].As<Napi::Number>().Int64Value();
+    void **out_alloc = (void **)malloc(sizeof(void *));
+    START_IS_OFFLOAD
+        *out_alloc = shmem_malloc(size);
+    END_IS_OFFLOAD
+    Napi::ArrayBuffer buffer = Napi::ArrayBuffer::New(info.Env(), *out_alloc, size);
+    free(out_alloc);
+    return buffer;
+}
+
 Napi::Number shmem_free_sync_fn(const Napi::CallbackInfo& info) {
     Napi::Env env = info.Env();
     void *ptr = (void*) info[0].As<Napi::Number>().Int64Value();
+    START_IS_OFFLOAD
+        shmem_free(ptr);
+    END_IS_OFFLOAD
+    return Napi::Number::New(env, 1);
+}
+
+Napi::Number shmem_free_ab_sync_fn(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    Napi::ArrayBuffer buffer = info[0].As<Napi::ArrayBuffer>();
+    void* ptr = static_cast<void*>(buffer.Data());
     START_IS_OFFLOAD
         shmem_free(ptr);
     END_IS_OFFLOAD
@@ -89,11 +111,44 @@ Napi::Number shmem_double_p_sync_fn(const Napi::CallbackInfo& info) {
     return Napi::Number::New(env, 1);
 }
 
-Napi::Number shmem_double_g_nbi_fn(const Napi::CallbackInfo& info) {
+Napi::Number shmem_double_g_nbi_sync_fn(const Napi::CallbackInfo& info) {
     Napi::Env env = info.Env();
-    double *src = (double*) info[0].As<Napi::Number>().Int64Value();
-    int64_t pe = info[1].As<Napi::Number>().Int64Value();
+    Napi::ArrayBuffer dest_buffer = info[0].As<Napi::ArrayBuffer>();
+    double* dest_ptr = static_cast<double*>(dest_buffer.Data());
+    int64_t dest_index = info[1].As<Napi::Number>().Int64Value();
+    Napi::ArrayBuffer src_buffer = info[2].As<Napi::ArrayBuffer>();
+    double* src_ptr = static_cast<double*>(src_buffer.Data());
+    int64_t src_index = info[3].As<Napi::Number>().Int64Value();
+    int64_t pe = info[4].As<Napi::Number>().Int64Value();
 
+    START_IS_OFFLOAD
+        shmem_double_get_nbi(dest_ptr+dest_index, src_ptr+src_index, 1, pe);
+    END_IS_OFFLOAD
+    return Napi::Number::New(env, 1);
+}
+
+Napi::Number shmem_double_p_nbi_sync_fn(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    Napi::ArrayBuffer dest_buffer = info[0].As<Napi::ArrayBuffer>();
+    double* dest_ptr = static_cast<double*>(dest_buffer.Data());
+    int64_t dest_index = info[1].As<Napi::Number>().Int64Value();
+    Napi::ArrayBuffer src_buffer = info[2].As<Napi::ArrayBuffer>();
+    double* src_ptr = static_cast<double*>(src_buffer.Data());
+    int64_t src_index = info[3].As<Napi::Number>().Int64Value();
+    int64_t pe = info[4].As<Napi::Number>().Int64Value();
+
+    START_IS_OFFLOAD
+        shmem_double_put_nbi(dest_ptr+dest_index, src_ptr+src_index, 1, pe);
+    END_IS_OFFLOAD
+    return Napi::Number::New(env, 1);
+}
+
+Napi::Number shmem_quiet_sync_fn(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    START_IS_OFFLOAD
+        shmem_quiet();
+    END_IS_OFFLOAD
+    return Napi::Number::New(env, 1);
 }
 
 Napi::Number shmem_barrier_all_sync_fn(const Napi::CallbackInfo& info) {
@@ -205,8 +260,12 @@ Napi::Value Init_sync(Napi::Env env, Napi::Object exports) {
 
   exports.Set(Napi::String::New(env, "malloc_sync"),
               Napi::Function::New(env, shmem_malloc_sync_fn));
+  exports.Set(Napi::String::New(env, "malloc_ab_sync"),
+              Napi::Function::New(env, shmem_malloc_ab_sync_fn));
   exports.Set(Napi::String::New(env, "free_sync"),
               Napi::Function::New(env, shmem_free_sync_fn));
+  exports.Set(Napi::String::New(env, "free_ab_sync"),
+              Napi::Function::New(env, shmem_free_ab_sync_fn));
   exports.Set(Napi::String::New(env, "long_g_sync"),
               Napi::Function::New(env, shmem_long_g_sync_fn));
   exports.Set(Napi::String::New(env, "long_p_sync"),
@@ -215,6 +274,12 @@ Napi::Value Init_sync(Napi::Env env, Napi::Object exports) {
               Napi::Function::New(env, shmem_double_g_sync_fn));
   exports.Set(Napi::String::New(env, "double_p_sync"),
               Napi::Function::New(env, shmem_double_p_sync_fn));
+  exports.Set(Napi::String::New(env, "double_g_nbi_sync"),
+              Napi::Function::New(env, shmem_double_g_nbi_sync_fn));
+  exports.Set(Napi::String::New(env, "double_p_nbi_sync"),
+              Napi::Function::New(env, shmem_double_p_nbi_sync_fn));
+  exports.Set(Napi::String::New(env, "quiet_sync"),
+              Napi::Function::New(env, shmem_quiet_sync_fn));
   exports.Set(Napi::String::New(env, "barrier_all_sync"),
               Napi::Function::New(env, shmem_barrier_all_sync_fn));
   exports.Set(Napi::String::New(env, "set_lock_sync"),

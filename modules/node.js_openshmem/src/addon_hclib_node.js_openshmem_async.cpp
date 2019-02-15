@@ -389,6 +389,20 @@ Napi::Promise shmem_int64_atomic_add_async_fn(const Napi::CallbackInfo& info) {
     return prom_ptr->Promise();
 }
 
+Napi::Promise shmem_quiet_async_fn(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    Napi::Promise::Deferred * prom_ptr = new Napi::Promise::Deferred(env);
+
+    hclib::async_nb_at([=] () {
+        shmem_quiet();
+        auto ret = new promise_data<long>(prom_ptr, 1);
+        const napi_status status = napi_call_threadsafe_function(long_promise_ts_fn, ret, napi_tsfn_nonblocking);
+        assert(status == napi_ok);
+    }, nic);
+
+    return prom_ptr->Promise();
+}
+
 Napi::Value Init_async(Napi::Env env, Napi::Object exports) {
 
     exports.Set(Napi::String::New(env, "long_g_async"),
@@ -413,6 +427,8 @@ Napi::Value Init_async(Napi::Env env, Napi::Object exports) {
             Napi::Function::New(env, shmem_clear_lock_async_callback_fn));
     exports.Set(Napi::String::New(env, "int64_atomic_add_async"),
             Napi::Function::New(env, shmem_int64_atomic_add_async_fn));
+    exports.Set(Napi::String::New(env, "quiet_async"),
+            Napi::Function::New(env, shmem_quiet_async_fn));
 
     return Napi::Number::New(env, 1);
 

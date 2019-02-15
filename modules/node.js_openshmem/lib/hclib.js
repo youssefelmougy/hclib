@@ -81,8 +81,16 @@ malloc_sync: function(size) {
     return addon.malloc_sync(size);
 },
 
+malloc_ab_sync: function(size) {
+    return addon.malloc_ab_sync(size);
+},
+
 free_sync: function(ptr) {
     return addon.free_sync(ptr);
+},
+
+free_ab_sync: function(array_buffer) {
+    return addon.free_ab_sync(array_buffer);
 },
 
 long_g_sync: function(src, pe) {
@@ -99,6 +107,18 @@ double_g_sync: function(src, pe) {
 
 double_p_sync: function(dest, val, pe) {
     return addon.double_p_sync(dest, val, pe);
+},
+
+double_g_nbi_sync: function(dest_buf, dest_idx, src_buf, src_idx, pe) {
+    return addon.double_g_nbi_sync(dest_buf, dest_idx, src_buf, src_idx, pe);
+},
+
+double_p_nbi_sync: function(dest_buf, dest_idx, src_buf, src_idx, pe) {
+    return addon.double_p_nbi_sync(dest_buf, dest_idx, src_buf, src_idx, pe);
+},
+
+quiet_sync: function() {
+    return addon.quiet_sync();
 },
 
 barrier_all_sync: function() {
@@ -175,6 +195,10 @@ clear_lock_async_finish: function(ptr) {
 
 clear_lock_async_callback: function(ptr) {
     return addon.clear_lock_async_callback(ptr);
+},
+
+quiet_async: function() {
+    return addon.quiet_async();
 }
 
 };
