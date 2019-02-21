@@ -199,6 +199,12 @@ clear_lock_async_callback: function(ptr) {
 
 quiet_async: function() {
     return addon.quiet_async();
+},
+
+finish: function(func) {
+    //TODO: include context to isolate this finish scope from others
+    func();
+    return addon.quiet_async();
 }
 
 };

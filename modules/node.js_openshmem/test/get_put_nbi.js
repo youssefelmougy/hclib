@@ -26,7 +26,7 @@ else if(rank == 1) {
     console.log("value from 0 on 1 after quiet is " + arr2[0]);
     addon.finalize_hc();
 }
-else {
+else if(rank == 2) {
     addon.barrier_all_sync();
     addon.double_g_nbi_sync(buffer2, 0, buffer1, 0, 0);
     console.log("value from 0 on 2 before quiet is " + arr2[0]);
@@ -34,6 +34,17 @@ else {
     prom.then(function (fulfilled) {
         console.log("value from 0 on 2 after quiet is " + arr2[0]);
         addon.finalize_hc();
-    })
+    });
+}
+else {
+    addon.barrier_all_sync();
+    var prom = addon.finish( function() {
+        addon.double_g_nbi_sync(buffer2, 0, buffer1, 0, 0);
+        console.log("value from 0 on 3 before finish is " + arr2[0]);
+    });
+    prom.then(function (fulfilled) {
+        console.log("value from 0 on 3 after finish is " + arr2[0]);
+        addon.finalize_hc();
+    });
 }
 
