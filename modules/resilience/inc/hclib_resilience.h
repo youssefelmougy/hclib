@@ -27,12 +27,19 @@ enum MPI_FUNC_LABELS {
     MPI_Isend_lbl
 };
 
-int Isend_helper(void *buf, int count, MPI_Datatype datatype, int dest, int tag, hclib::promise_t<void*> *prom, MPI_Comm comm);
+//Forward declare checkpoint object
+namespace hclib::resilience::checkpoint {
+    class obj;
+};
+
+//create communication object which is alias for checkpoint object
+using communication_obj = hclib::resilience::checkpoint::obj;
+
+int Isend_helper(communication_obj* buf, MPI_Datatype datatype, int dest, int tag, hclib_promise_t *prom, MPI_Comm comm);
 
 struct mpi_data {
     MPI_FUNC_LABELS type;
-    void *buf;
-    int count;
+    communication_obj *buf;
     MPI_Datatype datatype;
     int src_dest;
     int tag;
@@ -40,8 +47,8 @@ struct mpi_data {
     hclib_promise_t *prom;
     MPI_Comm comm;
 
-    mpi_data(MPI_FUNC_LABELS type, void *buf, int count, MPI_Datatype datatype, int src_dest, int tag, int do_free, hclib_promise_t *prom, MPI_Comm comm)
-        :type(type), buf(buf), count(count), datatype(datatype), src_dest(src_dest), tag(tag), do_free(do_free), prom(prom), comm(comm) {}
+    mpi_data(MPI_FUNC_LABELS type, communication_obj *buf, MPI_Datatype datatype, int src_dest, int tag, int do_free, hclib_promise_t *prom, MPI_Comm comm)
+        :type(type), buf(buf),  datatype(datatype), src_dest(src_dest), tag(tag), do_free(do_free), prom(prom), comm(comm) {}
 
     inline int send() {
         assert(type == MPI_Isend_lbl);
@@ -49,7 +56,7 @@ struct mpi_data {
         //if(type == MPI_Send_lbl)
         //    return ::MPI_Send(buf, count, datatype, src_dest, tag, comm);
         //else 
-            return ::Isend_helper(buf, count, datatype, src_dest, tag, (hclib::promise_t<void*>*)prom, comm);
+            return ::Isend_helper(buf, datatype, src_dest, tag, prom, comm);
     }
 
     inline void tmp_delete() {

@@ -63,8 +63,14 @@ void poll_on_pending(pending_op **addr_of_head,
                     prev->next = op->next;
                 }
 
+                if (op->serialize) {
+                    op->data->deserialize(op->serialize);
+                }
+                else {
+                    //assert(false);
+                }
                 if (op->prom) {
-                    op->prom->put(op->buf);
+                    hclib_promise_put(op->prom, op->data);
                 } else {
                     assert(false);
                 }

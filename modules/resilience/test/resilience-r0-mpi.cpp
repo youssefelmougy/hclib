@@ -12,11 +12,23 @@ enum TASK_STATE {NON_LEAF, LEAF};
 
 //int_obj is not required for replay promises, base types can be used.
 //Here it is just used to print inside constructor/destructor
-class int_obj {
+class int_obj : public checkpoint::obj {
   public:
     int n;
     int_obj() { printf("creating int_obj\n"); }
     ~int_obj() { printf("deleting int_obj\n"); }
+
+    void deserialize(checkpoint::archive_obj* ar_ptr) {
+        n = *(int*)(ar_ptr->data);
+    }
+
+    checkpoint::archive_obj* serialize() {
+        auto ar_ptr = new checkpoint::archive_obj();
+        ar_ptr->size = sizeof(int);
+        ar_ptr->data = malloc(ar_ptr->size);
+        memcpy(ar_ptr->data, &n, ar_ptr->size);
+        return ar_ptr;
+    }
 };
 
 //set count to 0 or less to replay
@@ -44,11 +56,11 @@ int main(int argc, char ** argv) {
         int rank;
         MPI_Comm_rank(MPI_COMM_WORLD, &rank);
         hclib::finish([=]() {
-            hclib::promise_t<int*> *prom = new hclib::promise_t<int*>();
-            replay::promise_t<int_obj*> *prom1 = new replay::promise_t<int_obj*>(1);
-            hclib::promise_t<int>* prom_res = new hclib::promise_t<int>();
-            hclib::promise_t<void*>* prom_recv = new hclib::promise_t<void*>();
-            hclib::promise_t<void*>* prom_send = new hclib::promise_t<void*>();
+             auto prom = new hclib::promise_t<int*>();
+             auto prom1 = new replay::promise_t<int_obj*>(1);
+             auto prom_res = new hclib::promise_t<int>();
+             auto prom_recv = new hclib::promise_t<int_obj*>();
+             auto prom_send = new hclib::promise_t<int_obj*>();
 
             hclib::async_await( [=]() {
                    sleep(1);
@@ -65,13 +77,13 @@ int main(int argc, char ** argv) {
  
             if(rank == 0)
                 hclib::async_await( [=]() {
-                        void *send_tmp =  prom_send->get_future()->get();
-                        printf("Value send %d\n", *(int*)send_tmp);
+                        int_obj *send_tmp =  prom_send->get_future()->get();
+                        printf("Value send %d\n", send_tmp->n);
                 }, prom_send->get_future()); 
             else if(rank == 1)
                 hclib::async_await( [=]() {
-                      void *recv_tmp = prom_recv->get_future()->get();
-                      printf("Value Recv %d\n", *(int*)recv_tmp);
+                      int_obj *recv_tmp = prom_recv->get_future()->get();
+                      printf("Value Recv %d\n", recv_tmp->n);
                 }, prom_recv->get_future());
 
             //This could be an array, vector, hash table or anything
@@ -88,7 +100,7 @@ int main(int argc, char ** argv) {
                         *args = n2->n;
                         if(rank == 0) {
                             //replay::Send(&(n2->n), sizeof(int), 1, 1, 0);
-                            replay::Isend(&(n2->n), sizeof(int), 1, 1, 0, prom_send);
+                            replay::Isend(n2, 1, 1, 0, prom_send);
                         }
                     }, future_nullptr);
 
