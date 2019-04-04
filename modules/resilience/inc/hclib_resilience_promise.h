@@ -184,8 +184,11 @@ inline void promise_t<T*>::put(T* datum) {
 
 inline int get_index() {
     auto task_local = static_cast<resilient_task_params_t<void*>*>(*hclib_get_curr_task_local());
-    assert(is_resilient_task(task_local));
-    return task_local->index;
+    //assert(is_resilient_task(task_local));
+    if(is_resilient_task(task_local))
+        return task_local->index;
+    else
+        return 0;
 }
 
 template<typename T>

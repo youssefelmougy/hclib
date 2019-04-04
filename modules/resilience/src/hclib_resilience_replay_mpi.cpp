@@ -99,9 +99,13 @@ void Recv(void *buf, int count, int source, int tag, MPI_Status *status, MPI_Com
 
 void Isend(void *buf, int count, int dest, int tag, int do_free, hclib::promise_t<void*> *prom, MPI_Comm comm) {
     auto task_local = static_cast<replay_task_params_t<void*>*>(*hclib_get_curr_task_local());
-    assert(is_replay_task(task_local));
-    auto temp = new mpi_data(MPI_Isend_lbl, buf, count, MPI_BYTE, dest, tag, do_free, prom, comm);
-    task_local->mpi_send_vec->push_back(temp);
+    //assert(is_replay_task(task_local));
+    if(is_resilient_task(task_local)) {
+        auto temp = new mpi_data(MPI_Isend_lbl, buf, count, MPI_BYTE, dest, tag, do_free, prom, comm);
+        task_local->mpi_send_vec->push_back(temp);
+    }
+    else
+        Isend_helper(buf, count, MPI_BYTE, dest, tag, prom, comm);
 }
 
 void Irecv(int count, int source, int tag, hclib::promise_t<void*> *prom, MPI_Comm comm) {

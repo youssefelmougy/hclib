@@ -60,7 +60,7 @@ int main(int argc, char ** argv) {
             hclib::async_await( [=]() {
                     int_obj *n2_tmp = prom1->get_future()->get();
                     printf("Value2 %d\n", n2_tmp->n);
-                    prom1->get_future()->release();
+                    //prom1->get_future()->release();
             }, prom1->get_future());
  
             if(rank == 0)
