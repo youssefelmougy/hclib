@@ -40,8 +40,8 @@ baack from the archive object
 class obj: public hclib::resilience::obj {
   public:
     //obj(archive_obj* ptr) { assert(false); }
-    virtual void deserialize(archive_obj*) {}
-    virtual archive_obj* serialize() {}
+    virtual void deserialize(archive_obj*) { assert(false); }
+    virtual archive_obj* serialize() { assert(false); return nullptr; }
 };
 
 class archive_store {
@@ -381,9 +381,7 @@ async_await_check(T&& lambda, hclib::promise_t<int> *prom_check,
         else {
             prom_check->put(0);
         }
-        delete ctp->put_vec;
-        delete ctp->rel_vec;
-        delete ctp;;
+        delete ctp;
     }, f1, f2, f3, f4);
 }
 

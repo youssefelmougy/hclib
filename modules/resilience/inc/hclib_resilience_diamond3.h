@@ -56,8 +56,9 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
             prom_check->put(1);
         }
 
-        delete put_vec;
-        delete rel_vec;
+        //put_vec and rel_vec gets deleted inside destructor of dtp_arr
+        //delete put_vec;
+        //delete rel_vec;
         delete[] dtp_arr;
     }, f1, f2, f3, f4, locale);
 }
@@ -106,8 +107,9 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
             prom_check->put(1);
         }
 
-        delete put_vec;
-        delete rel_vec;
+        //put_vec and rel_vec gets deleted inside destructor of dtp_arr
+        //delete put_vec;
+        //delete rel_vec;
         delete[] dtp_arr;
     }, futures, locale);
 }

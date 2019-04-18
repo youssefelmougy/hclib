@@ -6,13 +6,12 @@ include $(HCLIB_ROOT)/../modules/system/inc/hclib_system.post.mak
 include $(HCLIB_ROOT)/../modules/ref-count/inc/hclib_ref-count.post.mak
 include $(HCLIB_ROOT)/../modules/resilience/inc/hclib_resilience.post.mak
 
-TARGETS=resilience-d0 resilience-d1 resilience-r0 resilience-r1 resilience-a0 resilience-mix resilience-c0
+TARGETS=resilience-d0 resilience-d1 resilience-r0 resilience-r1 resilience-a0 resilience-mix resilience-c0 resilience-r0-mpi
 
 all: $(TARGETS)
 
 %: %.cpp
-	#$(CXX) -g -O0 -std=c++14 $(HCLIB_CFLAGS) $(HCLIB_LDFLAGS) -o $@ $^ $(HCLIB_LDLIBS)
-	mpicc -g -O0 -std=c++14 $(HCLIB_CFLAGS) $(HCLIB_LDFLAGS) -o $@ $^ $(HCLIB_LDLIBS)
+	$(MPICXX) -g -std=c++14 $(HCLIB_CFLAGS) $(HCLIB_LDFLAGS) -o $@ $^ $(HCLIB_LDLIBS)
 
 test:
 	for target in $(TARGETS); do ./$$target ; done

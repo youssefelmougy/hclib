@@ -67,9 +67,7 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
             prom_check->put(0);
         }
         //TODO: mpi_send_vec clear and delete. should we delete individual element inside put_vec/rel_vec
-        delete rtp->put_vec;
-        delete rtp->rel_vec;
-        delete rtp;;
+        delete rtp;
     }, f1, f2, f3, f4, locale);
 }
 
@@ -132,9 +130,7 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
             prom_check->put(0);
         }
         //TODO: mpi_send_vec clear and delete. should we delete individual element inside put_vec/rel_vec
-        delete rtp->put_vec;
-        delete rtp->rel_vec;
-        delete rtp;;
+        delete rtp;
     }, f1, f2, f3, f4, locale);
 }
 
@@ -205,9 +201,7 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
             prom_check->put(0);
         }
         //TODO: mpi_send_vec clear and delete. should we delete individual element inside put_vec/rel_vec
-        delete rtp->put_vec;
-        delete rtp->rel_vec;
-        delete rtp;;
+        delete rtp;
     }, futures, locale);
 }
 
@@ -269,9 +263,7 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
             prom_check->put(0);
         }
         //TODO: mpi_send_vec clear and delete. should we delete individual element inside put_vec/rel_vec
-        delete rtp->put_vec;
-        delete rtp->rel_vec;
-        delete rtp;;
+        delete rtp;
     }, futures, locale);
 }
 

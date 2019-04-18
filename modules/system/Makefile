@@ -10,7 +10,7 @@ TARGETS=lib/libhclib_system.so lib/libhclib_system.a
 all: $(TARGETS)
 
 lib/libhclib_system.a: $(OBJS)
-	ar rvs $@ $(OBJS)
+	$(AR) rvs $@ $(OBJS)
 
 lib/libhclib_system.so: $(OBJS)
 	$(CXX) -shared -fPIC $(HCLIB_LDLIBS) $(HCLIB_LDFLAGS) -o $@ $(OBJS)

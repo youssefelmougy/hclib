@@ -105,10 +105,10 @@ struct resilient_task_params_t {
     int index; //replica id
 
     //vector which captures all the puts
-    promise_vector<T> *put_vec;
+    promise_vector<T> *put_vec=nullptr;
 
     //vector which capture task dependencies
-    future_vector<T> *rel_vec;
+    future_vector<T> *rel_vec=nullptr;
 
 #ifdef FINISH_WORKAROUND
     volatile int *count = nullptr;
@@ -116,7 +116,7 @@ struct resilient_task_params_t {
 #endif
 
 #ifdef MPI_COMMUNICATION
-    mpi_data_vector *mpi_send_vec;
+    mpi_data_vector *mpi_send_vec=nullptr;
 #endif
 
     resilient_task_params_t() {}
@@ -132,16 +132,21 @@ struct resilient_task_params_t {
     }
 
     ~resilient_task_params_t() {
-        //delete put_vec;
-        //delete rel_vec;
+        delete put_vec;
+        put_vec = nullptr;
+        delete rel_vec;
+        rel_vec = nullptr;
 
 #ifdef FINISH_WORKAROUND
         delete count;
+        count = nullptr;
         delete finish_prom;
+        finish_prom = nullptr;
 #endif
 
 #ifdef MPI_COMMUNICATION
         delete mpi_send_vec;
+        mpi_send_vec = nullptr;
 #endif
     }
 };

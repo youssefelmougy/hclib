@@ -11,7 +11,7 @@ TARGETS=lib/libhclib_ref-count.so lib/libhclib_ref-count.a
 all: $(TARGETS)
 
 lib/libhclib_ref-count.a: $(OBJS)
-	ar rvs $@ $(OBJS)
+	$(AR) rvs $@ $(OBJS)
 
 lib/libhclib_ref-count.so: $(OBJS)
 	$(CXX) -shared $(HCLIB_LDFLAGS) $(HCLIB_LDLIBS) -o $@ $(OBJS)

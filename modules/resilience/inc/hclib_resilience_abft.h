@@ -262,9 +262,7 @@ void async_await_check_at(T1&& lambda, hclib::promise_t<int> *prom_check,
         else {
             prom_check->put(0);
         }
-        delete atp->put_vec;
-        delete atp->rel_vec;
-        delete atp;;
+        delete atp;
     }, f1, f2, f3, f4, locale);
 }
 
@@ -327,9 +325,7 @@ void async_await_check_at(T1&& lambda, hclib::promise_t<int> *prom_check,
         else {
             prom_check->put(0);
         }
-        delete atp->put_vec;
-        delete atp->rel_vec;
-        delete atp;;
+        delete atp;
     }, futures, locale);
 }
 

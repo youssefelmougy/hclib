@@ -7,7 +7,7 @@ TARGETS=init allocate
 all: $(TARGETS)
 
 %: %.cpp
-	g++ -std=c++11 $(HCLIB_CFLAGS) $(HCLIB_LDFLAGS) -o $@ $^ $(HCLIB_LDLIBS)
+	$(CXX) -std=c++11 $(HCLIB_CFLAGS) $(HCLIB_LDFLAGS) -o $@ $^ $(HCLIB_LDLIBS)
 
 clean:
 	rm -f $(TARGETS)

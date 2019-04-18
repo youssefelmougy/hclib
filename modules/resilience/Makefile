@@ -13,17 +13,17 @@ TARGETS=lib/libhclib_resilience.so lib/libhclib_resilience.a
 all: $(TARGETS)
 
 lib/libhclib_resilience.a: $(OBJS)
-	ar rvs $@ $(OBJS)
+	$(AR) rvs $@ $(OBJS)
 
 lib/libhclib_resilience.so: $(OBJS)
-	mpicc -shared $(HCLIB_LDFLAGS) $(HCLIB_LDLIBS) -o $@ $(OBJS)
+	$(MPICXX) -shared $(HCLIB_LDFLAGS) $(HCLIB_LDLIBS) -o $@ $(OBJS)
 	cp $@ $(HCLIB_ROOT)/lib
 
 obj/hclib_resilience.o: src/hclib_resilience.cpp
-	$(CXX) -g -O3 -std=c++14 -Iinc $^ -o $@ $(HCLIB_CFLAGS) -c -fPIC $(DEFINES)
+	$(MPICXX) -g -O3 -std=c++14 -Iinc $^ -o $@ $(HCLIB_CFLAGS) -c -fPIC $(DEFINES)
 
 obj/hclib_resilience_replay_mpi.o: src/hclib_resilience_replay_mpi.cpp
-	mpicc -g -O3 -std=c++14 -Iinc $^ -o $@ $(HCLIB_CFLAGS) -c -fPIC $(DEFINES)
+	$(MPICXX) -g -O3 -std=c++14 -Iinc $^ -o $@ $(HCLIB_CFLAGS) -c -fPIC $(DEFINES)
 
 clean:
 	rm -f obj/*.o lib/*

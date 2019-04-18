@@ -65,6 +65,10 @@ void poll_on_pending(pending_op **addr_of_head,
 
                 if (op->serialize) {
                     op->data->deserialize(op->serialize);
+                    //We do not want to delete data since the deserialize routine might
+                    //directy use data pointer instead of copying it for efficiency
+                    op->serialize->data = nullptr;
+                    delete op->serialize;
                 }
                 else {
                     //assert(false);
