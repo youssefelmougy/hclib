@@ -3,7 +3,7 @@
 HCLIB_CFLAGS+=-I$(HCLIB_ROOT)/../modules/resilience/inc
 HCLIB_CXXFLAGS+=-I$(HCLIB_ROOT)/../modules/resilience/inc
 HCLIB_LDFLAGS+=-L$(HCLIB_ROOT)/../modules/resilience/lib
-HCLIB_LDLIBS+=-lhclib_resilience
+#HCLIB_LDLIBS+=-lhclib_resilience
 
 # ifeq ($(IS_MAC_OS),1)
 # HCLIB_LDLIBS += $(call GET_LINK_FLAG,-force_load) \

@@ -3,7 +3,7 @@
 HCLIB_CFLAGS+=-I$(HCLIB_ROOT)/../modules/ref-count/inc
 HCLIB_CXXFLAGS+=-I$(HCLIB_ROOT)/../modules/ref-count/inc
 HCLIB_LDFLAGS+=-L$(HCLIB_ROOT)/../modules/ref-count/lib
-HCLIB_LDLIBS+=-lhclib_ref-count
+#HCLIB_LDLIBS+=-lhclib_ref-count
 
 # ifeq ($(IS_MAC_OS),1)
 # HCLIB_LDLIBS += $(call GET_LINK_FLAG,-force_load) \
