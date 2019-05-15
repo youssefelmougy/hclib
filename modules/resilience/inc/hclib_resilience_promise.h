@@ -132,10 +132,10 @@ struct resilient_task_params_t {
     }
 
     ~resilient_task_params_t() {
-        delete put_vec;
-        put_vec = nullptr;
-        delete rel_vec;
-        rel_vec = nullptr;
+        //delete put_vec;
+        //put_vec = nullptr;
+        //delete rel_vec;
+        //rel_vec = nullptr;
 
 #ifdef FINISH_WORKAROUND
         delete count;
@@ -145,8 +145,8 @@ struct resilient_task_params_t {
 #endif
 
 #ifdef MPI_COMMUNICATION
-        delete mpi_send_vec;
-        mpi_send_vec = nullptr;
+        //        delete mpi_send_vec;
+        //mpi_send_vec = nullptr;
 #endif
     }
 };
@@ -234,4 +234,3 @@ using future_t = ::hclib::resilience::future_t<T>;
 } // namespace hclib
 
 #endif
-

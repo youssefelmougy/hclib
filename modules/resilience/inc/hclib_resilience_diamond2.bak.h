@@ -28,8 +28,8 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
         //so that they can be released later if third task is not created
         auto rel_vec = new future_vector<void*>();
 #ifdef USE_RESILIENT_PROMISE
-        //mpi_send_vec is used to collect all the MPI_Isend operations
-        auto mpi_send_vec = new mpi_data_vector();
+        printf("In hclib async_await MPI (non-leaf, hoge)\n");
+        auto mpi_vec = new mpi_data_vector();
 #endif
 
         hclib::finish([=]() {
@@ -39,19 +39,19 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
                 dtp_arr[i].put_vec = put_vec;
                 dtp_arr[i].rel_vec = rel_vec;
 #ifdef USE_RESILIENT_PROMISE
-                dtp_arr[i].mpi_send_vec = mpi_send_vec;
+                dtp_arr[i].mpi_send_vec = mpi_vec;
 #endif
                 *(hclib_get_curr_task_local()) = &dtp_arr[i];
                 async_await_at(*lambda_ptr, f1, f2, f3, f4, locale);
             }
         });
-
+        printf("In hclib async_await MPI (non-leaf, hogesh)\n");
         *(hclib_get_curr_task_local()) = nullptr;
         bool result = check_result_helper(put_vec, 0, 1);
         //it all puts in both replica are same then do the actual put
         if(result) {
 #ifdef USE_RESILIENT_PROMISE
-            mpi_send_vec->do_sends();
+            mpi_vec->do_sends();
 #endif
             put_vec->do_puts(0);
             rel_vec->do_releases();
@@ -82,7 +82,7 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
                 prom_check->put(0);
             else {
 #ifdef USE_RESILIENT_PROMISE
-                mpi_send_vec->do_sends();
+                mpi_vec->do_sends();
 #endif
                 put_vec->do_puts(index);
                 rel_vec->do_releases();
@@ -90,12 +90,10 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
             }
         }
         delete lambda_ptr;
+        //put_vec and rel_vec gets deleted inside destructor of dtp_arr
         delete put_vec;
         delete rel_vec;
-#ifdef USE_RESILIENT_PROMISE
-        delete mpi_send_vec;
-#endif
-        delete[] dtp_arr;
+        delete[] dtp_arr; // for now
     }, f1, f2, f3, f4, locale);
 }
 
@@ -117,8 +115,7 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
         //so that they can be released later if third task is not created
         auto rel_vec = new future_vector<void*>();
 #ifdef USE_RESILIENT_PROMISE
-        //mpi_send_vec is used to collect all the MPI_Isend operations
-        auto mpi_send_vec = new mpi_data_vector();
+        auto mpi_vec = new mpi_data_vector();
 #endif
 
         hclib::finish([=]() {
@@ -128,7 +125,7 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
                 dtp_arr[i].put_vec = put_vec;
                 dtp_arr[i].rel_vec = rel_vec;
 #ifdef USE_RESILIENT_PROMISE
-                dtp_arr[i].mpi_send_vec = mpi_send_vec;
+                dtp_arr[i].mpi_send_vec = mpi_vec;
 #endif
                 *(hclib_get_curr_task_local()) = &dtp_arr[i];
                 async_await_at(*lambda_ptr, futures, locale);
@@ -140,7 +137,7 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
         //it all puts in both replica are same then do the actual put
         if(result) {
 #ifdef USE_RESILIENT_PROMISE
-            mpi_send_vec->do_sends();
+            mpi_vec->do_sends();
 #endif
             put_vec->do_puts(0);
             rel_vec->do_releases();
@@ -170,9 +167,6 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
             if(index < 0)
                 prom_check->put(0);
             else {
-#ifdef USE_RESILIENT_PROMISE
-              mpi_send_vec->do_sends();
-#endif
               put_vec->do_puts(index);
               rel_vec->do_releases();
               prom_check->put(1);
@@ -180,11 +174,9 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
         }
 
         delete lambda_ptr;
-        delete put_vec;
-        delete rel_vec;
-#ifdef USE_RESILIENT_PROMISE
-        delete mpi_send_vec;
-#endif
+        //put_vec and rel_vec gets deleted inside destructor of dtp_arr
+        //delete put_vec;
+        //delete rel_vec;
         delete[] dtp_arr;
     }, futures, locale);
 }
