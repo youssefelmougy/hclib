@@ -1,0 +1,6 @@
+
+How to run
+
+./naive_cholesky 9 < in3.txt
+./tiled_mkl_cholesky 9 3 < in3.txt
+./task_cholesky 9 3 < in3.txt

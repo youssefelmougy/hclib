@@ -1,0 +1,37 @@
+heat_3d_simple_imbal_nonres:
+
+Compare pinning vs. work-stealing for balanced and imbalanced workloads
+without resilience.
+
+Command-line options:
+  -ntiles <int>: Number of tiles in the domain (default 4)
+  -tilesize <int>: Number of elements per tile in each dimension (default 8)
+  -nsteps <int>: Number of time steps total (default 128)
+  -[no]checksum: Whether or not to use checksums (default checksum)
+  -inject <filename>: Failure list for failure injection (default disabled)
+  -[no]imbalance: Whether or not to use imbalanced workload (default noimbalance)
+  -[no]pin: Whether or not to pin tasks to workers (default nopin)
+
+heat_3d_simple_nonres, heat_3d_simple_replay, heat_3d_simple_replic:
+
+Analyze performance degradation introduced by chosen resilience mechanism.
+
+Command-line options:
+  -ntiles <int>: Number of tiles in the domain (default 4)
+  -tilesize <int>: Number of elements per tile in each dimension (default 8)
+  -nsteps <int>: Number of time steps total (default 128)
+  -[no]checksum: Whether or not to use checksums (default checksum)
+  -inject <filename>: Failure list for failure injection (default disabled)
+
+heat_3d_simple_mix:
+
+Mix replay and replication per the command-line configuration.
+
+Command-line options:
+  -ntiles <int>: Number of tiles in the domain (default 4)
+  -tilesize <int>: Number of elements per tile in each dimension (default 8)
+  -nsteps <int>: Number of time steps total (default 128)
+  -replic <int>: Replicate last percentage of tasks (default 20)
+  -[no]checksum: Whether or not to use checksums (default checksum)
+  -inject <filename>: Failure list for failure injection (default disabled)
+

@@ -1,0 +1,40 @@
+lw_1d_full_tile_imbal_nonres:
+
+Compare pinning vs. work-stealing for balanced and imbalanced workloads
+without resilience.
+
+Command-line options:
+  -ntiles <int>: Number of tiles in the domain (default 64)
+  -tilesize <int>: Number of elements per tile (default 128)
+  -nsteps <int>: Number of time steps total (default 128)
+  -nstepstask <int>: Number of time steps within each task (default 16)
+  -[no]checksum: Whether or not to use checksums (default checksum)
+  -inject <filename>: Failure list for failure injection (default disabled)
+  -[no]imbalance: Whether or not to use imbalanced workload (default noimbalance)
+  -[no]pin: Whether or not to pin tasks to workers (default nopin)
+
+lw_1d_full_tile_nonres, lw_1d_full_tile_replay, lw_1d_full_tile_replic:
+
+Analyze performance degradation introduced by chosen resilience mechanism.
+
+Command-line options:
+  -ntiles <int>: Number of tiles in the domain (default 64)
+  -tilesize <int>: Number of elements per tile (default 128)
+  -nsteps <int>: Number of time steps total (default 128)
+  -nstepstask <int>: Number of time steps within each task (default 16)
+  -[no]checksum: Whether or not to use checksums (default checksum)
+  -inject <filename>: Failure list for failure injection (default disabled)
+
+lw_1d_full_tile_mix:
+
+Mix replay and replication per the command-line configuration.
+
+Command-line options:
+  -ntiles <int>: Number of tiles in the domain (default 64)
+  -tilesize <int>: Number of elements per tile (default 128)
+  -nsteps <int>: Number of time steps total (default 128)
+  -nstepstask <int>: Number of time steps within each task (default 16)
+  -replic <int>: Replicate last percentage of tasks (default 20)
+  -[no]checksum: Whether or not to use checksums (default checksum)
+  -inject <filename>: Failure list for failure injection (default disabled)
+
