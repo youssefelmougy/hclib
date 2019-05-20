@@ -4,9 +4,17 @@
 #include "hclib_cpp.h"
 #include "hclib_ref-count.h"
 
-#define USE_STD_VEC
+#if defined(USE_STD_VEC) || defined(USE_C_ARRAY_WITH_ATOMIC) || defined(USE_C_ARRAY_WITH_LOCK)
+#else
+#define USE_C_ARRAY_WITH_ATOMIC
+#endif
+
+//#define USE_STD_VEC
 //#define USE_C_ARRAY_WITH_ATOMIC
 //#define USE_C_ARRAY_WITH_LOCK
+
+//Hack to remove atomics/lock when leaf task are used
+#define ONLY_LEAF
 
 #ifdef USE_STD_VEC
 #include <vector>
@@ -78,10 +86,14 @@ class safe_vector {
     //}
 #elif defined (USE_C_ARRAY_WITH_ATOMIC) || defined (USE_C_ARRAY_WITH_LOCK)
 #ifndef SAFE_VECTOR_CAPACITY
-#define SAFE_VECTOR_CAPACITY 128
+#define SAFE_VECTOR_CAPACITY 16
 #endif
     T vec[SAFE_VECTOR_CAPACITY];
+#ifdef ONLY_LEAF
+    int pos = -1;
+#else
     volatile int pos = -1;
+#endif
 #ifdef USE_C_ARRAY_WITH_LOCK
     std::mutex mtx;
 #endif
@@ -89,15 +101,18 @@ class safe_vector {
   public:
     //TODO: can this take both lvalue and rvalue?
     void push_back(T&& value) {
-#if defined (USE_C_ARRAY_WITH_LOCK)
-	std::lock_guard<std::mutex> lkg(mtx);
+#ifdef ONLY_LEAF
+        assert(pos < SAFE_VECTOR_CAPACITY-1);
+        vec[++pos] = value;
+#elif defined (USE_C_ARRAY_WITH_LOCK)
+        std::lock_guard<std::mutex> lkg(mtx);
         pos++;
         assert(pos < SAFE_VECTOR_CAPACITY);
         vec[pos] = value;
 #elif defined (USE_C_ARRAY_WITH_ATOMIC)
-	hc_atomic_inc(&pos);
-	assert(pos < SAFE_VECTOR_CAPACITY);
-	vec[pos] = std::forward<T>(value);
+        const int pos1 = hc_atomic_inc(&pos);
+        assert(pos1 < SAFE_VECTOR_CAPACITY);
+        vec[pos1] = std::forward<T>(value);
 #endif
     }
 
@@ -110,7 +125,7 @@ class safe_vector {
     }
 
     void clear() noexcept {
-	// TODO: mutual exclusion?
+    // TODO: mutual exclusion?
         pos = -1;
     }
 #endif
