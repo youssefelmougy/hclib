@@ -30,7 +30,7 @@ do
     for i in $(seq $NUM);
     do
         echo $i
-        ./$name crankseg_1/crankseg_1.mtx 128 500 failure_files/test_32_spmv_crankseg_1_128-tiles_500-its_0_f0.0_Work-Stealing_lifo.out_failedTasks.txt first_eig_value_vec.txt 
+        ./$name crankseg_1/crankseg_1.mtx 128 500 failure_files/replay/test_32_spmv_crankseg_1_128-tiles_500-its_0_f0.0_Work-Stealing_lifo.out_failedTasks.txt first_eig_value_vec.txt 
     done
 done
 

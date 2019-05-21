@@ -30,48 +30,68 @@ echo use big inputs $BIG
 echo number of times $NUM
 
 if [ $FIG -eq 1 ]; then
+    echo "## start stencil1d ##"
     cd stencil1d
     sh run.sh $NUM $BIG
     cd ..
+    echo "## end stencil1d ##"
     
-    cd stencil3d
-    sh run.sh $NUM $BIG
-    cd ..
-
+    echo "## start smith-waterman ##"
     cd smith-waterman
     sh run.sh $NUM $BIG
     cd ..
+    echo "## end smith-waterman ##"
 
+    echo "## start cholesky ##"
     cd cholesky
     sh run.sh $NUM
     cd ..
+    echo "## end cholesky ##"
+
+    echo "## start stencil3d ##"
+    cd stencil3d
+    sh run.sh $NUM $BIG
+    cd ..
+    echo "## end stencil3d ##"
 fi
 
 if [ $FIG -eq 2 ]; then
+    echo "## start stencil1d ##"
     cd stencil1d
     sh run_mix.sh $NUM $BIG
     cd ..
+    echo "## end stencil1d ##"
     
+    echo "## start stencil3d ##"
     cd stencil3d
     sh run_mix.sh $NUM $BIG
     cd ..
+    echo "## end stencil3d ##"
 fi
 
 if [ $FIG -eq 3 ]; then
+    echo "## start stencil1d ##"
     cd stencil1d
     sh run_fail.sh $NUM $BIG
     cd ..
+    echo "## end stencil1d ##"
 
-    cd stencil3d
-    sh run_fail.sh $NUM $BIG
-    cd ..
-
+    echo "## start smith-waterman ##"
     cd smith-waterman
     sh run_fail.sh $NUM $BIG
     cd ..
+    echo "## end smith-waterman ##"
 
+    echo "## start cholesky ##"
     cd cholesky
     sh run_fail.sh $NUM
     cd ..
+    echo "## end cholesky ##"
+
+    echo "## start stencil3d ##"
+    cd stencil3d
+    sh run_fail.sh $NUM $BIG
+    cd ..
+    echo "## end stencil3d ##"
 fi
 

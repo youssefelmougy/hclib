@@ -40,7 +40,7 @@ echo "Size " $NTILES $NS
 
 MPIRUN=mpirun
 
-for nnodes in 2 4 8
+for nnodes in 2 4
 do
 
     echo "Run no res no checksum"

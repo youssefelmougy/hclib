@@ -929,7 +929,8 @@ int main (int argc, char *argv[])
 #endif
     double dur = ((end.tv_sec - begin.tv_sec)*1000000000
                  +(end.tv_nsec - begin.tv_nsec))*1.0/1000000000;
-    printf("The computation took %f seconds\n", dur);
+    if(cur_rank == 0)
+        printf("The computation took %f seconds\n", dur);
 
 #ifdef DEBUG
     // print solution
