@@ -1,0 +1,72 @@
+
+The whole experiment consists for four phases, 1: building HClib library, 2: building the benchmarks, 3: Running the benchmarks, 4: process the output of step 3 to correspond to figures in the paper.
+Commands to be executed starts with '>>' marker. Please ignore this marker while copying the commands.
+
+1) HClib Installation
+
+    >> git clone https://github.com/srirajpaul/hclib.git
+    >> cd hclib
+    >> git checkout feature/resilience
+    >> ./install.sh
+    >> source hclib-install/bin/hclib_setup_env.sh
+
+2) Build Resilience benchmarks
+
+    >> cd modules/resilience/benchmarks
+    >> make clean
+    >> make
+
+    Note: To build the Cholesky benchmark, Intel MKL is needed. The Makefile uses icpc for the same.
+    
+3) Run Experiments
+
+    0)  >> export HCLIB_WORKERS=32
+        Set the number of workers. If this is not done, HClib will create as many workers as the number of cores.
+        In our experiments on Cori (with 64 cores), we used 32 workers.
+
+    1) for figure 1:
+        >> sh run.sh -f 1 -b 1 -n 5 2>&1 |tee 1.txt
+            
+        Explanation:
+        -f 1 => for figure 1
+        -b 1 => use big input (same as the paper). Use '-b 0' for a smaller input
+        -n 5 => run each experiments 5 times
+        2>&1 |tee 1.txt => redirect output to file 1.txt and also print on screen
+
+    2)  for figure 2:
+        >> sh run.sh -f 2 -b 1 -n 5 2>&1 |tee 2.txt
+
+    3)  for figure 3:
+        >> sh run.sh -f 3 -b 1 -n 5 2>&1 |tee 3.txt
+
+    4)  for figure 4:
+        >> sh run_mpi.sh  -b 1 -n 5 2>&1 |tee 4.txt
+
+    5)  for CG:
+        >> sh run_cg.sh -n 5 2>&1 |tee cg.txt
+
+4) View Results
+
+    1) Figure 1:
+        >> sh result.sh -i 1.txt -f 1 -n 5
+
+        Explanation:
+        -i 1.txt => use the input file 1.txt. The file 1.txt was created in Step 3.1.
+        -f 1     => for figure 1
+        -n 5     => ran each experiments 5 times. This number should be same as the one used in experiment step 3.1
+
+    2) Figure 2:
+        >> sh result.sh -i 2.txt -f 2 -n 5
+
+    3) Figure 3:
+        >> sh result.sh -i 3.txt -f 3 -n 5
+
+        Explanation:
+        Column 1 corresponds to the X-axis and, Column 3 corresponds to the Y-axis
+
+    4) Figure 4:
+        >> sh result.sh -i 4.txt -f 4 -n 5
+
+    5) CG:
+       >> sh result_cg.sh -i cg.txt -n 5
+ 

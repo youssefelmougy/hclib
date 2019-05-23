@@ -46,7 +46,8 @@ do
 done 
 
 echo "Run with checksum"
-for name in lw_1d_full_tile_nonres lw_1d_full_tile_replay lw_1d_full_tile_replic
+#for name in lw_1d_full_tile_nonres lw_1d_full_tile_replay lw_1d_full_tile_replic
+for name in lw_1d_full_tile_replay lw_1d_full_tile_replic
 do
     for i in $(seq $NUM);
     do

@@ -14,7 +14,7 @@ do
   in
     n) NUM=${OPTARG};;
     h) echo "Options
-             -n <1..inf} default is 5 i.e. run each experiment 5 times
+             -n <1..inf> default is 5 i.e. run each experiment 5 times
              -h show options"; exit 0;;
   esac
 done

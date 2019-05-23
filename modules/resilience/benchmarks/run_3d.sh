@@ -22,13 +22,26 @@ do
   esac
 done
 
-echo figure 4
 echo use big inputs $BIG
 echo number of times $NUM
 
-cd stencil1d/mpi
+pushd ../../../
+./clean.sh
+./install.sh
+source hclib-install/bin/hclib_setup_env.sh
+popd
+
+cd stencil3d
 make clean
 make
+echo "## start stencil3d ##"
 sh run.sh $NUM $BIG
-cd ../../
+echo "## end stencil3d ##"
+echo "## start stencil3d mix ##"
+sh run_mix.sh $NUM $BIG
+echo "## end stencil3d mix ##"
+echo "## start stencil3d fail ##"
+sh run_fail.sh $NUM $BIG
+echo "## end stencil3d fail ##"
+cd ..
 

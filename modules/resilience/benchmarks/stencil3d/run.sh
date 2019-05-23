@@ -46,7 +46,8 @@ do
 done 
 
 echo "Run with checksum"
-for name in heat_3d_simple_nonres heat_3d_simple_replay heat_3d_simple_replic
+#for name in heat_3d_simple_nonres heat_3d_simple_replay heat_3d_simple_replic
+for name in heat_3d_simple_replay heat_3d_simple_replic
 do
     for i in $(seq $NUM);
     do
