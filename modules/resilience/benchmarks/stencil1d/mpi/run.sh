@@ -30,6 +30,7 @@ echo "Times " $NUM
 echo "Size " $NTILES $NS
 
 MPIRUN=mpirun
+#MPIRUN=srun
 
 for nnodes in 2 4
 do

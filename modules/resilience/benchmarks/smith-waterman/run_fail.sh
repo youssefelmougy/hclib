@@ -27,7 +27,7 @@ do
     for i in $(seq $NUM);
     do
         echo $i
-        /bin/bash run_fail_base.sh $SIZE $name $rate
+        /bin/bash -x run_fail_base.sh $SIZE $name $rate
     done
 done
 done

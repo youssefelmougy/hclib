@@ -25,7 +25,7 @@ do
     for i in $(seq $NUM);
     do
         echo $i
-        /bin/bash run_base.sh $SIZE $name
+        /bin/bash -x run_base.sh $SIZE $name
     done
 done
 
