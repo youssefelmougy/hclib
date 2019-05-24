@@ -90,7 +90,7 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
         bool result = false;
         int index = -1;
 
-        assert(*(hclib_get_curr_task_local()) ==  nullptr);
+        //assert(*(hclib_get_curr_task_local()) ==  nullptr);
         for(int i=0; i<N; i++) {
             rtp->index = i;
             *(hclib_get_curr_task_local()) = rtp;
@@ -218,7 +218,7 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
         bool result = false;
         int index = -1;
 
-        assert(*(hclib_get_curr_task_local()) ==  nullptr);
+        //assert(*(hclib_get_curr_task_local()) ==  nullptr);
         for(int i=0; i<N; i++) {
             rtp->index = i;
             *(hclib_get_curr_task_local()) = rtp;

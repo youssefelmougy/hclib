@@ -33,11 +33,11 @@ wget https://sparse.tamu.edu/MM/GHS_psdef/crankseg_1.tar.gz
 tar -xvzf crankseg_1.tar.gz
 echo
 echo "### Start no failure run ###"
-/bin/bash run.sh $NUM
+/bin/bash -x run.sh $NUM
 echo "### End no failure run ###"
 echo
 echo "### Start failure run ###"
-/bin/bash run_fail.sh $NUM
+/bin/bash -x run_fail.sh $NUM
 echo "### End failure run ###"
 cd ..
 echo "### End Experiment ###"

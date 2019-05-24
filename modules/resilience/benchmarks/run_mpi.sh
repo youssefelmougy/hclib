@@ -23,6 +23,6 @@ echo number of times $NUM
 cd stencil1d/mpi
 make clean
 make
-/bin/bash run.sh $NUM $BIG
+/bin/bash -x run.sh $NUM $BIG
 cd ../../
 

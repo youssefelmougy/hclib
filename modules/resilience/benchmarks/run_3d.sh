@@ -29,15 +29,15 @@ cd stencil3d
 make clean
 make
 echo "## start stencil3d ##"
-/bin/bash run.sh $NUM $BIG
+/bin/bash -x run.sh $NUM $BIG
 echo "## end stencil3d ##"
 echo
 echo "## start stencil3d mix ##"
-/bin/bash run_mix.sh $NUM $BIG
+/bin/bash -x run_mix.sh $NUM $BIG
 echo "## end stencil3d mix ##"
 echo
 echo "## start stencil3d fail ##"
-/bin/bash run_fail.sh $NUM $BIG
+/bin/bash -x run_fail.sh $NUM $BIG
 echo "## end stencil3d fail ##"
 cd ..
 

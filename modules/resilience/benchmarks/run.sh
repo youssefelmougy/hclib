@@ -1,7 +1,5 @@
 #!/bin/bash
 
-set -x
-
 FIG=1;
 BIG=1;
 NUM=5;
@@ -28,19 +26,19 @@ echo number of times $NUM
 if [ $FIG -eq 1 ]; then
     echo "## start stencil1d ##"
     cd stencil1d
-    /bin/bash run.sh $NUM $BIG
+    /bin/bash -x run.sh $NUM $BIG
     cd ..
     echo "## end stencil1d ##"
     
     echo "## start smith-waterman ##"
     cd smith-waterman
-    /bin/bash run.sh $NUM $BIG
+    /bin/bash -x run.sh $NUM $BIG
     cd ..
     echo "## end smith-waterman ##"
 
     echo "## start cholesky ##"
     cd cholesky
-    /bin/bash run.sh $NUM
+    /bin/bash -x run.sh $NUM
     cd ..
     echo "## end cholesky ##"
 
@@ -49,7 +47,7 @@ fi
 if [ $FIG -eq 2 ]; then
     echo "## start stencil1d ##"
     cd stencil1d
-    /bin/bash run_mix.sh $NUM $BIG
+    /bin/bash -x run_mix.sh $NUM $BIG
     cd ..
     echo "## end stencil1d ##"
 
@@ -58,19 +56,19 @@ fi
 if [ $FIG -eq 3 ]; then
     echo "## start stencil1d ##"
     cd stencil1d
-    /bin/bash run_fail.sh $NUM $BIG
+    /bin/bash -x run_fail.sh $NUM $BIG
     cd ..
     echo "## end stencil1d ##"
 
     echo "## start smith-waterman ##"
     cd smith-waterman
-    /bin/bash run_fail.sh $NUM $BIG
+    /bin/bash -x run_fail.sh $NUM $BIG
     cd ..
     echo "## end smith-waterman ##"
 
     echo "## start cholesky ##"
     cd cholesky
-    /bin/bash run_fail.sh $NUM
+    /bin/bash -x run_fail.sh $NUM
     cd ..
     echo "## end cholesky ##"
 

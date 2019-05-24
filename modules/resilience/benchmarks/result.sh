@@ -28,7 +28,7 @@ if [ $FIG -eq 1 ]; then
     echo "#########"
 
     count=$(cat $FILE |grep took|wc -l)
-    total=10*$NUM
+    total=$((NUM*10))
     if [ $count -ne $total ]; then
         echo "Requires " $total " readings but only " $count " found"
         echo
@@ -60,7 +60,7 @@ elif [ $FIG -eq 2 ]; then
     echo "#########"
 
     count=$(cat $FILE |grep took|wc -l)
-    total=6*$NUM
+    total=$((NUM*6))
     if [ $count -ne $total ]; then
         echo "Requires " $total " readings but only " $count " found"
         echo
@@ -88,7 +88,7 @@ elif [ $FIG -eq 3 ]; then
     echo "#########"
 
     count=$(cat $FILE |grep took|wc -l)
-    total=21*$NUM
+    total=$((NUM*21))
     if [ $count -ne $total ]; then
         echo "Requires " $total " readings but only " $count " found"
         echo
@@ -139,7 +139,7 @@ elif [ $FIG -eq 4 ]; then
     echo "#########"
 
     count=$(cat $FILE |grep took|wc -l)
-    total=6*$NUM
+    total=$((NUM*6))
     if [ $count -ne $total ]; then
         echo "Requires " $total " readings but only " $count " found"
         echo
