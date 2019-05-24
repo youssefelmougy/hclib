@@ -29,7 +29,7 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
         auto rel_vec = new future_vector<void*>();
 #ifdef USE_RESILIENT_PROMISE
         //mpi_send_vec is used to collect all the MPI_Isend operations
-        auto mpi_send_vec = new mpi_data_vector();
+        auto mpi_send_vec = new mpi_data_vector[N+1];
 #endif
 
         hclib::finish([=]() {
@@ -39,7 +39,7 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
                 dtp_arr[i].put_vec = put_vec;
                 dtp_arr[i].rel_vec = rel_vec;
 #ifdef USE_RESILIENT_PROMISE
-                dtp_arr[i].mpi_send_vec = mpi_send_vec;
+                dtp_arr[i].mpi_send_vec = &mpi_send_vec[i];
 #endif
                 *(hclib_get_curr_task_local()) = &dtp_arr[i];
                 async_await_at(*lambda_ptr, f1, f2, f3, f4, locale);
@@ -51,7 +51,7 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
         //it all puts in both replica are same then do the actual put
         if(result) {
 #ifdef USE_RESILIENT_PROMISE
-            mpi_send_vec->do_sends();
+            mpi_send_vec[0].do_sends();
 #endif
             put_vec->do_puts(0);
             rel_vec->do_releases();
@@ -63,6 +63,9 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
                 dtp_arr[N].index = N;
                 dtp_arr[N].put_vec = put_vec;
                 dtp_arr[N].rel_vec = rel_vec;
+#ifdef USE_RESILIENT_PROMISE
+                dtp_arr[N].mpi_send_vec = &mpi_send_vec[N];
+#endif
                 *(hclib_get_curr_task_local()) = &dtp_arr[N];
                 async_await_at(*lambda_ptr, f1, f2, f3, f4, locale);
             });
@@ -82,7 +85,7 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
                 prom_check->put(0);
             else {
 #ifdef USE_RESILIENT_PROMISE
-                mpi_send_vec->do_sends();
+                mpi_send_vec[index].do_sends();
 #endif
                 put_vec->do_puts(index);
                 rel_vec->do_releases();
@@ -93,7 +96,7 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
         delete put_vec;
         delete rel_vec;
 #ifdef USE_RESILIENT_PROMISE
-        delete mpi_send_vec;
+        delete[] mpi_send_vec;
 #endif
         delete[] dtp_arr;
     }, f1, f2, f3, f4, locale);
@@ -118,7 +121,7 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
         auto rel_vec = new future_vector<void*>();
 #ifdef USE_RESILIENT_PROMISE
         //mpi_send_vec is used to collect all the MPI_Isend operations
-        auto mpi_send_vec = new mpi_data_vector();
+        auto mpi_send_vec = new mpi_data_vector[N+1];
 #endif
 
         hclib::finish([=]() {
@@ -128,7 +131,7 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
                 dtp_arr[i].put_vec = put_vec;
                 dtp_arr[i].rel_vec = rel_vec;
 #ifdef USE_RESILIENT_PROMISE
-                dtp_arr[i].mpi_send_vec = mpi_send_vec;
+                dtp_arr[i].mpi_send_vec = &mpi_send_vec[i];
 #endif
                 *(hclib_get_curr_task_local()) = &dtp_arr[i];
                 async_await_at(*lambda_ptr, futures, locale);
@@ -140,7 +143,7 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
         //it all puts in both replica are same then do the actual put
         if(result) {
 #ifdef USE_RESILIENT_PROMISE
-            mpi_send_vec->do_sends();
+            mpi_send_vec[0].do_sends();
 #endif
             put_vec->do_puts(0);
             rel_vec->do_releases();
@@ -152,6 +155,9 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
                 dtp_arr[N].index = N;
                 dtp_arr[N].put_vec = put_vec;
                 dtp_arr[N].rel_vec = rel_vec;
+#ifdef USE_RESILIENT_PROMISE
+                dtp_arr[N].mpi_send_vec = &mpi_send_vec[N];
+#endif
                 *(hclib_get_curr_task_local()) = &dtp_arr[N];
                 async_await_at(*lambda_ptr, futures, locale);
             });
@@ -171,7 +177,7 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
                 prom_check->put(0);
             else {
 #ifdef USE_RESILIENT_PROMISE
-              mpi_send_vec->do_sends();
+              mpi_send_vec[index].do_sends();
 #endif
               put_vec->do_puts(index);
               rel_vec->do_releases();
@@ -183,7 +189,7 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
         delete put_vec;
         delete rel_vec;
 #ifdef USE_RESILIENT_PROMISE
-        delete mpi_send_vec;
+        delete[] mpi_send_vec;
 #endif
         delete[] dtp_arr;
     }, futures, locale);

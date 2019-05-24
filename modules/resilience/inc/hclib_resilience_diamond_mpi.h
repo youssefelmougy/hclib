@@ -37,16 +37,14 @@ void Recv(void *buf, int count, int source, int tag, MPI_Status *status, MPI_Com
 //Assumption: the serialized archive_obj can be deleted after data is send to remote node
 template<class COMMUNICATION_OBJ>
 void Isend(COMMUNICATION_OBJ *data, int dest, int tag, int do_free, hclib::promise_t<COMMUNICATION_OBJ*> *prom, MPI_Comm comm=MPI_COMM_WORLD) {
-    if(resilience::get_index() == 0) {
-        auto task_local = static_cast<replay_task_params_t<void*>*>(*hclib_get_curr_task_local());
-        //assert(is_replay_task(task_local));
-        if(is_resilient_task(task_local)) {
-            auto temp = new mpi_data(MPI_Isend_lbl, data, MPI_BYTE, dest, tag, do_free, prom, comm);
-            task_local->mpi_send_vec->push_back(temp);
-        }
-        else
-            Isend_helper(data, MPI_BYTE, dest, tag, prom, comm);
+    auto task_local = static_cast<diamond_task_params_t<void*>*>(*hclib_get_curr_task_local());
+    //assert(is_replay_task(task_local));
+    if(is_resilient_task(task_local)) {
+        auto temp = new mpi_data(MPI_Isend_lbl, data, MPI_BYTE, dest, tag, do_free, prom, comm);
+        task_local->mpi_send_vec->push_back(temp);
     }
+    else
+        Isend_helper(data, MPI_BYTE, dest, tag, prom, comm);
 }
 
 template<class COMMUNICATION_OBJ>
@@ -73,7 +71,7 @@ void Irecv(int count, int source, int tag, hclib::promise_t<COMMUNICATION_OBJ*> 
     }
 }
 
-} // namespace replay
+} // namespace diamond
 } // namespace resilience
 } // namespace hclib
 
