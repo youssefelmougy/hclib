@@ -1,10 +1,4 @@
 #!/bin/bash
-#SBATCH -q debug
-##SBATCH -q regular
-#SBATCH -N 1
-#SBATCH -C haswell
-#SBATCH -t 00:30:00
-##SBATCH -t 00:58:00
 
 BIG=1;
 NUM=5;
@@ -29,6 +23,6 @@ echo number of times $NUM
 cd stencil1d/mpi
 make clean
 make
-sh run.sh $NUM $BIG
+/bin/bash run.sh $NUM $BIG
 cd ../../
 

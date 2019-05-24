@@ -297,7 +297,7 @@ int main ( int argc, char* argv[] ) {
 #if defined(USE_REPLAY)
         fprintf(stdout, "resilience=replay\n");
 #elif defined(USE_REPLICATION)
-        fprintf(stdout, "resilience=diamond\n");
+        fprintf(stdout, "resilience=replication\n");
 #else
         fprintf(stdout, "resilience=none\n");
 #endif

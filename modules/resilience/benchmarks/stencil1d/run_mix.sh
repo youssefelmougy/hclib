@@ -1,13 +1,4 @@
 #!/bin/bash
-##SBATCH -q debug
-#SBATCH -q regular
-#SBATCH -N 1
-#SBATCH -C haswell
-##SBATCH -t 00:30:00
-#SBATCH -t 00:98:00
-
-#export HCLIB_LOCALITY_FILE=$HOME/resilience/amt-resilience/src/apps/examples/sandia.2socket.json
-#export HCLIB_WORKERS=32
 
 NUM=1
 NTILES=128

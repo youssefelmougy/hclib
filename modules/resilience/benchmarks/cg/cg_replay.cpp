@@ -400,6 +400,7 @@ void launch_iters(Tile_t **rvec_tile_array, Tile_t **pvec_tile_array, Tile_t **x
 int main (int argc, char *argv[])
 {
 
+ printf("using replay\n");
  const char *deps[] = { "system" };
  hclib::launch(deps, 1, [&]() {
 

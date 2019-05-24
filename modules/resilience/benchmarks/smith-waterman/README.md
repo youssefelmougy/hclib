@@ -21,5 +21,5 @@ Command-line options:
 run.sh:
 
 ```
-./run.sh <NUM_WORKERS> <WORKLOAD> <APP>
+./run.sh <WORKLOAD> <APP>
 ```

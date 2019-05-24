@@ -28,8 +28,9 @@ if [ $FIG -eq 1 ]; then
     echo "#########"
 
     count=$(cat $FILE |grep took|wc -l)
-    if [ $count -ne 50 ]; then
-        echo "Requires 50 reading but only " $count " found"
+    total=10*$NUM
+    if [ $count -ne $total ]; then
+        echo "Requires " $total " readings but only " $count " found"
         echo
         exit
     fi
@@ -45,7 +46,7 @@ if [ $FIG -eq 1 ]; then
             #echo -n "  "$type" "
             printf "  %-12s " $type
             cat $FILE |grep took|head -$(($NUM *$i))|tail -$NUM| awk '{sum+=$4} END{print sum/NR}'
-            let i+=1
+            i=$((i+1))
         done
     done
     #echo -n "abft        "
@@ -59,8 +60,9 @@ elif [ $FIG -eq 2 ]; then
     echo "#########"
 
     count=$(cat $FILE |grep took|wc -l)
-    if [ $count -ne 30 ]; then
-        echo "Requires 30 reading but only " $count " found"
+    total=6*$NUM
+    if [ $count -ne $total ]; then
+        echo "Requires " $total " readings but only " $count " found"
         echo
         exit
     fi
@@ -76,7 +78,7 @@ elif [ $FIG -eq 2 ]; then
             #echo -n $frac " "
             printf "  %-5s " $frac
             cat $FILE |grep took|head -$(($NUM *$i))|tail -$NUM| awk '{sum+=$4} END{print sum/NR}'
-            let i+=1
+            i=$((i+1))
         done
     done
 
@@ -86,8 +88,9 @@ elif [ $FIG -eq 3 ]; then
     echo "#########"
 
     count=$(cat $FILE |grep took|wc -l)
-    if [ $count -ne 105 ]; then
-        echo "Requires 105 reading but only " $count " found"
+    total=21*$NUM
+    if [ $count -ne $total ]; then
+        echo "Requires " $total " readings but only " $count " found"
         echo
         exit
     fi
@@ -104,14 +107,14 @@ elif [ $FIG -eq 3 ]; then
             err_rate=0
             error_base=$(cat $FILE |grep took|head -$(($NUM *$i))|tail -$NUM| awk '{sum+=$4} END{print sum/NR}')
             printf "  %4d %9.5f %9.5f\n" $err_rate $error_base 0
-            let i+=1
+            i=$((i+1))
             for err_rate in 1 10
             do
                 #echo -n "  " $err " "
                 error=$(cat $FILE |grep took|head -$(($NUM *$i))|tail -$NUM| awk '{sum+=$4} END{print sum/NR}')
                 percent=$( echo "100*($error - $error_base)/$error_base" | bc -l)
                 printf "  %4d %9.5f %9.5f\n" $err_rate $error $percent
-                let i+=1
+                i=$((i+1))
             done
         done
     done
@@ -120,14 +123,14 @@ elif [ $FIG -eq 3 ]; then
     err_rate=0
     error_base=$(cat $FILE |grep took|head -$(($NUM *$i))|tail -$NUM| awk '{sum+=$4} END{print sum/NR}')
     printf "  %4d %9.5f %9.5f\n" $err_rate $error_base 0
-    let i+=1
+    i=$((i+1))
     for err_rate in 1 10
     do
         #echo -n "  " $err " "
         error=$(cat $FILE |grep took|head -$(($NUM *$i))|tail -$NUM| awk '{sum+=$4} END{print sum/NR}')
         percent=$( echo "100*($error - $error_base)/$error_base" | bc -l)
         printf "  %4d %9.5f %9.5f\n" $err_rate $error $percent
-        let i+=1
+        i=$((i+1))
     done
 
 elif [ $FIG -eq 4 ]; then
@@ -136,8 +139,9 @@ elif [ $FIG -eq 4 ]; then
     echo "#########"
 
     count=$(cat $FILE |grep took|wc -l)
-    if [ $count -ne 30 ]; then
-        echo "Requires 30 reading but only " $count " found"
+    total=6*$NUM
+    if [ $count -ne $total ]; then
+        echo "Requires " $total " readings but only " $count " found"
         echo
         exit
     fi
@@ -154,7 +158,7 @@ elif [ $FIG -eq 4 ]; then
             #echo -n $type
             printf "    %-12s " $type
             cat $FILE |grep took|head -$(($NUM *$i))|tail -$NUM| awk '{sum+=$4} END{print sum/NR}'
-            let i+=1
+            i=$((i+1))
         done
     done
 

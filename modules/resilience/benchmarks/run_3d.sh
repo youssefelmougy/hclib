@@ -1,10 +1,4 @@
 #!/bin/bash
-#SBATCH -q debug
-##SBATCH -q regular
-#SBATCH -N 1
-#SBATCH -C haswell
-#SBATCH -t 00:30:00
-##SBATCH -t 00:58:00
 
 BIG=1;
 NUM=5;
@@ -35,13 +29,19 @@ cd stencil3d
 make clean
 make
 echo "## start stencil3d ##"
-sh run.sh $NUM $BIG
+/bin/bash run.sh $NUM $BIG
 echo "## end stencil3d ##"
+echo
 echo "## start stencil3d mix ##"
-sh run_mix.sh $NUM $BIG
+/bin/bash run_mix.sh $NUM $BIG
 echo "## end stencil3d mix ##"
+echo
 echo "## start stencil3d fail ##"
-sh run_fail.sh $NUM $BIG
+/bin/bash run_fail.sh $NUM $BIG
 echo "## end stencil3d fail ##"
 cd ..
+
+pushd ../../../
+./clean.sh
+popd
 

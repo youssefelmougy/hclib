@@ -18,6 +18,15 @@ echo file $FILE
 echo num $NUM
 
 echo
+
+    count=$(cat $FILE |grep took|wc -l)
+    total=9*$NUM
+    if [ $count -ne $total ]; then
+        echo "Requires " $total " readings but only " $count " found"
+        echo
+        exit
+    fi
+
     echo "#########"
     echo "Figure 1"
     echo "#########"
@@ -33,7 +42,7 @@ echo
             #echo -n "  "$type" "
             printf "  %-12s " $type
             cat $FILE |grep took|head -$(($NUM *$i))|tail -$NUM| awk '{sum+=$4} END{print sum/NR}'
-            let i+=1
+            i=$((i+1))
         done
     done
 
@@ -53,14 +62,14 @@ echo
             err_rate=0
             error_base=$(cat $FILE |grep took|head -$(($NUM *$i))|tail -$NUM| awk '{sum+=$4} END{print sum/NR}')
             printf "  %4d %9.5f %9.5f\n" $err_rate $error_base 0
-            let i+=1
+            i=$((i+1))
             for err_rate in 1 10
             do
                 #echo -n "  " $err " "
                 error=$(cat $FILE |grep took|head -$(($NUM *$i))|tail -$NUM| awk '{sum+=$4} END{print sum/NR}')
                 percent=$( echo "100*($error - $error_base)/$error_base" | bc -l)
                 printf "  %4d %9.5f %9.5f\n" $err_rate $error $percent
-                let i+=1
+                i=$((i+1))
             done
         done
     done

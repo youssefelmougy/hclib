@@ -1,10 +1,4 @@
 #!/bin/bash
-#SBATCH -q debug
-##SBATCH -q regular
-#SBATCH -N 1
-#SBATCH -C haswell
-#SBATCH -t 00:30:00
-##SBATCH -t 00:58:00
 
 NUM=5;
 
@@ -21,19 +15,38 @@ done
 
 echo number of times $NUM
 
+echo "### Start Build ###"
 pushd ../../../
 ./clean.sh
 CFLAGS=-DMAX_NUM_WAITS=256 ./install.sh
 source hclib-install/bin/hclib_setup_env.sh
 popd
+echo "###End Build ###"
+echo
 
+echo "### Start Experiment ###"
 cd cg
 make clean
 make
 rm -rf crankseg_1.tar.gz crankseg_1
 wget https://sparse.tamu.edu/MM/GHS_psdef/crankseg_1.tar.gz
 tar -xvzf crankseg_1.tar.gz
-sh run.sh $NUM
-sh run_fail.sh $NUM
+echo
+echo "### Start no failure run ###"
+/bin/bash run.sh $NUM
+echo "### End no failure run ###"
+echo
+echo "### Start failure run ###"
+/bin/bash run_fail.sh $NUM
+echo "### End failure run ###"
 cd ..
+echo "### End Experiment ###"
+echo
+
+echo "### Start Cleanup ###"
+pushd ../../../
+./clean.sh
+popd
+echo "### End Cleanup ###"
+echo
 
