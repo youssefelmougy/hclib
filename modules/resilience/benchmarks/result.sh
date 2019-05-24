@@ -30,9 +30,9 @@ if [ $FIG -eq 1 ]; then
     count=$(cat $FILE |grep took|wc -l)
     total=$((NUM*10))
     if [ $count -ne $total ]; then
-        echo "Requires " $total " readings but only " $count " found"
         echo
-        exit
+        echo "WARNING: Requires " $total " readings but only " $count " found"
+        echo
     fi
     echo
     echo "Resilience type|"  "Time(Sec)"
@@ -62,9 +62,9 @@ elif [ $FIG -eq 2 ]; then
     count=$(cat $FILE |grep took|wc -l)
     total=$((NUM*6))
     if [ $count -ne $total ]; then
-        echo "Requires " $total " readings but only " $count " found"
         echo
-        exit
+        echo "WARNING: Requires " $total " readings but only " $count " found"
+        echo
     fi
     echo
     echo "Replic(%)|"  "Time(Sec)"
@@ -90,9 +90,9 @@ elif [ $FIG -eq 3 ]; then
     count=$(cat $FILE |grep took|wc -l)
     total=$((NUM*21))
     if [ $count -ne $total ]; then
-        echo "Requires " $total " readings but only " $count " found"
         echo
-        exit
+        echo "WARNING: Requires " $total " readings but only " $count " found"
+        echo
     fi
     echo
     echo "Error(%)|"  "Time(Sec)|"  "Time increase(%)"
@@ -141,9 +141,9 @@ elif [ $FIG -eq 4 ]; then
     count=$(cat $FILE |grep took|wc -l)
     total=$((NUM*6))
     if [ $count -ne $total ]; then
-        echo "Requires " $total " readings but only " $count " found"
         echo
-        exit
+        echo "WARNING: Requires " $total " readings but only " $count " found"
+        echo
     fi
     echo
     echo "Resilience type|"  "Time(Sec)"
