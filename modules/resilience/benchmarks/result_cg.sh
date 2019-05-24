@@ -20,11 +20,11 @@ echo num $NUM
 echo
 
     count=$(cat $FILE |grep took|wc -l)
-    total=9*$NUM
+    total=$((NUM*9))
     if [ $count -ne $total ]; then
-        echo "Requires " $total " readings but only " $count " found"
         echo
-        exit
+        echo "Warning: Requires " $total " readings but only " $count " found"
+        echo
     fi
 
     echo "#########"
