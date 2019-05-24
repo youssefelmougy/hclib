@@ -73,7 +73,7 @@ elif [ $FIG -eq 2 ]; then
         do
         echo
         echo $name
-        for frac in 0 20 60 40 100
+        for frac in 0 20 40 60 80 100
         do 
             #echo -n $frac " "
             printf "  %-5s " $frac
