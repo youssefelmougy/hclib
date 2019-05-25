@@ -138,10 +138,10 @@ struct resilient_task_params_t {
         //rel_vec = nullptr;
 
 #ifdef FINISH_WORKAROUND
-        delete count;
-        count = nullptr;
-        delete finish_prom;
-        finish_prom = nullptr;
+        //        delete count;
+        //count = nullptr;
+        //delete finish_prom;
+        //finish_prom = nullptr;
 #endif
 
 #ifdef MPI_COMMUNICATION
