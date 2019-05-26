@@ -819,7 +819,7 @@ int main (int argc, char *argv[])
 #if defined(USE_REPLAY)
     printf("resilience=replay\n");
 #elif defined(USE_REPLICATION)
-    printf("resilience=diamond\n");
+    printf("resilience=replication\n");
 #else
     printf("resilience=none\n");
 #endif

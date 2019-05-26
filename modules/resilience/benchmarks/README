@@ -1,8 +1,22 @@
 
-The whole experiment consists for five phases, 0: prepare your system, 1: building HClib library, 2: building the benchmarks, 3: running the benchmarks, 4: processing the output of step 3 to correspond to figures in the paper.
-Commands to be executed starts with '>>' marker. Please ignore this marker while copying the commands.
+Enabling Resiliency in Asynchronous Many-Task Programming Models
+----------------------------------------------------------------
 
-0) Before getting started, please make sure that the following packages are available:
+Document also available at
+https://github.com/srirajpaul/hclib/blob/feature/resilience/modules/resilience/benchmarks/README
+
+The whole experiment consists of five phases, 0: prepare your system,
+1: building HClib library, 2: building the benchmarks, 3: running the 
+benchmarks, 4: processing the output of step 3 to correspond to 
+figures in the paper.
+Commands to be executed starts with '>>' marker. Please ignore this 
+marker while copying the commands.
+
+Getting Started
+---------------
+
+0)  Please use bash shell. Before getting started, please make sure 
+    that the following packages are available:
 
     git
     make
@@ -14,18 +28,29 @@ Commands to be executed starts with '>>' marker. Please ignore this marker while
     mpich
     icpc (required for the Cholesky benchmark that uses Intel MKL)
     
-    Please make sure the C/C++ compiler supports -std=c++14 and -std=c11.
+    Please use a C/C++ compiler that supports -std=c++14 and -std=c11.
     
-    Here is an example command that installs all the dependencies except for icpc on an Ubuntu-based system:
+    Here is an example command that installs all the dependencies 
+    except for icpc on an Ubuntu-based system:
     >> sudo apt-get install git-core make automake libtool g++ libmpich-dev mpich
     
-1) HClib Installation
+1) HClib Installation and testing
 
     >> git clone https://github.com/srirajpaul/hclib.git
     >> cd hclib
     >> git checkout feature/resilience
     >> ./install.sh
     >> source hclib-install/bin/hclib_setup_env.sh
+    >> pushd modules/resilience/test
+    >> make
+    >> make test
+    >> popd
+
+    Explanation: Each test should execute without error. These tests
+    creates few integer objects, prints, deletes them and exits.
+
+Step-by-Step Instructions
+------------------------
 
 2) Build Resilience benchmarks
 
@@ -33,26 +58,36 @@ Commands to be executed starts with '>>' marker. Please ignore this marker while
     >> make clean
     >> make
 
-    Note: To build the Cholesky benchmark, Intel Math Kernel Library (MKL) is needed. 
-    The build system uses Intel C++ compiler (icpc) for compilation with the appropriate flags for MKL.
-    If the Intel C++ compiler (icpc) and Intel Math Kernel Library (MKL) is not available, 
-    then to skip Cholesky, remove cholesky from the Makefile (look at line 2 and 3 in the Makefile)
+    Note: For the Cholesky benchmark, Intel Math Kernel Library (MKL)
+    is needed. The build system uses Intel C++ compiler (icpc) for 
+    compilation with the appropriate flags for MKL. If the Intel C++ 
+    compiler (icpc) and Intel Math Kernel Library (MKL) is not
+    available, then to skip Cholesky, remove cholesky from the
+    Makefile (look at line 2 and 3 in the Makefile)
     
 3) Run Experiments
 
+    CG and Stencil3d benchmarks are run seperately.
+
     0)  >> export HCLIB_WORKERS=<number of cores>
-        Set the number of workers. If this is not done, HClib will create as many workers as the number of cores.
-        In our experiments on Cori (with 32 cores and 2 threads per core), we used 32 workers so as to map each
-        worker to a core.
+
+        Explanation:
+        Set the number of workers. If this is not done, HClib will 
+        create as many workers as the number of hardware threads.
+        In our experiments on Cori (32 cores and 2 threads/core) [1],
+        we used 32 workers so as to map each worker to a core.
+        >> export HCLIB_WORKERS=32
 
     1) for figure 1:
         >> /bin/bash run.sh -f 1 -b 1 -n 5 2>&1 |tee 1.txt
             
         Explanation:
         -f 1 => for figure 1
-        -b 1 => use big input (same as the paper). Use '-b 0' for a smaller input
+        -b 1 => use big input (same as the paper). Use '-b 0' 
+                for a smaller input with lesser time
         -n 5 => run each experiments 5 times
-        2>&1 |tee 1.txt => redirect output to file 1.txt and also print on screen
+        2>&1 |tee 1.txt => redirect output to file 1.txt and 
+                           also print on screen
 
     2)  for figure 2:
         >> /bin/bash run.sh -f 2 -b 1 -n 5 2>&1 |tee 2.txt
@@ -63,12 +98,18 @@ Commands to be executed starts with '>>' marker. Please ignore this marker while
     4)  for figure 4:
         >> /bin/bash run_mpi.sh  -b 1 -n 5 2>&1 |tee 4.txt
 
+        Note:
         Uses mpicxx to compile and mpirun to run the experiments.
-        If using a different compiler/launcher specify them in the
-        Makefile/run.sh inside stencil1d/mpi
+        If using a different compiler and launcher specify them in 
+        the Makefile and run.sh inside stencil1d/mpi
+        In Cori, we used CC to compile and srun to run them along
+        with setting 'export CRAYPE_LINK_TYPE=dynamic'
 
     5)  for CG:
         >> /bin/bash run_cg.sh -n 5 2>&1 |tee cg.txt
+
+    6) for Stencil3d:
+        >> /bin/bash run_3d.sh -b 1 -n 5 2>&1 |tee 3d.txt
 
 4) View Results
 
@@ -76,22 +117,61 @@ Commands to be executed starts with '>>' marker. Please ignore this marker while
         >> /bin/bash result.sh -i 1.txt -f 1 -n 5
 
         Explanation:
-        -i 1.txt => use the input file 1.txt. The file 1.txt was created in Step 3.1.
-        -f 1     => for figure 1
-        -n 5     => ran each experiments 5 times. This number should be same as the one used in experiment step 3.1
+        -i 1.txt => use the input file 1.txt. The file 1.txt was 
+                    created in Step 3.1.
+        -f 1     => For figure 1
+        -n 5     => ran each experiments 5 times. This number should 
+                    be same as the one used in experiment step 3.1
+
+        Result:
+        Here the time required for replay will be slightly higher 
+        than the baseline. In some cases, the overhead of replay may
+        be negligible and therefore not even visible due to 
+        differences in scheduling of tasks in various executions.
+        Replication causes the execution time to hover around twice
+        that of the baseline. Abft is low overhead like the replay.
 
     2) Figure 2:
         >> /bin/bash result.sh -i 2.txt -f 2 -n 5
+
+        Result:
+        In the mixing experiment, when the percent of replication
+        increases from 0 to 100, the time taken gradually increases.
+        
 
     3) Figure 3:
         >> /bin/bash result.sh -i 3.txt -f 3 -n 5
 
         Explanation:
-        Column 1 corresponds to the X-axis and, Column 3 corresponds to the Y-axis
+        Column 1 corresponds to the X-axis and, Column 3 corresponds
+        to the Y-axis. 1% error rate do not show much increase in
+        execution time (scheduling difference may also show up).
+        10% error rate would show a corresponding increase in
+        execution time with CG's time increasing to around 20%.
+        Cholesky ABFT do not show much increase even in 10% case
+        since the error correction is lightweight.
 
     4) Figure 4:
         >> /bin/bash result.sh -i 4.txt -f 4 -n 5
 
+        Explanation:
+        We use weak scaling for MPI experiments. So ideally, when
+        we go from 2 nodes to 4 nodes, the time should remain same
+        for a double size input. The time for baseline in 4 nodes
+        is not so much more than 2 nodes even when we are using a
+        double sized input. The same trend is seen for replay and
+        replication. The result is only for 2 and 4 nodes. If more
+        nodes are required, add them to stencil1d/mpi/run.sh line 35.
+
     5) CG:
-       >> /bin/bash result_cg.sh -i cg.txt -n 5
- 
+        >> /bin/bash result_cg.sh -i cg.txt -n 5
+
+        Explanation:
+        Refer Figure 1 and Figure 3.
+
+    6) Stencil3d:
+        >> /bin/bash result_3d.sh -i 3d.txt -n 5
+
+        Explanation:
+        Refer Figure 1, Figure 2  and Figure 3.
+
