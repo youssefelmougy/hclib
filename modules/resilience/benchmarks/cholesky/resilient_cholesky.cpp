@@ -408,7 +408,6 @@ int main(int argc, char* argv[]) {
     clock_gettime(CLOCK_MONOTONIC, &start);
   assert(argc > 2);
   const char *deps[] = { "system" };
-  hclib::launch(deps, 1, [=]() {
     int size = atoi(argv[1]);
     int block_size = atoi(argv[2]), res;
     if(argc > 3) {
@@ -455,6 +454,8 @@ int main(int argc, char* argv[]) {
 #endif
     //in_mat->zero_upper();
 
+  mkl_set_num_threads(1);
+  hclib::launch(deps, 1, [=]() {
     int num_blocks = size/block_size;
     int block_elems = in_mat->rows * in_mat->cols;
     resilient::promise_t<objArr<double>*> **potrf_prom  = new resilient::promise_t<objArr<double>*>*[num_blocks];

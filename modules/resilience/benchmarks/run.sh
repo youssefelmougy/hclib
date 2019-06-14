@@ -38,7 +38,7 @@ if [ $FIG -eq 1 ]; then
 
     echo "## start cholesky ##"
     cd cholesky
-    /bin/bash -x run.sh $NUM
+    /bin/bash -x run.sh $NUM $BIG
     cd ..
     echo "## end cholesky ##"
 
@@ -68,7 +68,7 @@ if [ $FIG -eq 3 ]; then
 
     echo "## start cholesky ##"
     cd cholesky
-    /bin/bash -x run_fail.sh $NUM
+    /bin/bash -x run_fail.sh $NUM $BIG
     cd ..
     echo "## end cholesky ##"
 

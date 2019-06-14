@@ -9,7 +9,7 @@ include $(HCLIB_ROOT)/../modules/resilience/inc/hclib_resilience.post.mak
 TARGETS=lw_1d_full_tile_mpi_nonres lw_1d_full_tile_mpi_replay lw_1d_full_tile_mpi_replic
 
 FLAGS= -g -std=c++14 -Wall -O3
-#MPICXX=CC $(HCLIB_CXXFLAGS)
+#MPICXX=CC
 MPICXX=mpicxx
 all: $(TARGETS) targets.txt
 
