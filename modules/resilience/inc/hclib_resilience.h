@@ -55,7 +55,7 @@ struct mpi_data {
         //blocking APIs are used only for debugging non-error executions
         //if(type == MPI_Send_lbl)
         //    return ::MPI_Send(buf, count, datatype, src_dest, tag, comm);
-        //else 
+        //else
             return ::Isend_helper(buf, datatype, src_dest, tag, prom, comm);
     }
 
@@ -152,6 +152,19 @@ class safe_vector {
 #endif
     }
 
+    void push_back(T& value) {
+#if defined (USE_C_ARRAY_WITH_LOCK)
+	std::lock_guard<std::mutex> lkg(mtx);
+        pos++;
+        assert(pos < SAFE_VECTOR_CAPACITY);
+        vec[pos] = value;
+#elif defined (USE_C_ARRAY_WITH_ATOMIC)
+	hc_atomic_inc(&pos);
+	assert(pos < SAFE_VECTOR_CAPACITY);
+	vec[pos] = value;
+#endif
+    }
+
     size_t size() const noexcept {
         return pos + 1;
     }
@@ -163,6 +176,14 @@ class safe_vector {
     void clear() noexcept {
 	// TODO: mutual exclusion?
         pos = -1;
+    }
+
+    auto begin() noexcept -> decltype(&vec[0]) {
+        return &vec[0];
+    }
+
+    auto end() noexcept -> decltype(&vec[pos]) {
+        return &vec[pos];
     }
 #endif
 };
@@ -219,4 +240,3 @@ class safe_mpi_data_vector : public safe_vector<T> {
 #include "hclib_resilience_checkpoint.h"
 
 #endif
-
