@@ -65,6 +65,23 @@ int Isend_helper(communication_obj *data, MPI_Datatype datatype, int dest, int t
     return 0;
 }
 
+int Iallreduce_helper(void *data, MPI_Datatype datatype, int mpi_op, hclib_promise_t *prom, MPI_Comm comm) {
+     hclib::async_nb_await_at([=] {
+        MPI_Request req;
+        pending_mpi_op *op = (pending_mpi_op *)malloc(sizeof(pending_mpi_op));
+        assert(op);
+        op->serialize = nullptr;
+        void *recv_data = malloc(sizeof(double));
+        ::MPI_Iallreduce(data, recv_data, 1, datatype, mpi_op, comm, &req);
+
+        op->req = req;
+        op->prom = prom;
+        op->data = (communication_obj*)recv_data;
+        hclib::append_to_pending(op, &pending, test_mpi_completion, nic);
+    }, nullptr, nic);
+    return 0;
+}
+
 #if 0
 namespace hclib {
 namespace resilience{

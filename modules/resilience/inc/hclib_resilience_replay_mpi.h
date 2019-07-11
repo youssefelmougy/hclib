@@ -21,6 +21,7 @@ hclib::locale_t *nic = nullptr;
 bool test_mpi_completion(void *generic_op);
 
 int Isend_helper(communication_obj *data, MPI_Datatype datatype, int dest, int tag, hclib_promise_t *prom, MPI_Comm comm);
+int Iallreduce_helper(communication_obj *data, MPI_Datatype datatype, int mpi_op, hclib_promise_t *prom, MPI_Comm comm);
 
 namespace hclib {
 namespace resilience {
@@ -69,6 +70,18 @@ void Irecv(int count, int source, int tag, hclib::promise_t<COMMUNICATION_OBJ*> 
     else {
         //do nothing on replays since the mpi communication is already scheduled during first execution
     }
+}
+
+template<class COMMUNICATION_OBJ>
+void Iallreduce_tmp(void *data, MPI_Datatype datatype, MPI_Op op, int do_free, hclib::promise_t<COMMUNICATION_OBJ*> *prom, MPI_Comm comm=MPI_COMM_WORLD) {
+    auto task_local = static_cast<replay_task_params_t<void*>*>(*hclib_get_curr_task_local());
+    //assert(is_replay_task(task_local));
+    if(is_resilient_task(task_local)) {
+        auto temp = new mpi_data(MPI_Iallreduce_lbl, (communication_obj*)data, datatype, -1, op, do_free, prom, comm);
+        task_local->mpi_send_vec->push_back(temp);
+    }
+    else
+        Iallreduce_helper(data, datatype, op, prom, comm);
 }
 
 } // namespace replay

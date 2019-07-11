@@ -24,7 +24,8 @@
 #include<mpi.h>
 enum MPI_FUNC_LABELS {
     MPI_Send_lbl,
-    MPI_Isend_lbl
+    MPI_Isend_lbl,
+    MPI_Iallreduce_lbl
 };
 
 //Forward declare checkpoint object
@@ -36,6 +37,7 @@ namespace hclib::resilience::checkpoint {
 using communication_obj = hclib::resilience::checkpoint::obj;
 
 int Isend_helper(communication_obj* buf, MPI_Datatype datatype, int dest, int tag, hclib_promise_t *prom, MPI_Comm comm);
+int Iallreduce_helper(void *buf, MPI_Datatype datatype, int mpi_op, hclib_promise_t *prom, MPI_Comm comm);
 
 struct mpi_data {
     MPI_FUNC_LABELS type;
@@ -51,12 +53,20 @@ struct mpi_data {
         :type(type), buf(buf),  datatype(datatype), src_dest(src_dest), tag(tag), do_free(do_free), prom(prom), comm(comm) {}
 
     inline int send() {
-        assert(type == MPI_Isend_lbl);
+        //assert(type == MPI_Isend_lbl);
         //blocking APIs are used only for debugging non-error executions
         //if(type == MPI_Send_lbl)
         //    return ::MPI_Send(buf, count, datatype, src_dest, tag, comm);
         //else
-            return ::Isend_helper(buf, datatype, src_dest, tag, prom, comm);
+        switch(type) {
+            case MPI_Isend_lbl:
+                return ::Isend_helper(buf, datatype, src_dest, tag, prom, comm);
+            case MPI_Iallreduce_lbl:
+                return ::Iallreduce_helper(buf, datatype, tag, prom, comm);
+            default:
+                assert(false);
+        }
+        return -1;
     }
 
     inline void tmp_delete() {
