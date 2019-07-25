@@ -72,7 +72,7 @@ int Iallreduce_helper(void *data, MPI_Datatype datatype, int mpi_op, hclib_promi
         assert(op);
         op->serialize = nullptr;
         void *recv_data = malloc(sizeof(double));
-        ::MPI_Iallreduce(data, recv_data, 1, datatype, mpi_op, comm, &req);
+        ::MPI_Iallreduce(data, recv_data, 1, datatype, (MPI_Op)mpi_op, comm, &req);
 
         op->req = req;
         op->prom = prom;

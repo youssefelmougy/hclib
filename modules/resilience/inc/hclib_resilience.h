@@ -29,9 +29,9 @@ enum MPI_FUNC_LABELS {
 };
 
 //Forward declare checkpoint object
-namespace hclib::resilience::checkpoint {
+namespace hclib { namespace resilience { namespace checkpoint {
     class obj;
-};
+};};};
 
 //create communication object which is alias for checkpoint object
 using communication_obj = hclib::resilience::checkpoint::obj;
