@@ -63,20 +63,22 @@ void poll_on_pending(pending_op **addr_of_head,
                     prev->next = op->next;
                 }
 
-                if (op->serialize) {
-                    op->data->deserialize(op->serialize);
+                if (op->serialized) {
+                    op->data->deserialize(op->serialized);
                     //We do not want to delete data since the deserialize routine might
                     //directy use data pointer instead of copying it for efficiency
-                    op->serialize->data = nullptr;
-                    delete op->serialize;
+                    op->serialized->data = nullptr;
+                    delete op->serialized;
                 }
                 else {
+                    //Isend do not need to deserialize data once the operation is completed
                     //assert(false);
                 }
                 if (op->prom) {
                     hclib_promise_put(op->prom, op->data);
                 } else {
-                    assert(false);
+                    //Allow the completion notification promise to be not set
+                    //assert(false);
                 }
                 free(op);
             } else {

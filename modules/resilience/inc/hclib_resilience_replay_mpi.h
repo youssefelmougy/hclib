@@ -11,7 +11,7 @@ struct pending_mpi_op {
     MPI_Request req;
     hclib_promise_t *prom;
     communication_obj *data;
-    checkpoint::archive_obj *serialize;
+    checkpoint::archive_obj *serialized;
     pending_mpi_op *next;
 };
 
@@ -49,7 +49,7 @@ void Isend(COMMUNICATION_OBJ *data, int dest, int tag, int do_free, hclib::promi
 }
 
 template<class COMMUNICATION_OBJ>
-void Irecv(int count, int source, int tag, hclib::promise_t<COMMUNICATION_OBJ*> *prom, MPI_Comm comm=MPI_COMM_WORLD) {
+void Irecv(int count, int source, int tag, hclib::promise_t<COMMUNICATION_OBJ*> *prom, hclib::future_t<COMMUNICATION_OBJ*> *fut = nullptr, MPI_Comm comm=MPI_COMM_WORLD) {
     if(resilience::get_index() == 0) {
         hclib::async_nb_await_at([=] {
             auto ar_ptr = new checkpoint::archive_obj();
@@ -63,9 +63,9 @@ void Irecv(int count, int source, int tag, hclib::promise_t<COMMUNICATION_OBJ*> 
             op->req = req;
             op->prom = prom;
             op->data = new COMMUNICATION_OBJ();
-            op->serialize = ar_ptr;
+            op->serialized = ar_ptr;
             hclib::append_to_pending(op, &pending, test_mpi_completion, nic);
-        }, nullptr, nic);
+        }, fut, nic);
     }
     else {
         //do nothing on replays since the mpi communication is already scheduled during first execution

@@ -51,11 +51,11 @@ int Isend_helper(communication_obj *data, MPI_Datatype datatype, int dest, int t
         MPI_Request req;
         pending_mpi_op *op = (pending_mpi_op *)malloc(sizeof(pending_mpi_op));
         assert(op);
-        //TODO: since serialized object it not saved, they cannot be deleted
-        //Need to improve garbage collection
-        op->serialize = nullptr;
+        op->serialized = nullptr;
         auto ar_ptr = data->serialize();
         ::MPI_Isend(ar_ptr->data, ar_ptr->size, MPI_BYTE, dest, tag, comm, &req);
+        ar_ptr->data = nullptr;
+        delete ar_ptr;
 
         op->req = req;
         op->prom = prom;
@@ -70,7 +70,7 @@ int Iallreduce_helper(void *data, MPI_Datatype datatype, int mpi_op, hclib_promi
         MPI_Request req;
         pending_mpi_op *op = (pending_mpi_op *)malloc(sizeof(pending_mpi_op));
         assert(op);
-        op->serialize = nullptr;
+        op->serialized = nullptr;
         void *recv_data = malloc(sizeof(double));
         ::MPI_Iallreduce(data, recv_data, 1, datatype, (MPI_Op)mpi_op, comm, &req);
 
