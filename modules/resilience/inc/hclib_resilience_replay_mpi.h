@@ -54,15 +54,19 @@ void Irecv(int count, int source, int tag, hclib::promise_t<COMMUNICATION_OBJ*> 
         hclib::async_nb_await_at([=] {
             auto ar_ptr = new checkpoint::archive_obj();
             ar_ptr->size = count;
-            ar_ptr->data = malloc(count);
-            MPI_Request req;
-            ::MPI_Irecv(ar_ptr->data, count, MPI_BYTE, source, tag, comm, &req);
 
             pending_mpi_op *op = (pending_mpi_op *)malloc(sizeof(pending_mpi_op));
             assert(op);
+            op->data = new COMMUNICATION_OBJ();
+            ar_ptr->data = op->data->allocate_buffer(count);
+            if(ar_ptr->data == nullptr)
+                ar_ptr->data = malloc(count);
+
+            MPI_Request req;
+            ::MPI_Irecv(ar_ptr->data, count, MPI_BYTE, source, tag, comm, &req);
+
             op->req = req;
             op->prom = prom;
-            op->data = new COMMUNICATION_OBJ();
             op->serialized = ar_ptr;
             hclib::append_to_pending(op, &pending, test_mpi_completion, nic);
         }, fut, nic);

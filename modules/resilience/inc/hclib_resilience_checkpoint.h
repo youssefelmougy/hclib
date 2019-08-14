@@ -40,6 +40,7 @@ baack from the archive object
 class obj: public hclib::resilience::obj {
   public:
     //obj(archive_obj* ptr) { assert(false); }
+    virtual void* allocate_buffer(size_t) { return nullptr; }
     virtual void deserialize(archive_obj*) { assert(false); }
     virtual archive_obj* serialize() { assert(false); return nullptr; }
 };
