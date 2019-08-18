@@ -6,7 +6,7 @@ include $(HCLIB_ROOT)/../modules/ref-count/inc/hclib_ref-count.post.mak
 
 DEFINES=-DHC_ASSERTION_CHECK
 
-OBJS=obj/hclib_resilience.o obj/hclib_resilience_replay_mpi.o
+OBJS=obj/hclib_resilience.o obj/hclib_resilience_communication.o
 
 TARGETS=lib/libhclib_resilience.so lib/libhclib_resilience.a
 
@@ -22,7 +22,7 @@ lib/libhclib_resilience.so: $(OBJS)
 obj/hclib_resilience.o: src/hclib_resilience.cpp
 	$(MPICXX) -g -O3 -std=c++14 -Iinc $^ -o $@ $(HCLIB_CFLAGS) -c -fPIC $(DEFINES)
 
-obj/hclib_resilience_replay_mpi.o: src/hclib_resilience_replay_mpi.cpp
+obj/hclib_resilience_communication.o: src/hclib_resilience_communication.cpp
 	$(MPICXX) -g -O3 -std=c++14 -Iinc $^ -o $@ $(HCLIB_CFLAGS) -c -fPIC $(DEFINES)
 
 clean:

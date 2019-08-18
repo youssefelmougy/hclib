@@ -2,8 +2,14 @@
 #define USE_RESILIENT_PROMISE
 
 #include "hclib_resilience.h"
-#include "hclib_resilience_replay_mpi.h"
 #include "hclib-module.h"
+
+namespace hclib {
+namespace resilience{
+namespace communication {
+
+pending_mpi_op *pending = nullptr;
+hclib::locale_t *nic = nullptr;
 
 static int nic_locale_id;
 
@@ -34,7 +40,7 @@ HCLIB_MODULE_INITIALIZATION_FUNC(mpi_finalize) {
 HCLIB_REGISTER_MODULE("resilience_mpi", mpi_pre_initialize, mpi_post_initialize, mpi_finalize)
 
 bool test_mpi_completion(void *generic_op) {
-    pending_mpi_op *op = (pending_mpi_op *)generic_op;
+    auto op = (pending_mpi_op *)generic_op;
 
     int complete;
     ::MPI_Test(&op->req, &complete, MPI_STATUS_IGNORE);
@@ -46,10 +52,10 @@ bool test_mpi_completion(void *generic_op) {
     }
 }
 
-int Isend_helper(communication_obj *data, MPI_Datatype datatype, int dest, int tag, hclib_promise_t *prom, MPI_Comm comm) {
+int Isend_helper(obj *data, MPI_Datatype datatype, int dest, int tag, hclib_promise_t *prom, MPI_Comm comm) {
     hclib::async_nb_await_at([=] {
         MPI_Request req;
-        pending_mpi_op *op = (pending_mpi_op *)malloc(sizeof(pending_mpi_op));
+        auto op = (pending_mpi_op *)malloc(sizeof(pending_mpi_op));
         assert(op);
         op->serialized = nullptr;
         auto ar_ptr = data->serialize();
@@ -68,7 +74,7 @@ int Isend_helper(communication_obj *data, MPI_Datatype datatype, int dest, int t
 int Iallreduce_helper(void *data, MPI_Datatype datatype, int mpi_op, hclib_promise_t *prom, MPI_Comm comm) {
      hclib::async_nb_await_at([=] {
         MPI_Request req;
-        pending_mpi_op *op = (pending_mpi_op *)malloc(sizeof(pending_mpi_op));
+        auto op = (pending_mpi_op *)malloc(sizeof(pending_mpi_op));
         assert(op);
         op->serialized = nullptr;
         void *recv_data = malloc(sizeof(double));
@@ -76,11 +82,15 @@ int Iallreduce_helper(void *data, MPI_Datatype datatype, int mpi_op, hclib_promi
 
         op->req = req;
         op->prom = prom;
-        op->data = (communication_obj*)recv_data;
+        op->data = (obj*)recv_data;
         hclib::append_to_pending(op, &pending, test_mpi_completion, nic);
     }, nullptr, nic);
     return 0;
 }
+
+} // namespace communication
+} // namespace resilience
+} // namespace hclib
 
 #if 0
 namespace hclib {

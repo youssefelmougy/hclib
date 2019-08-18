@@ -1,44 +1,58 @@
-#ifndef HCLIB_RESILIENCE_REPLAY_MPI_H
-#define HCLIB_RESILIENCE_REPLAY_MPI_H
 
-#include <mpi.h>
-#include <hclib_resilience_checkpoint.h>
+#ifndef HCLIB_RESILIENCE_COMMUNICATION_H
+#define HCLIB_RESILIENCE_COMMUNICATION_H
+
 #include "hclib-module-common.h"
 
-namespace checkpoint = hclib::resilience::checkpoint;
+namespace hclib {
+namespace resilience {
+namespace communication {
+
+/*
+The object that will be saved to the archive.
+*/
+struct archive_obj {
+
+    //size of object blob
+    int size = -1;
+    //blob of object to be archived
+    void *data = nullptr;
+};
+
+/*
+The user object should include a serialize method that
+will convert the current objct to an archive object
+and a constructor that can create the current object
+baack from the archive object
+*/
+class obj: public hclib::resilience::obj {
+  public:
+    //obj(archive_obj* ptr) { assert(false); }
+    virtual void* allocate_buffer(size_t) { return nullptr; }
+    virtual void deserialize(archive_obj*) { assert(false); }
+    virtual archive_obj* serialize() { assert(false); return nullptr; }
+};
 
 struct pending_mpi_op {
     MPI_Request req;
     hclib_promise_t *prom;
-    communication_obj *data;
-    checkpoint::archive_obj *serialized;
+    obj *data;
+    archive_obj *serialized;
     pending_mpi_op *next;
 };
 
-pending_mpi_op *pending = nullptr;
-hclib::locale_t *nic = nullptr;
+extern pending_mpi_op *pending;
+extern hclib::locale_t *nic;
 
 bool test_mpi_completion(void *generic_op);
 
-int Isend_helper(communication_obj *data, MPI_Datatype datatype, int dest, int tag, hclib_promise_t *prom, MPI_Comm comm);
-int Iallreduce_helper(communication_obj *data, MPI_Datatype datatype, int mpi_op, hclib_promise_t *prom, MPI_Comm comm);
-
-namespace hclib {
-namespace resilience {
-namespace replay {
-
-/*
-//int Send(void *buf, int count, MPI_Datatype datatype, int dest, int tag, int do_free, MPI_Comm comm=MPI_COMM_WORLD);
-void Send(void *buf, int count, int dest, int tag, int do_free, MPI_Comm comm=MPI_COMM_WORLD);
-
-//int Recv(void *buf, int count, MPI_Datatype datatype, int source, int tag, MPI_Status *status, MPI_Comm comm=MPI_COMM_WORLD);
-void Recv(void *buf, int count, int source, int tag, MPI_Status *status, MPI_Comm comm=MPI_COMM_WORLD);
-*/
+int Isend_helper(obj *data, MPI_Datatype datatype, int dest, int tag, hclib_promise_t *prom, MPI_Comm comm);
+int Iallreduce_helper(obj *data, MPI_Datatype datatype, int mpi_op, hclib_promise_t *prom, MPI_Comm comm);
 
 //Assumption: the serialized archive_obj can be deleted after data is send to remote node
 template<class COMMUNICATION_OBJ>
 void Isend(COMMUNICATION_OBJ *data, int dest, int tag, int do_free, hclib::promise_t<COMMUNICATION_OBJ*> *prom, MPI_Comm comm=MPI_COMM_WORLD) {
-    auto task_local = static_cast<replay_task_params_t<void*>*>(*hclib_get_curr_task_local());
+    auto task_local = static_cast<resilient_task_params_t<void*>*>(*hclib_get_curr_task_local());
     //assert(is_replay_task(task_local));
     if(is_resilient_task(task_local)) {
         auto temp = new mpi_data(MPI_Isend_lbl, data, MPI_BYTE, dest, tag, do_free, prom, comm);
@@ -52,7 +66,7 @@ template<class COMMUNICATION_OBJ>
 void Irecv(int count, int source, int tag, hclib::promise_t<COMMUNICATION_OBJ*> *prom, hclib::future_t<COMMUNICATION_OBJ*> *fut = nullptr, MPI_Comm comm=MPI_COMM_WORLD) {
     if(resilience::get_index() == 0) {
         hclib::async_nb_await_at([=] {
-            auto ar_ptr = new checkpoint::archive_obj();
+            auto ar_ptr = new archive_obj();
             ar_ptr->size = count;
 
             pending_mpi_op *op = (pending_mpi_op *)malloc(sizeof(pending_mpi_op));
@@ -81,16 +95,16 @@ void Iallreduce_tmp(void *data, MPI_Datatype datatype, MPI_Op op, int do_free, h
     auto task_local = static_cast<replay_task_params_t<void*>*>(*hclib_get_curr_task_local());
     //assert(is_replay_task(task_local));
     if(is_resilient_task(task_local)) {
-        auto temp = new mpi_data(MPI_Iallreduce_lbl, (communication_obj*)data, datatype, -1, op, do_free, prom, comm);
+        auto temp = new mpi_data(MPI_Iallreduce_lbl, (obj*)data, datatype, -1, op, do_free, prom, comm);
         task_local->mpi_send_vec->push_back(temp);
     }
     else
         Iallreduce_helper(data, datatype, op, prom, comm);
 }
 
-} // namespace replay
+} // namespace communication
 } // namespace resilience
 } // namespace hclib
 
-#endif
 
+#endif

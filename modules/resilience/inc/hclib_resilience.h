@@ -28,20 +28,20 @@ enum MPI_FUNC_LABELS {
     MPI_Iallreduce_lbl
 };
 
-//Forward declare checkpoint object
-namespace hclib { namespace resilience { namespace checkpoint {
+//Forward declare communication object and communication helpers
+namespace hclib { namespace resilience { namespace communication {
     class obj;
+
+    int Isend_helper(communication::obj* buf, MPI_Datatype datatype, int dest, int tag, hclib_promise_t *prom, MPI_Comm comm);
+    int Iallreduce_helper(void *buf, MPI_Datatype datatype, int mpi_op, hclib_promise_t *prom, MPI_Comm comm);
 };};};
 
-//create communication object which is alias for checkpoint object
-using communication_obj = hclib::resilience::checkpoint::obj;
-
-int Isend_helper(communication_obj* buf, MPI_Datatype datatype, int dest, int tag, hclib_promise_t *prom, MPI_Comm comm);
-int Iallreduce_helper(void *buf, MPI_Datatype datatype, int mpi_op, hclib_promise_t *prom, MPI_Comm comm);
+//short name for communication namespace
+namespace communication = hclib::resilience::communication;
 
 struct mpi_data {
     MPI_FUNC_LABELS type;
-    communication_obj *buf;
+    communication::obj *buf;
     MPI_Datatype datatype;
     int src_dest;
     int tag;
@@ -49,7 +49,7 @@ struct mpi_data {
     hclib_promise_t *prom;
     MPI_Comm comm;
 
-    mpi_data(MPI_FUNC_LABELS type, communication_obj *buf, MPI_Datatype datatype, int src_dest, int tag, int do_free, hclib_promise_t *prom, MPI_Comm comm)
+    mpi_data(MPI_FUNC_LABELS type, communication::obj *buf, MPI_Datatype datatype, int src_dest, int tag, int do_free, hclib_promise_t *prom, MPI_Comm comm)
         :type(type), buf(buf),  datatype(datatype), src_dest(src_dest), tag(tag), do_free(do_free), prom(prom), comm(comm) {}
 
     inline int send() {
@@ -60,9 +60,9 @@ struct mpi_data {
         //else
         switch(type) {
             case MPI_Isend_lbl:
-                return ::Isend_helper(buf, datatype, src_dest, tag, prom, comm);
+                return communication::Isend_helper(buf, datatype, src_dest, tag, prom, comm);
             case MPI_Iallreduce_lbl:
-                return ::Iallreduce_helper(buf, datatype, tag, prom, comm);
+                return communication::Iallreduce_helper(buf, datatype, tag, prom, comm);
             default:
                 assert(false);
         }
@@ -248,5 +248,6 @@ class safe_mpi_data_vector : public safe_vector<T> {
 #include "hclib_resilience_replay.h"
 #include "hclib_resilience_abft.h"
 #include "hclib_resilience_checkpoint.h"
+#include "hclib_resilience_communication.h"
 
 #endif
