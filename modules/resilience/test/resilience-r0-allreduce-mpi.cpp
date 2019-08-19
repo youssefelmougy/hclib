@@ -1,9 +1,7 @@
-
-#define USE_RESILIENT_PROMISE
+#define MPI_COMMUNICATION
 
 #include "hclib_cpp.h"
 #include "hclib_resilience.h"
-#include "hclib_resilience_replay_mpi.h"
 #include <unistd.h>
 
 namespace replay = hclib::resilience::replay;
@@ -47,12 +45,12 @@ int main(int argc, char ** argv) {
             replay::async_await_check<NON_LEAF>( [=]() {
                     long *send_data = new long (10);
                     //reduction from replay task
-                    replay::Iallreduce_tmp(send_data, MPI_LONG, MPI_SUM, 0, prom_allred1);
+                    communication::Iallreduce_tmp(send_data, MPI_LONG, MPI_SUM, 0, prom_allred1);
             }, prom_res, check, args, prom->get_future());
 
             long *send_data = new long (15);
             //reduction from non resilient task
-            replay::Iallreduce_tmp(send_data, MPI_LONG, MPI_SUM, 0, prom_allred2);
+            communication::Iallreduce_tmp(send_data, MPI_LONG, MPI_SUM, 0, prom_allred2);
 
             hclib::async_await( [=]() {
                     int res = prom_res->get_future()->get();

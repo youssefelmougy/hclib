@@ -34,7 +34,7 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
         //so that they can be released later if third task is not created
         auto rel_vec = new future_vector<void*>();
 
-#ifdef USE_RESILIENT_PROMISE
+#ifdef MPI_COMMUNICATION
         //mpi_send_vec is used to collect all the MPI_Isend operations
         auto mpi_send_vec = new mpi_data_vector[N+1];
 #endif
@@ -45,7 +45,7 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
                 dtp_arr[i].index = i;
                 dtp_arr[i].put_vec = put_vec;
                 dtp_arr[i].rel_vec = rel_vec;
-#ifdef USE_RESILIENT_PROMISE
+#ifdef MPI_COMMUNICATION
                 dtp_arr[i].mpi_send_vec = &mpi_send_vec[i];
 #endif
                 *(hclib_get_curr_task_local()) = &dtp_arr[i];
@@ -59,7 +59,7 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
         if(index < 0 )
             prom_check->put(0);
         else {
-#ifdef USE_RESILIENT_PROMISE
+#ifdef MPI_COMMUNICATION
             mpi_send_vec[index].do_sends();
 #endif
             put_vec->do_puts(index);
@@ -70,7 +70,7 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
         //put_vec and rel_vec gets deleted inside destructor of dtp_arr
         delete put_vec;
         delete rel_vec;
-#ifdef USE_RESILIENT_PROMISE
+#ifdef MPI_COMMUNICATION
         delete[] mpi_send_vec;
 #endif
         delete[] dtp_arr;
@@ -99,7 +99,7 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
         //so that they can be released later if third task is not created
         auto rel_vec = new future_vector<void*>();
 
-#ifdef USE_RESILIENT_PROMISE
+#ifdef MPI_COMMUNICATION
         //mpi_send_vec is used to collect all the MPI_Isend operations
         auto mpi_send_vec = new mpi_data_vector[N+1];
 #endif
@@ -110,7 +110,7 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
                 dtp_arr[i].index = i;
                 dtp_arr[i].put_vec = put_vec;
                 dtp_arr[i].rel_vec = rel_vec;
-#ifdef USE_RESILIENT_PROMISE
+#ifdef MPI_COMMUNICATION
                 dtp_arr[i].mpi_send_vec = &mpi_send_vec[i];
 #endif
                 *(hclib_get_curr_task_local()) = &dtp_arr[i];
@@ -124,7 +124,7 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
         if(index < 0 )
             prom_check->put(0);
         else {
-#ifdef USE_RESILIENT_PROMISE
+#ifdef MPI_COMMUNICATION
             mpi_send_vec[index].do_sends();
 #endif
             put_vec->do_puts(index);
@@ -135,7 +135,7 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
         //put_vec and rel_vec gets deleted inside destructor of dtp_arr
         delete put_vec;
         delete rel_vec;
-#ifdef USE_RESILIENT_PROMISE
+#ifdef MPI_COMMUNICATION
         delete[] mpi_send_vec;
 #endif
         delete[] dtp_arr;

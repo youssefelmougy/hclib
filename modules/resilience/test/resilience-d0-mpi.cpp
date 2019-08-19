@@ -1,8 +1,7 @@
-#define USE_RESILIENT_PROMISE
+#define MPI_COMMUNICATION
 
 #include "hclib_cpp.h"
 #include "hclib_resilience.h"
-#include "hclib_resilience_diamond_mpi.h"
 #include <unistd.h>
 
 namespace diamond = hclib::resilience::diamond;
@@ -11,7 +10,7 @@ enum TASK_STATE {NON_LEAF, LEAF};
 
 //int_obj is not required for replay promises, base types can be used.
 //Here it is just used to print inside constructor/destructor
-class int_obj : public checkpoint::obj {
+class int_obj : public communication::obj {
   public:
     int n;
     int_obj() { printf("creating int_obj\n"); }
@@ -21,12 +20,12 @@ class int_obj : public checkpoint::obj {
       return n == ((int_obj*)obj2)->n;
     }
 
-    void deserialize(checkpoint::archive_obj* ar_ptr) {
+    void deserialize(communication::archive_obj* ar_ptr) {
         n = *(int*)(ar_ptr->data);
     }
 
-    checkpoint::archive_obj* serialize() {
-        auto ar_ptr = new checkpoint::archive_obj();
+    communication::archive_obj* serialize() {
+        auto ar_ptr = new communication::archive_obj();
         ar_ptr->size = sizeof(int);
         ar_ptr->data = malloc(ar_ptr->size);
         memcpy(ar_ptr->data, &n, ar_ptr->size);
@@ -86,13 +85,13 @@ int main(int argc, char ** argv) {
                         n2->n = 22;
                         prom1->put(n2);
                         if(rank == 0) {
-                            diamond::Isend(n2, 1, 1, 0, prom_send);
+                            communication::Isend(n2, 1, 1, 0, prom_send);
                         }
                     }, future_nullptr);
 
                     if(rank == 1) {
                         int buf=6;
-                        diamond::Irecv(sizeof(int), 0, 1, prom_recv);
+                        communication::Irecv(sizeof(int), 0, 1, prom_recv);
                         printf("Received %d in rank %d\n", buf, rank);
                     }
             }, prom_res, prom->get_future());

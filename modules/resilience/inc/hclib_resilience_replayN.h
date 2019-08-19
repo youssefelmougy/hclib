@@ -50,7 +50,7 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
             //no need to clear since the promise is only added in first execution
             //rtp->put_vec->clear();
             //rtp->rel_vec->clear();
-#ifdef USE_RESILIENT_PROMISE
+#ifdef MPI_COMMUNICATION
             for(auto &val: *(rtp->mpi_send_vec))
                 val->tmp_delete();
             rtp->mpi_send_vec->clear();
@@ -59,7 +59,7 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
         delete lambda_ptr;
 
         if(result) {
-#ifdef USE_RESILIENT_PROMISE
+#ifdef MPI_COMMUNICATION
             rtp->mpi_send_vec->do_sends();
 #endif
             rtp->put_vec->do_puts(index);
@@ -116,7 +116,7 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
                 data[i]->tmp_delete();
             //rtp->put_vec->clear();
             //rtp->rel_vec->clear();
-#ifdef USE_RESILIENT_PROMISE
+#ifdef MPI_COMMUNICATION
             for(auto &val: *(rtp->mpi_send_vec))
                 val->tmp_delete();
             rtp->mpi_send_vec->clear();
@@ -125,7 +125,7 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
         delete lambda_ptr;
 
         if(result) {
-#ifdef USE_RESILIENT_PROMISE
+#ifdef MPI_COMMUNICATION
             rtp->mpi_send_vec->do_sends();
 #endif
             rtp->put_vec->do_puts(index);
@@ -191,7 +191,7 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
             //rtp->put_vec->clear();
             //rtp->rel_vec->clear();
 
-#ifdef USE_RESILIENT_PROMISE
+#ifdef MPI_COMMUNICATION
             for(auto &val: *(rtp->mpi_send_vec))
                 val->tmp_delete();
             rtp->mpi_send_vec->clear();
@@ -200,7 +200,7 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
         delete lambda_ptr;
 
         if(result) {
-#ifdef USE_RESILIENT_PROMISE
+#ifdef MPI_COMMUNICATION
             rtp->mpi_send_vec->do_sends();
 #endif
             rtp->put_vec->do_puts(index);
@@ -256,7 +256,7 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
 
             //rtp->put_vec->clear();
             //rtp->rel_vec->clear();
-#ifdef USE_RESILIENT_PROMISE
+#ifdef MPI_COMMUNICATION
             for(auto &val: *(rtp->mpi_send_vec))
                 val->tmp_delete();
             rtp->mpi_send_vec->clear();
@@ -265,7 +265,7 @@ async_await_check_at(T&& lambda, hclib::promise_t<int> *prom_check,
         delete lambda_ptr;
 
         if(result) {
-#ifdef USE_RESILIENT_PROMISE
+#ifdef MPI_COMMUNICATION
             rtp->mpi_send_vec->do_sends();
 #endif
             rtp->put_vec->do_puts(index);

@@ -20,7 +20,7 @@ lib/libhclib_resilience.so: $(OBJS)
 	cp $@ $(HCLIB_ROOT)/lib
 
 obj/hclib_resilience.o: src/hclib_resilience.cpp
-	$(MPICXX) -g -O3 -std=c++14 -Iinc $^ -o $@ $(HCLIB_CFLAGS) -c -fPIC $(DEFINES)
+	$(CXX) -g -O3 -std=c++14 -Iinc $^ -o $@ $(HCLIB_CFLAGS) -c -fPIC $(DEFINES)
 
 obj/hclib_resilience_communication.o: src/hclib_resilience_communication.cpp
 	$(MPICXX) -g -O3 -std=c++14 -Iinc $^ -o $@ $(HCLIB_CFLAGS) -c -fPIC $(DEFINES)

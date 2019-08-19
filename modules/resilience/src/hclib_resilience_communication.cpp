@@ -1,5 +1,7 @@
 
-#define USE_RESILIENT_PROMISE
+#ifndef MPI_COMMUNICATION
+#define MPI_COMMUNICATION
+#endif
 
 #include "hclib_resilience.h"
 #include "hclib-module.h"
@@ -52,7 +54,7 @@ bool test_mpi_completion(void *generic_op) {
     }
 }
 
-int Isend_helper(obj *data, MPI_Datatype datatype, int dest, int tag, hclib_promise_t *prom, MPI_Comm comm) {
+int Isend_helper(obj *data, MPI_Datatype datatype, int dest, int64_t tag, hclib_promise_t *prom, MPI_Comm comm) {
     hclib::async_nb_await_at([=] {
         MPI_Request req;
         auto op = (pending_mpi_op *)malloc(sizeof(pending_mpi_op));
@@ -71,7 +73,7 @@ int Isend_helper(obj *data, MPI_Datatype datatype, int dest, int tag, hclib_prom
     return 0;
 }
 
-int Iallreduce_helper(void *data, MPI_Datatype datatype, int mpi_op, hclib_promise_t *prom, MPI_Comm comm) {
+int Iallreduce_helper(void *data, MPI_Datatype datatype, int64_t mpi_op, hclib_promise_t *prom, MPI_Comm comm) {
      hclib::async_nb_await_at([=] {
         MPI_Request req;
         auto op = (pending_mpi_op *)malloc(sizeof(pending_mpi_op));

@@ -4,7 +4,7 @@
 #include "hclib_cpp.h"
 #include "hclib_ref-count.h"
 
-#define MPI_COMMUNICATION
+//#define MPI_COMMUNICATION
 #define USE_STD_VEC
 //#define USE_C_ARRAY_WITH_ATOMIC
 //#define USE_C_ARRAY_WITH_LOCK
@@ -21,6 +21,11 @@
 #endif
 
 #ifdef MPI_COMMUNICATION
+
+#ifndef USE_RESILIENT_PROMISE
+#define USE_RESILIENT_PROMISE
+#endif
+
 #include<mpi.h>
 enum MPI_FUNC_LABELS {
     MPI_Send_lbl,
@@ -32,8 +37,8 @@ enum MPI_FUNC_LABELS {
 namespace hclib { namespace resilience { namespace communication {
     class obj;
 
-    int Isend_helper(communication::obj* buf, MPI_Datatype datatype, int dest, int tag, hclib_promise_t *prom, MPI_Comm comm);
-    int Iallreduce_helper(void *buf, MPI_Datatype datatype, int mpi_op, hclib_promise_t *prom, MPI_Comm comm);
+    int Isend_helper(communication::obj* buf, MPI_Datatype datatype, int dest, int64_t tag, hclib_promise_t *prom, MPI_Comm comm);
+    int Iallreduce_helper(void *buf, MPI_Datatype datatype, int64_t mpi_op, hclib_promise_t *prom, MPI_Comm comm);
 };};};
 
 //short name for communication namespace
@@ -44,12 +49,12 @@ struct mpi_data {
     communication::obj *buf;
     MPI_Datatype datatype;
     int src_dest;
-    int tag;
+    int64_t tag;
     int do_free;
     hclib_promise_t *prom;
     MPI_Comm comm;
 
-    mpi_data(MPI_FUNC_LABELS type, communication::obj *buf, MPI_Datatype datatype, int src_dest, int tag, int do_free, hclib_promise_t *prom, MPI_Comm comm)
+    mpi_data(MPI_FUNC_LABELS type, communication::obj *buf, MPI_Datatype datatype, int src_dest, int64_t tag, int do_free, hclib_promise_t *prom, MPI_Comm comm)
         :type(type), buf(buf),  datatype(datatype), src_dest(src_dest), tag(tag), do_free(do_free), prom(prom), comm(comm) {}
 
     inline int send() {
@@ -73,7 +78,7 @@ struct mpi_data {
         if(do_free == 1) free(buf);
     }
 };
-#endif
+#endif // MPI_COMMUNICATION
 
 //TODO: Assumes lambdas provided to tasks are non mutable.
 //Need to find out what happens it not?

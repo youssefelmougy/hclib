@@ -2,6 +2,8 @@
 #ifndef HCLIB_RESILIENCE_COMMUNICATION_H
 #define HCLIB_RESILIENCE_COMMUNICATION_H
 
+#ifdef MPI_COMMUNICATION
+
 #include "hclib-module-common.h"
 
 namespace hclib {
@@ -46,12 +48,12 @@ extern hclib::locale_t *nic;
 
 bool test_mpi_completion(void *generic_op);
 
-int Isend_helper(obj *data, MPI_Datatype datatype, int dest, int tag, hclib_promise_t *prom, MPI_Comm comm);
-int Iallreduce_helper(obj *data, MPI_Datatype datatype, int mpi_op, hclib_promise_t *prom, MPI_Comm comm);
+int Isend_helper(obj *data, MPI_Datatype datatype, int dest, int64_t tag, hclib_promise_t *prom, MPI_Comm comm);
+int Iallreduce_helper(obj *data, MPI_Datatype datatype, int64_t mpi_op, hclib_promise_t *prom, MPI_Comm comm);
 
 //Assumption: the serialized archive_obj can be deleted after data is send to remote node
 template<class COMMUNICATION_OBJ>
-void Isend(COMMUNICATION_OBJ *data, int dest, int tag, int do_free, hclib::promise_t<COMMUNICATION_OBJ*> *prom, MPI_Comm comm=MPI_COMM_WORLD) {
+void Isend(COMMUNICATION_OBJ *data, int dest, int64_t tag, int do_free, hclib::promise_t<COMMUNICATION_OBJ*> *prom, MPI_Comm comm=MPI_COMM_WORLD) {
     auto task_local = static_cast<resilient_task_params_t<void*>*>(*hclib_get_curr_task_local());
     //assert(is_replay_task(task_local));
     if(is_resilient_task(task_local)) {
@@ -63,7 +65,7 @@ void Isend(COMMUNICATION_OBJ *data, int dest, int tag, int do_free, hclib::promi
 }
 
 template<class COMMUNICATION_OBJ>
-void Irecv(int count, int source, int tag, hclib::promise_t<COMMUNICATION_OBJ*> *prom, hclib::future_t<COMMUNICATION_OBJ*> *fut = nullptr, MPI_Comm comm=MPI_COMM_WORLD) {
+void Irecv(int count, int source, int64_t tag, hclib::promise_t<COMMUNICATION_OBJ*> *prom, hclib::future_t<COMMUNICATION_OBJ*> *fut = nullptr, MPI_Comm comm=MPI_COMM_WORLD) {
     if(resilience::get_index() == 0) {
         hclib::async_nb_await_at([=] {
             auto ar_ptr = new archive_obj();
@@ -92,19 +94,21 @@ void Irecv(int count, int source, int tag, hclib::promise_t<COMMUNICATION_OBJ*> 
 
 template<class COMMUNICATION_OBJ>
 void Iallreduce_tmp(void *data, MPI_Datatype datatype, MPI_Op op, int do_free, hclib::promise_t<COMMUNICATION_OBJ*> *prom, MPI_Comm comm=MPI_COMM_WORLD) {
+    assert(sizeof(MPI_Op) <= sizeof(int64_t));
     auto task_local = static_cast<replay_task_params_t<void*>*>(*hclib_get_curr_task_local());
     //assert(is_replay_task(task_local));
     if(is_resilient_task(task_local)) {
-        auto temp = new mpi_data(MPI_Iallreduce_lbl, (obj*)data, datatype, -1, op, do_free, prom, comm);
+        auto temp = new mpi_data(MPI_Iallreduce_lbl, (obj*)data, datatype, -1, (int64_t)op, do_free, prom, comm);
         task_local->mpi_send_vec->push_back(temp);
     }
     else
-        Iallreduce_helper(data, datatype, op, prom, comm);
+        Iallreduce_helper(data, datatype, (int64_t)op, prom, comm);
 }
 
 } // namespace communication
 } // namespace resilience
 } // namespace hclib
 
+#endif // MPI_COMMUNICATION
 
 #endif
