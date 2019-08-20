@@ -16,7 +16,7 @@ The object that will be saved to the archive.
 struct archive_obj {
 
     //size of object blob
-    int size = -1;
+    int size = 0;
     //blob of object to be archived
     void *data = nullptr;
 };
@@ -31,15 +31,15 @@ class obj: public hclib::resilience::obj {
   public:
     //obj(archive_obj* ptr) { assert(false); }
     virtual void* allocate_buffer(size_t) { return nullptr; }
-    virtual void deserialize(archive_obj*) { assert(false); }
-    virtual archive_obj* serialize() { assert(false); return nullptr; }
+    virtual void deserialize(archive_obj) { assert(false); }
+    virtual archive_obj serialize() { assert(false); return archive_obj(); }
 };
 
 struct pending_mpi_op {
     MPI_Request req;
     hclib_promise_t *prom;
     obj *data;
-    archive_obj *serialized;
+    archive_obj serialized;
     pending_mpi_op *next;
 };
 
@@ -68,18 +68,18 @@ template<class COMMUNICATION_OBJ>
 void Irecv(int count, int source, int64_t tag, hclib::promise_t<COMMUNICATION_OBJ*> *prom, hclib::future_t<COMMUNICATION_OBJ*> *fut = nullptr, MPI_Comm comm=MPI_COMM_WORLD) {
     if(resilience::get_index() == 0) {
         hclib::async_nb_await_at([=] {
-            auto ar_ptr = new archive_obj();
-            ar_ptr->size = count;
+            archive_obj ar_ptr;
+            ar_ptr.size = count;
 
             pending_mpi_op *op = (pending_mpi_op *)malloc(sizeof(pending_mpi_op));
             assert(op);
             op->data = new COMMUNICATION_OBJ();
-            ar_ptr->data = op->data->allocate_buffer(count);
-            if(ar_ptr->data == nullptr)
-                ar_ptr->data = malloc(count);
+            ar_ptr.data = op->data->allocate_buffer(count);
+            if(ar_ptr.data == nullptr)
+                ar_ptr.data = malloc(count);
 
             MPI_Request req;
-            ::MPI_Irecv(ar_ptr->data, count, MPI_BYTE, source, tag, comm, &req);
+            ::MPI_Irecv(ar_ptr.data, count, MPI_BYTE, source, tag, comm, &req);
 
             op->req = req;
             op->prom = prom;

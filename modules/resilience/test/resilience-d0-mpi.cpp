@@ -20,15 +20,15 @@ class int_obj : public communication::obj {
       return n == ((int_obj*)obj2)->n;
     }
 
-    void deserialize(communication::archive_obj* ar_ptr) {
-        n = *(int*)(ar_ptr->data);
+    void deserialize(communication::archive_obj ar_ptr) {
+        n = *(int*)(ar_ptr.data);
     }
 
-    communication::archive_obj* serialize() {
-        auto ar_ptr = new communication::archive_obj();
-        ar_ptr->size = sizeof(int);
-        ar_ptr->data = malloc(ar_ptr->size);
-        memcpy(ar_ptr->data, &n, ar_ptr->size);
+    communication::archive_obj serialize() {
+        communication::archive_obj ar_ptr;
+        ar_ptr.size = sizeof(int);
+        ar_ptr.data = malloc(ar_ptr.size);
+        memcpy(ar_ptr.data, &n, ar_ptr.size);
         return ar_ptr;
     }
 };

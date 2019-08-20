@@ -59,11 +59,9 @@ int Isend_helper(obj *data, MPI_Datatype datatype, int dest, int64_t tag, hclib_
         MPI_Request req;
         auto op = (pending_mpi_op *)malloc(sizeof(pending_mpi_op));
         assert(op);
-        op->serialized = nullptr;
-        auto ar_ptr = data->serialize();
-        ::MPI_Isend(ar_ptr->data, ar_ptr->size, MPI_BYTE, dest, tag, comm, &req);
-        ar_ptr->data = nullptr;
-        delete ar_ptr;
+        op->serialized.size = 0;
+        archive_obj ar_ptr = data->serialize();
+        ::MPI_Isend(ar_ptr.data, ar_ptr.size, MPI_BYTE, dest, tag, comm, &req);
 
         op->req = req;
         op->prom = prom;
@@ -78,7 +76,7 @@ int Iallreduce_helper(void *data, MPI_Datatype datatype, int64_t mpi_op, hclib_p
         MPI_Request req;
         auto op = (pending_mpi_op *)malloc(sizeof(pending_mpi_op));
         assert(op);
-        op->serialized = nullptr;
+        op->serialized.size = 0;
         void *recv_data = malloc(sizeof(double));
         ::MPI_Iallreduce(data, recv_data, 1, datatype, (MPI_Op)mpi_op, comm, &req);
 

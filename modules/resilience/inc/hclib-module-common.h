@@ -63,12 +63,9 @@ void poll_on_pending(pending_op **addr_of_head,
                     prev->next = op->next;
                 }
 
-                if (op->serialized) {
+                //Deserialize the data if serialized data is present i.e Irecv
+                if (op->serialized.size > 0) {
                     op->data->deserialize(op->serialized);
-                    //We do not want to delete data since the deserialize routine might
-                    //directy use data pointer instead of copying it for efficiency
-                    op->serialized->data = nullptr;
-                    delete op->serialized;
                 }
                 else {
                     //Isend do not need to deserialize data once the operation is completed
