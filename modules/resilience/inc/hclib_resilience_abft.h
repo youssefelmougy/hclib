@@ -245,7 +245,7 @@ void async_await_check_at(T1&& lambda, hclib::promise_t<int> *prom_check,
         //ran with errors
         if(result == 0){
             atp->index = 1;
-            index = 1;
+            //index = 1;
             *(hclib_get_curr_task_local()) = atp;
             (*abft_lambda_ptr)();
             *(hclib_get_curr_task_local()) = nullptr;
@@ -255,6 +255,9 @@ void async_await_check_at(T1&& lambda, hclib::promise_t<int> *prom_check,
         delete abft_lambda_ptr;
 
         if(result) {
+#ifdef MPI_COMMUNICATION
+            atp->mpi_send_vec->do_sends();
+#endif
             atp->put_vec->do_puts(index);
             atp->rel_vec->do_releases();
             prom_check->put(1);
@@ -305,7 +308,7 @@ void async_await_check_at(T1&& lambda, hclib::promise_t<int> *prom_check,
         //ran with errors
         if(result == 0){
             atp->index = 1;
-            index = 1;
+            //index = 1;
             *(hclib_get_curr_task_local()) = atp;
             (*abft_lambda_ptr)();
             *(hclib_get_curr_task_local()) = nullptr;
@@ -318,6 +321,9 @@ void async_await_check_at(T1&& lambda, hclib::promise_t<int> *prom_check,
         *(hclib_get_curr_task_local()) = nullptr;
 
         if(result) {
+#ifdef MPI_COMMUNICATION
+            atp->mpi_send_vec->do_sends();
+#endif
             atp->put_vec->do_puts(index);
             atp->rel_vec->do_releases();
             prom_check->put(1);

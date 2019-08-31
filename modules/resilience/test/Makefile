@@ -9,7 +9,7 @@ include $(HCLIB_ROOT)/../modules/resilience/inc/hclib_resilience.post.mak
 MPIRUN=mpirun
 
 TARGETS=resilience-d0 resilience-d1 resilience-r0 resilience-r1 resilience-a0 resilience-mix resilience-c0
-MPI_TARGETS=resilience-r0-mpi resilience-d0-mpi resilience-r0-allreduce-mpi
+MPI_TARGETS=resilience-r0-mpi resilience-d0-mpi resilience-a0-mpi resilience-r0-allreduce-mpi
 
 all: $(TARGETS) $(MPI_TARGETS)
 
