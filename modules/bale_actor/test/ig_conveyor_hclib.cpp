@@ -90,7 +90,7 @@ double ig_conveyor(int64_t *tgt, int64_t *pckindx, int64_t l_num_req,  int64_t *
   pkg_t pkg;
   pkg_t *ptr = (pkg_t*)calloc(1, sizeof(pkg_t));
   
-  convey_t* requests = hclib::convey_new(sizeof(pkg_t), SIZE_MAX, 0, NULL, convey_opt_SCATTER);
+  convey_t* requests = convey_new(sizeof(pkg_t), SIZE_MAX, 0, NULL, convey_opt_SCATTER);
   assert( requests != NULL );
   convey_t* replies = convey_new(sizeof(pkg_t), SIZE_MAX, 0, NULL, 0);
   assert( replies != NULL );
