@@ -21,7 +21,7 @@ class IgSelector: public Selector<2, IgPkt> {
       
       num_processed ++;
       if(num_processed == l_num_req)
-        end();
+        done(RESPONSE);
   }
 
   void resp_process(IgPkt pkt, int sender_rank) {
@@ -50,23 +50,27 @@ int main() {
   hclib::launch(deps, 2, [=] {
 
     int tab_siz = 10, num_req = 100;
-    IgSelector igs;
-    igs.init_ig(tab_siz, num_req);
-
+    //TODO: get the parameters from command line
     int64_t *index   =  (int64_t*)malloc(num_req* sizeof(int64_t));
     //TODO: populate index array with some indexes
     
     
     int num_ranks = shmem_n_pes();
-    for(int i=0;i<num_req;i++) {
-        IgPkt pkt;
-        pkt.val = index[i] % num_ranks;
-        pkt.idx = i;
-        int dest_rank = index[i] / num_ranks;
-        igs.send(REQUEST, pkt, dest_rank);
-    }
 
-    //Do we need to notify that send from here is over?
+    IgSelector igs;
+    IgSelector *igs_ptr = &igs;
+    igs.init_ig(tab_siz, num_req);
+
+    selector::finish(igs, [=]() { //finish will start the igs selector and wait for igs to finish all communication
+      for(int i=0;i<num_req;i++) {
+          IgPkt pkt;
+          pkt.val = index[i] % num_ranks;
+          pkt.idx = i;
+          int dest_rank = index[i] / num_ranks;
+          igs_ptr->send(REQUEST, pkt, dest_rank);
+      }
+      igs_ptr->done(REQUEST);
+    });
 
   });
   return 0;

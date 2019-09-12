@@ -1,4 +1,13 @@
 
+namespace selector {
+
+template<typename S, typename T>
+void finish(S slr, T lambda) {
+    //TODO: add details
+}
+
+};
+
 template<typename T>
 class Mailbox {
 
@@ -8,7 +17,7 @@ class Mailbox {
 
     void send(T pkt, int rank) {}
 
-    void end() {}
+    void done() {}
 
     //TODO: add details
 };
@@ -22,14 +31,14 @@ class Selector {
 
   public:
 
+    void start() {}
+
     void send(int mb_id, T pkt, int rank) {
         mb[mb_id].send(pkt, rank);
     }
 
-    void end() {
-        for(int i=0;i<N;i++) {
-            mb[i].end();
-        }
+    void done(int mb_id) {
+        mb[mb_id].done();
     }
 
     //TODO: add details
