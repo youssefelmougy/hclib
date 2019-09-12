@@ -11,6 +11,8 @@ extern "C" {
 #define USE_OFFLOAD
 #endif
 
+#include<selector.h>
+
 namespace hclib {
 
 HCLIB_MODULE_INITIALIZATION_FUNC(bale_actor_pre_initialize);
