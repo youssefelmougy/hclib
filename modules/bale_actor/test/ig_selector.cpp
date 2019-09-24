@@ -18,10 +18,6 @@ class IgSelector: public Selector<2, IgPkt> {
   void req_process(IgPkt pkt, int sender_rank) {
       pkt.val = table[pkt.val];
       send(RESPONSE, pkt, sender_rank);
-      
-      num_processed ++;
-      if(num_processed == l_num_req)
-        done(RESPONSE);
   }
 
   void resp_process(IgPkt pkt, int sender_rank) {
@@ -69,7 +65,7 @@ int main() {
           int dest_rank = index[i] / num_ranks;
           igs_ptr->send(REQUEST, pkt, dest_rank);
       }
-      igs_ptr->done(REQUEST);
+      igs_ptr->done(REQUEST); // Indicate that we are done with sending messages to the REQUEST mailbox
     });
 
   });
