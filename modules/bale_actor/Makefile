@@ -1,6 +1,4 @@
-include $(HCLIB_ROOT)/../modules/bale_actor/inc/hclib_bale_actor.pre.mak
 include $(HCLIB_ROOT)/include/hclib.mak
-include $(HCLIB_ROOT)/../modules/bale_actor/inc/hclib_bale_actor.post.mak
 
 DEFINES=-DHC_ASSERTION_CHECK
 # DEFINES=-DVERBOSE
@@ -25,4 +23,4 @@ clean:
 
 install: $(TARGETS)
 	cp lib/*.a lib/*.so $(HCLIB_ROOT)/lib
-	cp inc/*.h $(HCLIB_ROOT)/include/
+	#cp inc/*.h $(HCLIB_ROOT)/include/

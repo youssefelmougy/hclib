@@ -3,15 +3,9 @@
 
 #include "hclib-module.h"
 #include "hclib_cpp.h"
-extern "C" {
-#include "convey.h"
-}
 
-#ifndef USE_OFFLOAD
-#define USE_OFFLOAD
-#endif
-
-#include<selector.h>
+extern int nic_locale_id;
+extern hclib::locale_t *nic;
 
 namespace hclib {
 
@@ -22,8 +16,6 @@ HCLIB_MODULE_INITIALIZATION_FUNC(bale_actor_finalize);
 int shmem_my_pe();
 int shmem_n_pes();
 
-void convey_begin(convey_t* c);
-
-}
+}; //namespace hclib
 
 #endif

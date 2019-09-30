@@ -72,11 +72,5 @@ int hclib::shmem_n_pes() {
     return ::shmem_n_pes();
 }
 
-void hclib::convey_begin(convey_t* c) {
-  START_IS_OFFLOAD
-    assert(::convey_begin(c) == convey_OK);
-  END_IS_OFFLOAD
-}
-
 HCLIB_REGISTER_MODULE("bale_actor", bale_actor_pre_initialize, bale_actor_post_initialize, bale_actor_finalize)
 
