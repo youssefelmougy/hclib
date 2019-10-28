@@ -1,4 +1,5 @@
 
+
 /******************************************************************
 //
 //
@@ -37,64 +38,52 @@
 //
  *****************************************************************/
 
-/*! \file histo_conveyor.upc
- * \brief A conveyor implementation of histogram.
+/*! \file histo_agi.upc
+ * \brief The intuitive implementation of histogram that uses global atomics.
  */
-
-#include <shmem.h>
+#include <unistd.h>
 #include <stdio.h>
-#include "hclib_bale_actor.h"
-#include "selector.h"
+#include <sys/time.h>
+#include <assert.h>
+#include <stdlib.h>
+#include <shmem.h>
+#include <libgetput.h>
 #include "mytime.h"
 
 #define THREADS shmem_n_pes()
 #define MYTHREAD shmem_my_pe()
 
-
 /*!
- * \brief This routine implements histogram using conveyors
- * \param *pckindx array of packed indices for the distributed version of the global array of counts.
- * \param T the length of the pcindx array
- * \param *lcounts localized pointer to the count array.
+ * \brief This routine implements straight forward,
+ *         single word atomic updates to implement histogram.
+ * \param *index array of indices into the shared array of counts.
+ * \param l_num_ups the local length of the index array
+ * \param *counts SHARED pointer to the count array.
  * \return average run time
  *
  */
+double histo_agi(int64_t *index, int64_t T,  int64_t *counts) {
+  int ret;
+  int64_t i;
+  double tm;
 
-class HistogramSelector: public hclib::Selector<1, int64_t> {
-  int64_t *lcounts;
-
-  public:
-    HistogramSelector(int64_t *lcounts) : lcounts(lcounts) {
-
-        mb[0].process = [this](int64_t pkt, int sender_rank) { 
-            this->lcounts[pkt] += 1;
-        };
-    }
-};
-
-double histo_conveyor(int64_t *pckindx, int64_t T,  int64_t *lcounts) {
-  HistogramSelector *hs_ptr = new HistogramSelector(lcounts);
-  double tm = wall_seconds();
-  hclib::finish([=]() {
-  hclib::selector::finish(hs_ptr, [=]() { //finish will start the hs selector and wait for hs to finish all communication
-    for(int i=0; i< T; i++){
-      int64_t pe, col;
-      col = pckindx[i] >> 16;
-      pe  = pckindx[i] & 0xffff;
-      hs_ptr->send(0, col, pe);
-    }
-    hs_ptr->done(0);
-  });
-  });
+  tm = wall_seconds();
+  i = 0UL;
+  for(i = 0; i < T; i++) {
+    //lgp_atomic_add(counts, index[i], 1);
+    long lindex = index[i]/shmem_n_pes();
+    long pe = index[i] % shmem_n_pes();
+    shmem_long_add(&counts[lindex], 1, pe);
+    //shmem_atomic_inc(&counts[lindex], pe);
+  }
   tm = wall_seconds() - tm;
   printf("time %f\n", tm);
+
   return 0;
 }
 
 int main(int argc, char * argv[]) {
-
-  const char *deps[] = { "system", "bale_actor" };
-  hclib::launch(deps, 2, [=] {
+  shmem_init();
 
   char hostname[1024];
   hostname[1023] = '\0';
@@ -166,17 +155,17 @@ int main(int argc, char * argv[]) {
   int64_t num_models = 0L;               // number of models that are executed
 
 
-      fprintf(stderr,"Conveyors: ");
-      laptime = histo_conveyor(pckindx, l_num_ups, lcounts);
+      //fprintf(stderr,"Conveyors: ");
+      laptime = histo_agi(index, l_num_ups, counts);
 
     //injection_bw = volume_per_node / laptime;
     //fprintf(stderr,"  %8.3lf seconds  %8.3lf GB/s injection bandwidth\n", laptime, injection_bw);
- 
+
   if(printhelp) {
     for(int i=0;i<lnum_counts; i++)
         printf("%ld ", lcounts[i]);
-    printf("\n");
   }
+  printf("\n");
 
   shmem_barrier_all();
 
@@ -203,7 +192,8 @@ int main(int argc, char * argv[]) {
   shmem_free(counts);
   free(index);
   free(pckindx);
-  });
+  shmem_finalize();
 
   return 0;
 }
+

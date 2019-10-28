@@ -6,7 +6,7 @@ extern "C" {
 }
 
 #define DONE_MARK -1
-#define BUFFER_SIZE 100000
+#define BUFFER_SIZE 1000000
 
 namespace hclib {
 
@@ -65,17 +65,18 @@ class Mailbox {
           while(true) {
               size_t buff_size = buff->size();
               if(buff_size > 0) break;
-              //hclib::yield_at(nic);
+              hclib::yield_at(nic);
           }
 
           BufferPacket<T> bp = buff->at(0);
           while(convey_advance(conv, bp.rank == DONE_MARK)) {
               int i;
               size_t buff_size = buff->size();
-              for(i=1; i<=buff_size && bp.rank!=DONE_MARK; i++){
+              for(i=1; i<=buff_size-1; i++){
                   if( !convey_push(conv, &(bp.data), bp.rank)) break;
                   bp = buff->operator[](i);
               }
+	      if(i>1)
               {
                   std::lock_guard<std::mutex> lg(buff->get_mutex());
                   buff->erase_begin(i-1);
@@ -83,15 +84,14 @@ class Mailbox {
               T pop;
               int64_t from;
               while( convey_pull(conv, &pop, &from) == convey_OK) {
-                  hclib::async([=]() { process(pop, from); });
+                  //hclib::async([=]() { process(pop, from); });
+                  process(pop, from);
               }
               //hclib::yield_at(nic);
           }
         }, nic);
-}
+    }
 };
-
-
 
 template<int N, typename T, int SIZE=BUFFER_SIZE>
 class Selector {
@@ -124,6 +124,7 @@ template<typename S, typename T>
 void finish(S slr, T lambda) {
     slr->start();
     lambda();
+    //hclib::yield_at(nic);
     //TODO: add details about waiting for the end of all communication
 }
 

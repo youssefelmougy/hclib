@@ -49,6 +49,7 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <shmem.h>
+#include "mytime.h"
 
 #define THREADS shmem_n_pes()
 #define MYTHREAD shmem_my_pe()
@@ -77,6 +78,7 @@ double histo_conveyor(int64_t *pckindx, int64_t T,  int64_t *lcounts) {
   ret = convey_begin(conveyor, sizeof(int64_t));
   if(ret < 0){printf("ERROR: histo_conveyor: begin failed!\n"); return(-1.0);}
 
+  tm = wall_seconds();
   i = 0UL;
   while(convey_advance(conveyor, i == T)) {
     for(; i< T; i++){
@@ -89,13 +91,20 @@ double histo_conveyor(int64_t *pckindx, int64_t T,  int64_t *lcounts) {
     //while( (pop_col = convey_pull(conveyor, NULL)) != NULL)
       lcounts[pop_col] += 1;
   }
+  tm = wall_seconds() - tm;
+  printf("time %f\n", tm);
 
   convey_free(conveyor);
   return 0;
 }
 
 int main(int argc, char * argv[]) {
+
   shmem_init();
+  char hostname[1024];
+  hostname[1023] = '\0';
+  gethostname(hostname, 1023);
+  printf("Hostname: %s rank: %d\n", hostname, MYTHREAD);
 
   int64_t buf_cnt = 1024;
   int64_t models_mask = 0; // run all the programing models
@@ -105,7 +114,7 @@ int main(int argc, char * argv[]) {
 
   int64_t i;
 
-  int printhelp = 1; 
+  int printhelp = 0;
   int opt;
   while( (opt = getopt(argc, argv, "hb:M:n:c:T:")) != -1 ) {
     switch(opt) {
