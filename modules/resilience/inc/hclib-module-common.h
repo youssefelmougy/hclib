@@ -68,8 +68,14 @@ void poll_on_pending(pending_op **addr_of_head,
                     op->data->deserialize(op->serialized);
                 }
                 else {
-                    //Isend do not need to deserialize data once the operation is completed
+                    //Isend do not need to deserialize data once the operation is completed.
+                    //Need to delete the archive data if it is marked to be freed
+                    //since the data is already send and user does not need it anymore.
                     //assert(false);
+                    if(op->serialized.do_free) {
+                        free(op->serialized.data);
+                        op->serialized.data = nullptr;
+                    }
                 }
                 if (op->prom) {
                     hclib_promise_put(op->prom, op->data);

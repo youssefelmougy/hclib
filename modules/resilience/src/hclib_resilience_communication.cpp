@@ -35,7 +35,14 @@ HCLIB_MODULE_INITIALIZATION_FUNC(mpi_post_initialize) {
     hclib_locale_mark_special(nic, "COMM");
 }
 
+#ifdef COMM_PROFILE
+int64_t test_count=0,send_count=0,recv_count=0,send_size=0,recv_size=0;
+#endif
+
 HCLIB_MODULE_INITIALIZATION_FUNC(mpi_finalize) {
+#ifdef COMM_PROFILE
+    printf("test %ld, send/recv count %ld / %ld, send/recv bytes %ld / %ld\n",test_count, send_count, recv_count, send_size, recv_size);
+#endif
     MPI_Finalize();
 }
 
@@ -46,6 +53,9 @@ bool test_mpi_completion(void *generic_op) {
 
     int complete;
     ::MPI_Test(&op->req, &complete, MPI_STATUS_IGNORE);
+#ifdef COMM_PROFILE
+    test_count++;
+#endif
 
     if (complete) {
         return true;
@@ -59,10 +69,15 @@ int Isend_helper(obj *data, MPI_Datatype datatype, int dest, int64_t tag, hclib_
         MPI_Request req;
         auto op = (pending_mpi_op *)malloc(sizeof(pending_mpi_op));
         assert(op);
-        op->serialized.size = 0;
         archive_obj ar_ptr = data->serialize();
         ::MPI_Isend(ar_ptr.data, ar_ptr.size, MPI_BYTE, dest, tag, comm, &req);
+#ifdef COMM_PROFILE
+        send_count++;
+        send_size+=ar_ptr.size;
+#endif
 
+        op->serialized = ar_ptr;
+        op->serialized.size = 0;
         op->req = req;
         op->prom = prom;
         op->data = data;

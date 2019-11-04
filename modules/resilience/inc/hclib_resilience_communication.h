@@ -17,6 +17,8 @@ struct archive_obj {
 
     //size of object blob
     int size = 0;
+    //delete data after usage is over
+    bool do_free = 0;
     //blob of object to be archived
     void *data = nullptr;
 };
@@ -64,6 +66,10 @@ void Isend(COMMUNICATION_OBJ *data, int dest, int64_t tag, int do_free, hclib::p
         Isend_helper(data, MPI_BYTE, dest, tag, prom, comm);
 }
 
+#ifdef COMM_PROFILE
+extern int64_t recv_count, recv_size;
+#endif
+
 template<class COMMUNICATION_OBJ>
 void Irecv(int count, int source, int64_t tag, hclib::promise_t<COMMUNICATION_OBJ*> *prom, hclib::future_t<COMMUNICATION_OBJ*> *fut = nullptr, MPI_Comm comm=MPI_COMM_WORLD) {
     if(resilience::get_index() == 0) {
@@ -80,6 +86,10 @@ void Irecv(int count, int source, int64_t tag, hclib::promise_t<COMMUNICATION_OB
 
             MPI_Request req;
             ::MPI_Irecv(ar_ptr.data, count, MPI_BYTE, source, tag, comm, &req);
+#ifdef COMM_PROFILE
+            recv_count++;
+            recv_size+=count;
+#endif
 
             op->req = req;
             op->prom = prom;
