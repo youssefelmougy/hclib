@@ -29,6 +29,7 @@ class Mailbox {
   public:
 
     Mailbox() {
+        buff = new hclib::conveyor::safe_buffer<BufferPacket<T>>(SIZE);
 #ifdef SELECTOR_DEBUG
         printf("Creating Mailbox\n");
 #endif
@@ -45,7 +46,7 @@ class Mailbox {
     std::function<void (T, int)> process;
 
     void start() {
-        buff = new hclib::conveyor::safe_buffer<BufferPacket<T>>(SIZE);
+        //buff = new hclib::conveyor::safe_buffer<BufferPacket<T>>(SIZE);
         conv = convey_new(SIZE_MAX, 0, NULL, 0);
         assert( conv != nullptr );
         convey_begin(conv, sizeof(T));
@@ -78,7 +79,9 @@ class Mailbox {
               }
 	      if(i>1)
               {
+#ifdef USE_LOCK
                   std::lock_guard<std::mutex> lg(buff->get_mutex());
+#endif
                   buff->erase_begin(i-1);
               }
               T pop;

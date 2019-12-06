@@ -44,7 +44,9 @@ class safe_buffer {
     }
 
     void push_back(const T& val) {
+#ifdef USE_LOCK
         std::lock_guard<std::mutex> lg(mtx); 
+#endif
         cb.push_back(val);
     }
 

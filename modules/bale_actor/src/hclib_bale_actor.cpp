@@ -23,8 +23,10 @@ int nic_locale_id = -1;
 hclib::locale_t *nic = NULL;
 
 HCLIB_MODULE_INITIALIZATION_FUNC(bale_actor_pre_initialize) {
+#ifdef USE_LOCK
     nic_locale_id = hclib_add_known_locale_type("Interconnect");
     HASSERT(nic_locale_id > -1);
+#endif
 }
 
 int shmem_init_thread(int, int*);
@@ -32,8 +34,12 @@ int shmem_init_thread(int, int*);
 HCLIB_MODULE_INITIALIZATION_FUNC(bale_actor_post_initialize) {
 
 #ifdef USE_CRAY_SHMEM_7
+#ifdef USE_LOCK
     int ret = ::shmem_init_thread(SHMEM_THREAD_MULTIPLE);
     assert(ret == SHMEM_THREAD_MULTIPLE);
+#else
+    ::shmem_init();
+#endif
 #else
     int major, minor;
     shmem_info_get_version(&major, &minor);
@@ -49,6 +55,7 @@ HCLIB_MODULE_INITIALIZATION_FUNC(bale_actor_post_initialize) {
     }
 #endif
 
+#ifdef USE_LOCK
     int n_nics;
     hclib::locale_t **nics = hclib::get_all_locales_of_type(nic_locale_id,
             &n_nics);
@@ -58,6 +65,7 @@ HCLIB_MODULE_INITIALIZATION_FUNC(bale_actor_post_initialize) {
     nic = nics[0];
 
     hclib_locale_mark_special(nic, "COMM");
+#endif
 }
 
 HCLIB_MODULE_INITIALIZATION_FUNC(bale_actor_finalize) {

@@ -7,7 +7,8 @@ TARGETS=ig_conveyor ig_conveyor_hclib ig_selector test_conveyor test_selector hi
 all: $(TARGETS)
 
 %: %.cpp
-	$(CXX) -g -O3 -std=c++11 $(HCLIB_CFLAGS) $(HCLIB_LDFLAGS) -o $@ $^ $(HCLIB_LDLIBS)
+	$(CXX) -g -O3 -std=c++11 $(HCLIB_CFLAGS) $(HCLIB_LDFLAGS) -o $@ $^ $(HCLIB_LDLIBS) -lconvey -lhclib_bale_actor
+	#$(CXX) -g -O3 -std=c++11 -DUSE_LOCK $(HCLIB_CFLAGS) $(HCLIB_LDFLAGS) -o $@_lock $^ $(HCLIB_LDLIBS) -lconvey -lhclib_bale_actor_lock
 
 clean:
 	rm -f $(TARGETS)
