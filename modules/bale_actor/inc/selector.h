@@ -90,7 +90,7 @@ class Mailbox {
                   //hclib::async([=]() { process(pop, from); });
                   process(pop, from);
               }
-              //hclib::yield_at(nic);
+              hclib::yield_at(nic);
           }
         }, nic);
     }

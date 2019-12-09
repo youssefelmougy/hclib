@@ -44,10 +44,10 @@ extern "C" {
 }
 #include <unistd.h>
 #include <stdio.h>
-#include <sys/time.h>
 #include <assert.h>
 #include <stdlib.h>
 #include <shmem.h>
+#include "mytime.h"
 
 #define THREADS shmem_n_pes()
 #define MYTHREAD shmem_my_pe()
@@ -57,13 +57,6 @@ typedef struct minavgmaxD_t{
   double avg;    /*!< the average. */
   double max;    /*!< the max. */
 }minavgmaxD_t;
-
-double wall_seconds() {
-  struct timeval tp;
-  int retVal = gettimeofday(&tp,NULL);
-  if (retVal == -1) { perror("gettimeofday:"); fflush(stderr); }
-  return ( (double) tp.tv_sec + (double) tp.tv_usec * 1.e-6 );
-}
 
 /*!
  * \brief This routine implements the conveyor variant of indexgather.
@@ -88,13 +81,15 @@ double ig_conveyor(int64_t *tgt, int64_t *pckindx, int64_t l_num_req,  int64_t *
   pkg_t pkg;
   pkg_t *ptr = (pkg_t*)calloc(1, sizeof(pkg_t));
   
-  convey_t* requests = convey_new(sizeof(pkg_t), SIZE_MAX, 0, NULL, convey_opt_SCATTER);
+  //convey_t* requests = convey_new(sizeof(pkg_t), SIZE_MAX, 0, NULL, convey_opt_SCATTER);
+  convey_t* requests = convey_new(SIZE_MAX, 0, NULL, 0);
   assert( requests != NULL );
-  convey_t* replies = convey_new(sizeof(pkg_t), SIZE_MAX, 0, NULL, 0);
+  //convey_t* replies = convey_new(sizeof(pkg_t), SIZE_MAX, 0, NULL, 0);
+  convey_t* replies = convey_new(SIZE_MAX, 0, NULL, 0);
   assert( replies != NULL );
 
-  convey_begin(requests);
-  convey_begin(replies);
+  convey_begin(requests, sizeof(pkg_t));
+  convey_begin(replies, sizeof(pkg_t));
   shmem_barrier_all();
   
   tm = wall_seconds();
