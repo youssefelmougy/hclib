@@ -43,11 +43,10 @@
  */
 #include <unistd.h>
 #include <stdio.h>
-#include <sys/time.h>
 #include <assert.h>
 #include <stdlib.h>
 #include <shmem.h>
-#include <libgetput.h>
+//#include <libgetput.h>
 #include "mytime.h"
 
 #define THREADS shmem_n_pes()
@@ -62,7 +61,7 @@
  * \return average run time
  *
  */
-double histo_agi(int64_t *index, int64_t T,  int64_t *counts) {
+double histo_agi(int64_t *pckindx, int64_t T,  int64_t *counts) {
   int ret;
   int64_t i;
   double tm;
@@ -71,9 +70,10 @@ double histo_agi(int64_t *index, int64_t T,  int64_t *counts) {
   i = 0UL;
   for(i = 0; i < T; i++) {
     //lgp_atomic_add(counts, index[i], 1);
-    long lindex = index[i]/shmem_n_pes();
-    long pe = index[i] % shmem_n_pes();
-    shmem_long_add(&counts[lindex], 1, pe);
+    int64_t pe, col;
+    col = pckindx[i] >> 16;
+    pe  = pckindx[i] & 0xffff;
+    shmem_long_add(&counts[col], 1, pe);
     //shmem_atomic_inc(&counts[lindex], pe);
   }
   tm = wall_seconds() - tm;
@@ -156,7 +156,7 @@ int main(int argc, char * argv[]) {
 
 
       //fprintf(stderr,"Conveyors: ");
-      laptime = histo_agi(index, l_num_ups, counts);
+      laptime = histo_agi(pckindx, l_num_ups, counts);
 
     //injection_bw = volume_per_node / laptime;
     //fprintf(stderr,"  %8.3lf seconds  %8.3lf GB/s injection bandwidth\n", laptime, injection_bw);

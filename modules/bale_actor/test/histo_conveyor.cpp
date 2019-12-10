@@ -45,7 +45,6 @@
 }
 #include <unistd.h>
 #include <stdio.h>
-#include <sys/time.h>
 #include <assert.h>
 #include <stdlib.h>
 #include <shmem.h>
