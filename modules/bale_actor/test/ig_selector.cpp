@@ -77,8 +77,8 @@ class IgSelector: public hclib::Selector<2, IgPkt> {
       send(RESPONSE, pkt, sender_rank);
 
       //TODO: the end of response need to be automatically identified by runtime
-      num_processed++;
-      if(num_processed == l_num_req) done(RESPONSE);
+      //num_processed++;
+      //if(num_processed == l_num_req) done(RESPONSE);
   }
 
   void resp_process(IgPkt pkt, int sender_rank) {

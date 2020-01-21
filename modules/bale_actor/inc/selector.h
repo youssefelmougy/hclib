@@ -6,7 +6,7 @@ extern "C" {
 }
 
 #define DONE_MARK -1
-#define BUFFER_SIZE 1000000
+#define BUFFER_SIZE 1000001
 
 namespace hclib {
 
@@ -25,6 +25,7 @@ class Mailbox {
     hclib::conveyor::safe_buffer<BufferPacket<T>> *buff;
     convey_t* conv;
     BufferPacket<T> done_mark;
+    hclib::promise_t<int> worker_loop_end;
 
   public:
 
@@ -44,6 +45,10 @@ class Mailbox {
     }
 
     std::function<void (T, int)> process;
+
+    hclib::future_t<int>* get_worker_loop_finish() {
+        return worker_loop_end.get_future();
+    }
 
     void start() {
         //buff = new hclib::conveyor::safe_buffer<BufferPacket<T>>(SIZE);
@@ -92,6 +97,7 @@ class Mailbox {
               }
               hclib::yield_at(nic);
           }
+          worker_loop_end.put(1);
         }, nic);
     }
 };
@@ -104,6 +110,7 @@ class Selector {
   public:
 
     Mailbox<T, SIZE> mb[N];
+    int num_work_loop_end = 0;
 
     void start() {
         for(int i=0; i<N; i++) {
@@ -118,6 +125,12 @@ class Selector {
 
     void done(int mb_id) {
         mb[mb_id].done();
+        hclib::async_await_at([=]() {
+            num_work_loop_end++;
+            if(num_work_loop_end < N) {
+                mb[(mb_id+1)%SIZE].done();
+            }
+        }, mb[mb_id].get_worker_loop_finish(), nic);
     }
 };
 
