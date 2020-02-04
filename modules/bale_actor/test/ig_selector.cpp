@@ -75,10 +75,6 @@ class IgSelector: public hclib::Selector<2, IgPkt> {
   void req_process(IgPkt pkt, int sender_rank) {
       pkt.val = ltable[pkt.val];
       send(RESPONSE, pkt, sender_rank);
-
-      //TODO: the end of response need to be automatically identified by runtime
-      //num_processed++;
-      //if(num_processed == l_num_req) done(RESPONSE);
   }
 
   void resp_process(IgPkt pkt, int sender_rank) {
