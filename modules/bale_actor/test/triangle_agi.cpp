@@ -38,19 +38,19 @@
 /*! \file triangle.upc
  * \brief Demo application that counts triangles in a graph.
  */
-// extern "C" {
-//    #include "triangle.h"
-// }
+
+#include <iostream>
+#include <math.h>
+#include <shmem.h>
 
 extern "C" {
-//#include <exstack.h>
+
+#include <exstack.h>
 #include <spmat.h>
-//#include <libgetput.h>
+#include <libgetput.h>
+#include <convey.h>
 
-//#include <convey.h>
 }
-
-
 
 /*!
   \page triangles_page Triangles
