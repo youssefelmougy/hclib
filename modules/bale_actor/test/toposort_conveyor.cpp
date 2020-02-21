@@ -39,6 +39,8 @@
 /*! \file toposort.upc
  * \brief Demo application that does a toposort on a permuted upper triangular matrix
  */
+#include "shmem.h"
+
 extern "C" {
 #include "toposort.h"
 }
