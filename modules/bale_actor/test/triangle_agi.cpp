@@ -179,7 +179,7 @@ sparsemat_t * generate_kronecker_graph(int64_t * B_spec, int64_t B_num, int64_t 
   return(A);
 }
 
-double triangle_agi(int64_t *count, int64_t *sr, sparsemat_t * L, sparsemat_t * U, int64_t alg) {
+double copied_triangle_agi(int64_t *count, int64_t *sr, sparsemat_t * L, sparsemat_t * U, int64_t alg) {
   int64_t cnt=0;
   int64_t numpulled=0;
   int64_t l_i, ii, k, kk, w, L_i, L_j;
@@ -477,7 +477,7 @@ int main(int argc, char * argv[]) {
   sh_refs = 0;
   total_sh_refs = 0;
   T0_fprintf(stderr,"      AGI: ");
-  laptime = triangle_agi(&tri_cnt, &sh_refs, L, U, alg);
+  laptime = copied_triangle_agi(&tri_cnt, &sh_refs, L, U, alg);
     
   lgp_barrier();
   total_tri_cnt = lgp_reduce_add_l(tri_cnt);

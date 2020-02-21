@@ -435,10 +435,8 @@ int main(int argc, char* argv[]) {
         total_sh_refs = 0;
 
         // only running selector model
-        printf("Running Selector: ");
+        T0_fprintf(stderr, "Running Selector: ");
         laptime = triangle_selector(&tri_cnt, &sh_refs, L, U, alg);
-        // DEBUG
-        T0_fprintf(stderr, "finished with count %d \n", tri_cnt);
         shmem_barrier_all();
 
         total_tri_cnt = reduce_add_l(tri_cnt);
