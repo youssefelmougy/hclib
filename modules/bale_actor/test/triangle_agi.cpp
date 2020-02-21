@@ -52,6 +52,8 @@ extern "C" {
 
 }
 
+#include "mytime.h"
+
 /*!
   \page triangles_page Triangles
 

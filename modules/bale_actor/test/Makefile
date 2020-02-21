@@ -2,7 +2,7 @@ include $(HCLIB_ROOT)/../modules/bale_actor/inc/hclib_bale_actor.pre.mak
 include $(HCLIB_ROOT)/include/hclib.mak
 include $(HCLIB_ROOT)/../modules/bale_actor/inc/hclib_bale_actor.post.mak
 
-TARGETS=ig_conveyor ig_selector ig_agi test_conveyor test_selector histo_conveyor histo_selector histo_agi toposort_agi toposort_conveyor
+TARGETS=ig_conveyor ig_selector ig_agi test_conveyor test_selector histo_conveyor histo_selector histo_agi toposort_agi toposort_conveyor triangle_agi triangle_selector
 
 all: $(TARGETS)
 
