@@ -128,7 +128,7 @@ class Selector {
         hclib::async_await_at([=]() {
             num_work_loop_end++;
             if(num_work_loop_end < N) {
-                mb[(mb_id+1)%SIZE].done();
+                done((mb_id+1)%N);
             }
         }, mb[mb_id].get_worker_loop_finish(), nic);
     }
