@@ -15,6 +15,7 @@ extern "C" {
 
 #define THREADS shmem_n_pes()
 #define MYTHREAD shmem_my_pe()
+#define converted_lgp_alloc(numBlocks, blocksize) shmem_malloc((((size_t)(numBlocks) + THREADS - 1) / THREADS) * blocksize)
 
 typedef struct TrianglePkt {
     int64_t w;
@@ -376,7 +377,7 @@ int main(int argc, char* argv[]) {
         int64_t sh_refs;         // number of shared reference or pushes
         int64_t total_sh_refs;
 
-        int64_t* cc = (int64_t*)shmem_malloc(L->numrows * sizeof(int64_t));
+        int64_t* cc = (int64_t*)converted_lgp_alloc(L->numrows, sizeof(int64_t));
         int64_t* l_cc = cc;
         for (i = 0; i < L->lnumrows; i++)
             l_cc[i] = 0;

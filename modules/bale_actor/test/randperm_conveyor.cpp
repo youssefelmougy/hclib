@@ -264,9 +264,9 @@ int main(int argc, char* argv[]) {
   
     t1 = wall_seconds();
     out = copied_rand_permp_conveyor(numrows, seed);
-    T0_fprintf(stderr, "rand_permp_conveyor:           ");
+    t1 = wall_seconds() - t1;
 
-    t1 = wall_seconds() - t1;    
+    T0_fprintf(stderr, "rand_permp_conveyor:           ");
     lgp_min_avg_max_d(stat, t1, THREADS);
     T0_fprintf(stderr, "%8.3lf\n", stat->avg);
 
