@@ -52,7 +52,8 @@ class Mailbox {
 
     void start() {
         //buff = new hclib::conveyor::safe_buffer<BufferPacket<T>>(SIZE);
-        conv = convey_new(SIZE_MAX, 0, NULL, 0);
+        //conv = convey_new(SIZE_MAX, 0, NULL, 0);
+        conv = convey_new(SIZE_MAX, 0, NULL, convey_opt_PROGRESS);
         assert( conv != nullptr );
         convey_begin(conv, sizeof(T));
         done_mark.rank = DONE_MARK;
@@ -78,10 +79,12 @@ class Mailbox {
           while(convey_advance(conv, bp.rank == DONE_MARK)) {
               int i;
               size_t buff_size = buff->size();
-              for(i=1; i<=buff_size-1; i++){
+              for(i=1; i<buff_size; i++){
                   if( !convey_push(conv, &(bp.data), bp.rank)) break;
                   bp = buff->operator[](i);
               }
+              if(i==1 && buff_size==1)
+                  if(convey_push(conv, &(bp.data), bp.rank)) i++;
 	      if(i>1)
               {
 #ifdef USE_LOCK
