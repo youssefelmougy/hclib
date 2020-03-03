@@ -2,9 +2,13 @@ include $(HCLIB_ROOT)/../modules/bale_actor/inc/hclib_bale_actor.pre.mak
 include $(HCLIB_ROOT)/include/hclib.mak
 include $(HCLIB_ROOT)/../modules/bale_actor/inc/hclib_bale_actor.post.mak
 
-TARGETS=ig_conveyor ig_selector ig_agi test_conveyor test_selector histo_conveyor histo_selector histo_agi toposort_agi toposort_conveyor toposort_selector \
+TARGETS=test_conveyor test_selector test_selector3 \
+        histo_agi histo_conveyor histo_selector \
+        ig_agi ig_conveyor ig_selector \
+        toposort_agi toposort_conveyor toposort_selector \
 		triangle_agi triangle_conveyor triangle_selector \
-		randperm_agi randperm_conveyor
+		randperm_agi randperm_conveyor \
+        permute_agi permute_conveyor permute_selector
 
 all: $(TARGETS)
 
