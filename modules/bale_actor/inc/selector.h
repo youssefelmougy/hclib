@@ -79,18 +79,18 @@ class Mailbox {
           while(convey_advance(conv, bp.rank == DONE_MARK)) {
               int i;
               size_t buff_size = buff->size();
-              for(i=1; i<buff_size; i++){
-                  if( !convey_push(conv, &(bp.data), bp.rank)) break;
+              for(i=0;i<buff_size; i++){
                   bp = buff->operator[](i);
+                  if( bp.rank == DONE_MARK) break;
+                  if( !convey_push(conv, &(bp.data), bp.rank)) break;
               }
-              if(i==1 && buff_size==1)
-                  if(convey_push(conv, &(bp.data), bp.rank)) i++;
-	      if(i>1)
+
+	          if(i>0)
               {
 #ifdef USE_LOCK
                   std::lock_guard<std::mutex> lg(buff->get_mutex());
 #endif
-                  buff->erase_begin(i-1);
+                  buff->erase_begin(i);
               }
               T pop;
               int64_t from;
