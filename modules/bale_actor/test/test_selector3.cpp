@@ -61,7 +61,7 @@ int main() {
       }
       printf("DEBUG: ready to teardown\n");
 
-      ts_ptr->done(0); // Indicate that we are done with sending messages to the REQUEST mailbox
+      ts_ptr->done(2); // Indicate that we are done with sending messages to the REQUEST mailbox
     });
     });
     printf("Outside Finish\n");
