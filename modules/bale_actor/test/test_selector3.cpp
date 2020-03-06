@@ -1,4 +1,8 @@
 
+#ifndef YIELD_LOOP
+#define YIELD_LOOP
+#endif
+
 #include <shmem.h>
 #include <stdio.h>
 #include "hclib_bale_actor.h"
@@ -8,6 +12,7 @@ class TestSelector: public hclib::Selector<3, int64_t> {
 
     void process0(int64_t pkt, int sender_rank) {
         printf("Process0 In rank %d, val %d, from rank %d\n", shmem_my_pe(), pkt, sender_rank);
+        send(1, pkt, sender_rank);
     }
 
     void process1(int64_t pkt, int sender_rank) {
@@ -17,7 +22,6 @@ class TestSelector: public hclib::Selector<3, int64_t> {
 
     void process2(int64_t pkt, int sender_rank) {
         printf("Process2 In rank %d, val %d, from rank %d\n", shmem_my_pe(), pkt, sender_rank);
-        send(0, pkt, sender_rank);
     }
 
   public:
@@ -42,9 +46,9 @@ int main() {
       int num = 10, dest_rank = (shmem_my_pe() + 1)%shmem_n_pes();
       for(int i=0;i<num;i++) {
           int64_t val = shmem_my_pe() * 1000 + i;
-          ts_ptr->send(1, val, dest_rank);
+          ts_ptr->send(0, val, dest_rank);
       }
-      ts_ptr->done(1); // Indicate that we are done with sending messages to the REQUEST mailbox
+      ts_ptr->done(0); // Indicate that we are done with sending messages to the REQUEST mailbox
     });
     });
     printf("Outside Finish\n");

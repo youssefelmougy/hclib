@@ -15,7 +15,7 @@ struct BufferPacket {
     T data;
     int64_t rank;
 
-    BufferPacket() {}
+    BufferPacket() : rank(0) {}
     BufferPacket(T data, int64_t rank) : data(data), rank(rank) {}
 };
 
@@ -67,15 +67,33 @@ class Mailbox {
         buff->push_back(done_mark);
     }
 
-    void start_worker_loop() {
+    int start_worker_loop(int status=0) {
+
+#ifndef YIELD_LOOP
+        assert(status == 0);
         hclib::async_at([=]{
+#endif
           while(true) {
               size_t buff_size = buff->size();
               if(buff_size > 0) break;
+#ifndef YIELD_LOOP
               hclib::yield_at(nic);
+#else
+              if(status == 1)
+                  return 1;
+              else {
+                  assert(status == 2);
+                  break;
+              }
+#endif
           }
 
-          BufferPacket<T> bp = buff->at(0);
+          BufferPacket<T> bp;
+          if(buff->size() > 0)
+            bp = buff->at(0);
+
+          //Assumes once 'advance' is called with done=true, the conveyor
+          //enters endgame and subsequent value of 'done' is ignored
           while(convey_advance(conv, bp.rank == DONE_MARK)) {
               int i;
               size_t buff_size = buff->size();
@@ -98,15 +116,50 @@ class Mailbox {
                   //hclib::async([=]() { process(pop, from); });
                   process(pop, from);
               }
+#ifndef YIELD_LOOP
               hclib::yield_at(nic);
+#else
+              return 2;
+#endif
           }
           worker_loop_end.put(1);
+#ifndef YIELD_LOOP
         }, nic);
+#endif
+        return 0;
     }
 };
 
 template<int N, typename T, int SIZE=BUFFER_SIZE>
 class Selector {
+
+  private:
+#ifndef YIELD_LOOP
+    void start_worker_loop() {
+        for(int i=0;i<N;i++) {
+            mb[i].start_worker_loop();
+        }
+    }
+#else
+    void start_worker_loop() {
+        hclib::async_at([=]{
+            int loop_stat[N];
+            std::fill_n(loop_stat, N, 1);
+            int finish_count = 0;
+
+            while(finish_count < N) {
+              for(int i=0;i<N;i++) {
+                if(loop_stat[i] != 0) {
+                  loop_stat[i] = mb[i].start_worker_loop(loop_stat[i]);
+                  if(loop_stat[i] == 0)
+                    finish_count++;
+                }
+              }
+              hclib::yield_at(nic);
+            }
+        }, nic);
+    }
+#endif
 
   protected:
 
@@ -118,8 +171,9 @@ class Selector {
     void start() {
         for(int i=0; i<N; i++) {
             mb[i].start();
-            mb[i].start_worker_loop();
+            //mb[i].start_worker_loop();
         }
+        start_worker_loop();
     }
 
     void send(int mb_id, T pkt, int rank) {
