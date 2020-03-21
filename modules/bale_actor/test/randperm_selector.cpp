@@ -35,18 +35,22 @@
 //  OF THE POSSIBILITY OF SUCH DAMAGE.
 // 
  *****************************************************************/ 
+#ifndef YIELD_LOOP
+#define YIELD_LOOP
+#endif
+
 #include <math.h>
 #include <shmem.h>
 #include <stdio.h>
 
 extern "C" {
 
+#include <libgetput.h>
 #include <spmat.h>
 
 }
 
 #include "hclib_bale_actor.h"
-#include "mytime.h"
 #include "selector.h"
 
 
@@ -81,20 +85,6 @@ randperm [-h][-n num][-M mask][-s seed]
 - -M=mask Set the models mask (1,2,4,8,16,32 for AGI,exstack,exstack2,conveyor,alternate)
 - -s=seed Set a seed for the random number generation.
  */
-
-/*
-    Some helper functions ported from lgp
-*/
-#define converted_lgp_alloc(numBlocks, blocksize) shmem_malloc((((size_t)(numBlocks) + THREADS - 1) / THREADS) * blocksize)
-
-#define shmem_reduce_add_l(val) lgp_reduce_add_l(val)
-#define shmem_reduce_add_d(val) lgp_reduce_add_d(val)
-#define shmem_reduce_min_d(val) lgp_reduce_min_d(val)
-#define shmem_reduce_min_d(val) lgp_reduce_min_d(val)
-#define shmem_min_avg_max_d(stat, t1, THREADS) lgp_min_avg_max_d(stat, t1, THREADS)
-#define shmem_partial_add_l(x) lgp_partial_add_l(x)
-#define shmem_prior_add_l(x) lgp_prior_add_l(x)
-
 
 /*
     Regular Benchmark stuff starts here
@@ -158,15 +148,15 @@ private:
 
 class RandPermSelectorPhaseTwo: public hclib::Selector<1, int64_t> {
 public:
-    RandPermSelectorPhaseTwo(int64_t* lperm, int64_t* pos) : lperm_(lperm), pos_(pos) {
+    RandPermSelectorPhaseTwo(int64_t* lperm, int64_t& pos) : lperm_(lperm), pos_(pos) {
         mb[MSG].process = [this](int64_t pkg, int senderRank) { this->processMsg(pkg, senderRank); };
     }
 private:
     int64_t* lperm_;
-    int64_t* pos_;
+    int64_t& pos_;
 
     void processMsg(int64_t val, int senderRank) {
-        lperm_[(*pos_)++] = val;
+        lperm_[pos_++] = val;
     }
 };
 
@@ -176,13 +166,13 @@ int64_t* copied_rand_permp_conveyor(int64_t N, int seed) {
     int64_t M = N * 2;
     int64_t lM = (M + THREADS - MYTHREAD - 1) / THREADS;
 
-    int64_t* perm = (int64_t*)converted_lgp_alloc(N, sizeof(int64_t));
+    int64_t* perm = (int64_t*)lgp_all_alloc(N, sizeof(int64_t));
     if (!perm) return nullptr;
-    int64_t* lperm = perm;
+    int64_t* lperm = lgp_local_part(int64_t, perm);
 
-    int64_t* target = (int64_t*)converted_lgp_alloc(M, sizeof(int64_t));
+    int64_t* target = (int64_t*)lgp_all_alloc(M, sizeof(int64_t));
     if (!target) return nullptr;
-    int64_t* ltarget = target;
+    int64_t* ltarget = lgp_local_part(int64_t, target);;
   
     /* initialize perm[i] = i,  the darts*/
     for (int64_t i = 0; i < lN; i++)
@@ -199,10 +189,10 @@ int64_t* copied_rand_permp_conveyor(int64_t N, int seed) {
     int64_t* hitsPtr = &hits;
     int64_t* iendPtr = &iend;
 
-    RandPermSelectorPhaseOne* phaseOneSelector = new RandPermSelectorPhaseOne(ltarget, lperm, hitsPtr, iendPtr);
+    RandPermSelectorPhaseOne* phaseOneSelector = new RandPermSelectorPhaseOne(ltarget, lperm, iendPtr, hitsPtr);
     
     // setup finish, start algorithm
-    shmem_barrier_all();
+    lgp_barrier();
     double t1 = wall_seconds();
 
     hclib::finish([lN, M, lperm, hitsPtr, iendPtr, phaseOneSelector]() {
@@ -214,6 +204,14 @@ int64_t* copied_rand_permp_conveyor(int64_t N, int seed) {
             // instead of believing our lN request will all result in hits
             while (*hitsPtr != lN) {
                 i = *iendPtr;
+
+                // Debug:
+                // T0_printf("Before sending requests");
+                // T0_printf(" i = %ld", i);
+                // T0_printf(" iend = %ld", *iendPtr);
+                // T0_printf(" hits = %ld", *hitsPtr);
+                // T0_printf(" ln = %ld", lN);
+                // T0_printf("\n");
 
                 // per round of sending is bound by lN
                 while (i < lN) {
@@ -234,21 +232,29 @@ int64_t* copied_rand_permp_conveyor(int64_t N, int seed) {
                 // let the mailbox process in order for hits to update
                 hclib::yield();
 
+                // Debug:
+                // T0_printf("After yielding");
+                // T0_printf(" i = %ld", i);
+                // T0_printf(" iend = %ld", *iendPtr);
+                // T0_printf(" hits = %ld", *hitsPtr);
+                // T0_printf(" ln = %ld", lN);
+                // T0_printf("\n");
+
                 // If enough hits are processed, break and teardown
                 if (*hitsPtr >= lN) { break; }
             }
 
             phaseOneSelector->done(THROW);
-            phaseOneSelector->done(REPLY);
+            // phaseOneSelector->done(REPLY);
         });
     });
   
     t1 = wall_seconds() - t1;
-    T0_printf("phase 1 t1 = %8.3lf\n", t1);
-    T0_printf("DEBUG: phase 1 finished, no task starving");
+    // T0_printf("phase 1 t1 = %8.3lf\n", t1);
+    // T0_printf("DEBUG: phase 1 finished, no task starving\n");
 
     int64_t pos = 0;
-    RandPermSelectorPhaseTwo* phaseTwoSelector = new RandPermSelectorPhaseTwo(lperm, &pos);
+    RandPermSelectorPhaseTwo* phaseTwoSelector = new RandPermSelectorPhaseTwo(lperm, pos);
   
     /* now locally pack the values you have in target */
     int64_t cnt = 0;
@@ -257,17 +263,20 @@ int64_t* copied_rand_permp_conveyor(int64_t N, int seed) {
             ltarget[cnt++] = ltarget[i];
         }
     }
-    shmem_barrier_all();
+    lgp_barrier();
   
     /* sanity check */
-    int64_t total = shmem_reduce_add_l(cnt);
+    int64_t total = lgp_reduce_add_l(cnt);
     if (total != N) {
         T0_printf("ERROR: rand_permp_convey: total = %ld should be %ld\n", total, N);
 
         return nullptr;
     }
 
-    int64_t offset = shmem_prior_add_l(cnt);
+    // Debug
+    // T0_printf("Passed the Phase 1 sanity check\n");
+
+    int64_t offset = lgp_prior_add_l(cnt);
     
     hclib::finish([phaseTwoSelector, cnt, offset, ltarget]() {
         hclib::selector::finish(phaseTwoSelector, [=]() {
@@ -288,14 +297,14 @@ int64_t* copied_rand_permp_conveyor(int64_t N, int seed) {
         });
     });
 
-    pos = shmem_reduce_add_l(pos);
+    pos = lgp_reduce_add_l(pos);
     if (pos != N) {
         printf("ERROR! in rand_permp_convey! sum of pos = %ld lN = %ld\n", pos, N);
 
         return nullptr;
     }
 
-    shmem_barrier_all();
+    lgp_barrier();
 
     return perm;
 }
@@ -341,19 +350,20 @@ int main(int argc, char* argv[]) {
 
         int64_t use_model;
   
+        T0_fprintf(stderr, "Running rand_permp_selector\n");
         t1 = wall_seconds();
         out = copied_rand_permp_conveyor(numrows, seed);
         t1 = wall_seconds() - t1;
         
         T0_fprintf(stderr, "rand_permp_selector:           ");
-        shmem_min_avg_max_d(stat, t1, THREADS);
+        lgp_min_avg_max_d(stat, t1, THREADS);
         T0_fprintf(stderr, "%8.3lf\n", stat->avg);
 
         if (!is_perm(out, numrows)) {
             error++;
             T0_printf("\nERROR: rand_permp_selector failed!\n\n");
         }
-        shmem_free(out);
+        lgp_all_free(out);
   
         if (error) {
             T0_fprintf(stderr,"BALE FAIL!!!!\n"); 
