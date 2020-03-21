@@ -424,6 +424,7 @@ int main(int argc, char* argv[]) {
 
         shmem_barrier_all();
         
-        return 0;
     });
+
+    return 0;
 }

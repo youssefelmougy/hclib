@@ -70,7 +70,7 @@ extern "C" {
  * - -Z=z Set the avg number of nonzeros per row to z (default = 10, overrides Erdos-Renyi p).
  */
 
-sparsemat_t* copied_transpose_matrix_conveyor(sparsemat_t * A) {
+sparsemat_t* copied_transpose_matrix_conveyor(sparsemat_t* A) {
     typedef struct pkg_rowcol_t {
         int64_t row;    
         int64_t col;
@@ -113,7 +113,7 @@ sparsemat_t* copied_transpose_matrix_conveyor(sparsemat_t * A) {
     if (!At) {
         printf("ERROR: transpose_matrix: init_matrix failed!\n");
         
-        return(NULL);
+        return nullptr;
     }
 
     /* convert colcounts to offsets */
@@ -128,7 +128,7 @@ sparsemat_t* copied_transpose_matrix_conveyor(sparsemat_t * A) {
     if (!wrkoff) {
         printf("ERROR: transpose_matrix: wrkoff alloc fail!\n");
         
-        return(NULL);
+        return nullptr;
     }
 
     pkg_rowcol_t pkg_nz, pkg_p;
@@ -136,7 +136,7 @@ sparsemat_t* copied_transpose_matrix_conveyor(sparsemat_t * A) {
     convey_t* cnv_rd = convey_new(SIZE_MAX, 0, NULL, convey_opt_SCATTER);
     convey_begin(cnv_rd, sizeof(pkg_rowcol_t));
 
-    uint64_t numtimespop=0;
+    uint64_t numtimespop = 0;
     i = row = 0;
     while (convey_advance(cnv_rd, (i == A->lnnz))) {
         for(; i < A->lnnz; i++) {
@@ -270,5 +270,6 @@ int main(int argc, char** argv) {
     clear_matrix(inmat);
     lgp_barrier();
     lgp_finalize();
-    return(error);
+    
+    return error;
 }
