@@ -8,7 +8,8 @@ TARGETS=test_conveyor test_selector test_selector3 \
         toposort_agi toposort_conveyor toposort_selector \
 		triangle_agi triangle_conveyor triangle_selector \
 		randperm_agi randperm_conveyor randperm_selector \
-        permute_agi permute_conveyor permute_selector
+        permute_agi permute_conveyor permute_selector \
+		transpose_agi transpose_conveyor
 
 all: $(TARGETS)
 

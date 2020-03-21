@@ -9,13 +9,11 @@ extern "C" {
 }
 
 #include "hclib_bale_actor.h"
-#include "mytime.h"
 #include "selector.h"
 
 
 #define THREADS shmem_n_pes()
 #define MYTHREAD shmem_my_pe()
-#define converted_lgp_alloc(numBlocks, blocksize) shmem_malloc((((size_t)(numBlocks) + THREADS - 1) / THREADS) * blocksize)
 
 typedef struct TrianglePkt {
     int64_t w;
@@ -156,11 +154,13 @@ double triangle_selector(int64_t* count, int64_t* sr, sparsemat_t* L, sparsemat_
         });
     }
 
-    shmem_barrier_all();
+    lgp_barrier();
     *sr = numpushed;
     // Updating count is not necessary since that is taken cared by the mailbox logic
     // *count = cnt;
+    minavgmaxD_t stat[1];
     t1 = wall_seconds() - t1;
+    lgp_min_avg_max_d( stat, t1, THREADS );
 
     return t1;
 }
@@ -191,37 +191,6 @@ sparsemat_t* generate_kronecker_graph(
     sparsemat_t* A = kron_prod_dist(B, C, 1);
   
     return A;
-}
-
-static void* setup_shmem_reduce_workdata(long** psync, size_t xsize) {
-    long* work;
-    long i;
-
-    work = (long*)shmem_malloc(_SHMEM_REDUCE_MIN_WRKDATA_SIZE * xsize);
-    *psync = (long*)shmem_malloc(_SHMEM_REDUCE_SYNC_SIZE * sizeof(long));
-
-    for (i = 0; i <_SHMEM_REDUCE_SYNC_SIZE; ++i) {
-        (*psync)[i] = _SHMEM_SYNC_VALUE;
-    }
-
-    shmem_barrier_all();
-    return work;
-}
-
-long reduce_add_l(long myval) {
-    static long* buff = nullptr;
-    static long* work;
-    static long* sync;
-
-    if (!buff) {
-        buff = (long*)shmem_malloc(2 * sizeof(long));
-        work = (long*)setup_shmem_reduce_workdata(&sync, sizeof(long));
-    }
-
-    buff[0] = myval;
-    shmem_long_sum_to_all(&buff[1], buff, 1, 0, 0, THREADS, work, sync);
-    shmem_barrier_all();
-    return buff[1];
 }
 
 int main(int argc, char* argv[]) {
@@ -358,11 +327,11 @@ int main(int argc, char* argv[]) {
             L = gen_erdos_renyi_graph_dist(numrows, erdos_renyi_prob, 0, 1, 12345);
         }
 
-        shmem_barrier_all();
+        lgp_barrier();
         if (alg == 1)
             U = transpose_matrix(L);   
 
-        shmem_barrier_all();
+        lgp_barrier();
 
         T0_fprintf(stderr, "L has %ld rows/cols and %ld nonzeros.\n", L->numrows, L->nnz);
   
@@ -377,21 +346,21 @@ int main(int argc, char* argv[]) {
         int64_t sh_refs;         // number of shared reference or pushes
         int64_t total_sh_refs;
 
-        int64_t* cc = (int64_t*)converted_lgp_alloc(L->numrows, sizeof(int64_t));
-        int64_t* l_cc = cc;
+        int64_t* cc = (int64_t*)lgp_all_alloc(L->numrows, sizeof(int64_t));
+        int64_t* l_cc = lgp_local_part(int64_t, cc);
         for (i = 0; i < L->lnumrows; i++)
             l_cc[i] = 0;
             
-        shmem_barrier_all();
+        lgp_barrier();
   
         /* calculate col sums */
         for (i = 0; i < L->lnnz; i++) {
             long lindex = L->lnonzero[i] / THREADS;
             long pe = L->lnonzero[i] % THREADS;
-            shmem_long_finc(&cc[lindex], pe);
+            lgp_fetch_and_inc(&cc[lindex], pe);
         }
   
-        shmem_barrier_all();
+        lgp_barrier();
   
         int64_t rtimesc_calc = 0;
         for (i = 0; i < L->lnumrows; i++) {
@@ -416,14 +385,14 @@ int main(int argc, char* argv[]) {
         int64_t pulls_calc = 0;
         int64_t pushes_calc = 0;
         if (alg == 0) {
-            pulls_calc = reduce_add_l(rtimesc_calc);
-            pushes_calc = reduce_add_l(rchoose2_calc);
+            pulls_calc = lgp_reduce_add_l(rtimesc_calc);
+            pushes_calc = lgp_reduce_add_l(rchoose2_calc);
         } else {
-            pushes_calc = reduce_add_l(rtimesc_calc);
-            pulls_calc = reduce_add_l(cchoose2_calc);
+            pushes_calc = lgp_reduce_add_l(rtimesc_calc);
+            pulls_calc = lgp_reduce_add_l(cchoose2_calc);
         }
 
-        shmem_free(cc);
+        lgp_all_free(cc);
 
         T0_fprintf(stderr,"Calculated: Pulls = %ld\n            Pushes = %ld\n\n", pulls_calc, pushes_calc);
 
@@ -438,10 +407,10 @@ int main(int argc, char* argv[]) {
         // only running selector model
         T0_fprintf(stderr, "Running Selector: ");
         laptime = triangle_selector(&tri_cnt, &sh_refs, L, U, alg);
-        shmem_barrier_all();
+        lgp_barrier();
 
-        total_tri_cnt = reduce_add_l(tri_cnt);
-        total_sh_refs = reduce_add_l(sh_refs);
+        total_tri_cnt = lgp_reduce_add_l(tri_cnt);
+        total_sh_refs = lgp_reduce_add_l(sh_refs);
         T0_fprintf(stderr, "  %8.3lf seconds: %16ld triangles", laptime, total_tri_cnt);
         T0_fprintf(stderr, "%16ld shared refs\n", total_sh_refs);
         
@@ -454,7 +423,6 @@ int main(int argc, char* argv[]) {
         }
 
         shmem_barrier_all();
-        shmem_finalize();
         
         return 0;
     });
