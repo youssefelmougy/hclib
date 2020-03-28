@@ -96,8 +96,7 @@ double ig_selector(int64_t *tgt, int64_t *pckindx, int64_t l_num_req,  int64_t *
 
     double tm = wall_seconds();
     hclib::finish([=]() {
-    hclib::selector::finish(igs_ptr, [=]() { //finish will start the igs selector and wait for igs to finish all communication
-      
+      igs_ptr->start();
       for(int i=0;i<l_num_req;i++) {
           IgPkt pkt;
           pkt.idx = i;
@@ -107,9 +106,9 @@ double ig_selector(int64_t *tgt, int64_t *pckindx, int64_t l_num_req,  int64_t *
       }
       igs_ptr->done(REQUEST); // Indicate that we are done with sending messages to the REQUEST mailbox
     });
-    });
 
     tm = wall_seconds() - tm;
+    delete igs_ptr;
     return( tm );
 }
 

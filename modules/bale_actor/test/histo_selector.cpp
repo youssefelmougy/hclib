@@ -76,7 +76,7 @@ double histo_conveyor(int64_t *pckindx, int64_t T,  int64_t *lcounts) {
   HistogramSelector *hs_ptr = new HistogramSelector(lcounts);
   double tm = wall_seconds();
   hclib::finish([=]() {
-  hclib::selector::finish(hs_ptr, [=]() { //finish will start the hs selector and wait for hs to finish all communication
+    hs_ptr->start();
     for(int i=0; i< T; i++){
       int64_t pe, col;
       col = pckindx[i] >> 16;
@@ -85,9 +85,9 @@ double histo_conveyor(int64_t *pckindx, int64_t T,  int64_t *lcounts) {
     }
     hs_ptr->done(0);
   });
-  });
   tm = wall_seconds() - tm;
   printf("time %f\n", tm);
+  delete hs_ptr;
   return 0;
 }
 
