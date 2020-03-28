@@ -22,15 +22,15 @@ struct BufferPacket {
 template<typename T, int SIZE>
 class Mailbox {
 
-    hclib::conveyor::safe_buffer<BufferPacket<T>> *buff;
-    convey_t* conv;
+    hclib::conveyor::safe_buffer<BufferPacket<T>> *buff=nullptr;
+    convey_t* conv=nullptr;
     BufferPacket<T> done_mark;
     hclib::promise_t<int> worker_loop_end;
 
   public:
 
     Mailbox() {
-        buff = new hclib::conveyor::safe_buffer<BufferPacket<T>>(SIZE);
+        //buff = new hclib::conveyor::safe_buffer<BufferPacket<T>>(SIZE);
 #ifdef SELECTOR_DEBUG
         printf("Creating Mailbox\n");
 #endif
@@ -51,12 +51,17 @@ class Mailbox {
     }
 
     void start() {
-        //buff = new hclib::conveyor::safe_buffer<BufferPacket<T>>(SIZE);
+        buff = new hclib::conveyor::safe_buffer<BufferPacket<T>>(SIZE);
         //conv = convey_new(SIZE_MAX, 0, NULL, 0);
         conv = convey_new(SIZE_MAX, 0, NULL, convey_opt_PROGRESS);
         assert( conv != nullptr );
         convey_begin(conv, sizeof(T));
         done_mark.rank = DONE_MARK;
+    }
+
+    void end() {
+        delete buff;
+        convey_free(conv);
     }
 
     void send(T pkt, int rank) {
@@ -161,17 +166,30 @@ class Selector {
     }
 #endif
 
+    hclib::promise_t<int> end_prom;
+    int num_work_loop_end = 0;
+
   protected:
 
   public:
 
     Mailbox<T, SIZE> mb[N];
-    int num_work_loop_end = 0;
+
+    Selector(bool is_start = false) {
+        if(is_start) {
+            start();
+        }
+    }
+
+    ~Selector() {
+        for(int i=0; i<N; i++) {
+            mb[i].end();
+        }
+    }
 
     void start() {
         for(int i=0; i<N; i++) {
             mb[i].start();
-            //mb[i].start_worker_loop();
         }
         start_worker_loop();
     }
@@ -187,7 +205,15 @@ class Selector {
             if(num_work_loop_end < N) {
                 done((mb_id+1)%N);
             }
+            else {
+                assert(num_work_loop_end == N);
+                end_prom.put(1);
+            }
         }, mb[mb_id].get_worker_loop_finish(), nic);
+    }
+
+    hclib::future_t<int>* get_future() {
+        return end_prom.get_future();
     }
 };
 
@@ -198,7 +224,6 @@ void finish(S slr, T lambda) {
     slr->start();
     lambda();
     //hclib::yield_at(nic);
-    //TODO: add details about waiting for the end of all communication
 }
 
 }; // namespace selector
