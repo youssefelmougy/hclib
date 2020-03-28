@@ -1,12 +1,12 @@
 
 #include "safe_buffer.h"
-#include "hclib_cpp.h"
+#include "hclib_bale_actor.h"
 extern "C" {
 #include "convey.h"
 }
 
 #define DONE_MARK -1
-#define BUFFER_SIZE 1000001
+#define BUFFER_SIZE 10000001
 
 namespace hclib {
 
@@ -30,7 +30,7 @@ class Mailbox {
   public:
 
     Mailbox() {
-        //buff = new hclib::conveyor::safe_buffer<BufferPacket<T>>(SIZE);
+        buff = new hclib::conveyor::safe_buffer<BufferPacket<T>>(SIZE);
 #ifdef SELECTOR_DEBUG
         printf("Creating Mailbox\n");
 #endif
@@ -51,7 +51,7 @@ class Mailbox {
     }
 
     void start() {
-        buff = new hclib::conveyor::safe_buffer<BufferPacket<T>>(SIZE);
+        //buff = new hclib::conveyor::safe_buffer<BufferPacket<T>>(SIZE);
         //conv = convey_new(SIZE_MAX, 0, NULL, 0);
         conv = convey_new(SIZE_MAX, 0, NULL, convey_opt_PROGRESS);
         assert( conv != nullptr );
@@ -216,17 +216,6 @@ class Selector {
         return end_prom.get_future();
     }
 };
-
-namespace selector {
-
-template<typename S, typename T>
-void finish(S slr, T lambda) {
-    slr->start();
-    lambda();
-    //hclib::yield_at(nic);
-}
-
-}; // namespace selector
 
 }; // namespace hclib
 
