@@ -36,15 +36,15 @@
 // 
  *****************************************************************/ 
 
-/*! \file ig_conveyor.upc
- * \brief A conveyor implementation of indexgather.
+/*! \file ig_selector.upc
+ * \brief A Selector implementation of indexgather.
  */
 
 #include <shmem.h>
-#include <stdio.h>
-#include "hclib_bale_actor.h"
+extern "C" {
+#include <spmat.h>
+}
 #include "selector.h"
-#include "mytime.h"
 
 #define THREADS shmem_n_pes()
 #define MYTHREAD shmem_my_pe()
@@ -92,11 +92,13 @@ class IgSelector: public hclib::Selector<2, IgPkt> {
 
 double ig_selector(int64_t *tgt, int64_t *pckindx, int64_t l_num_req,  int64_t *ltable) {
 
+    minavgmaxD_t stat[1];
     IgSelector *igs_ptr = new IgSelector(ltable, tgt, l_num_req);
+    igs_ptr->start();
 
+    lgp_barrier();
     double tm = wall_seconds();
     hclib::finish([=]() {
-      igs_ptr->start();
       for(int i=0;i<l_num_req;i++) {
           IgPkt pkt;
           pkt.idx = i;
@@ -108,14 +110,18 @@ double ig_selector(int64_t *tgt, int64_t *pckindx, int64_t l_num_req,  int64_t *
     });
 
     tm = wall_seconds() - tm;
+    lgp_barrier();
+
+    lgp_min_avg_max_d( stat, tm, THREADS );
+
     delete igs_ptr;
-    return( tm );
+    return( stat->avg );
 }
 
 int64_t ig_check_and_zero(int64_t use_model, int64_t *tgt, int64_t *index, int64_t l_num_req) {
   int64_t errors=0;
   int64_t i;
-  shmem_barrier_all();
+  lgp_barrier();
   for(i=0; i<l_num_req; i++){
     if(tgt[i] != (-1)*(index[i] + 1)){
       errors++;
@@ -128,7 +134,7 @@ int64_t ig_check_and_zero(int64_t use_model, int64_t *tgt, int64_t *index, int64
   }
   if( errors > 0 )
     fprintf(stderr,"ERROR: %ld: %ld total errors on thread %d\n", use_model, errors, MYTHREAD);
-  shmem_barrier_all();
+  lgp_barrier();
   return(errors);
 }
 
@@ -140,8 +146,8 @@ int main(int argc, char * argv[]) {
     int64_t i;
     int64_t buf_cnt = 1024;
     int64_t models_mask = 0; // run all the programing models
-    int64_t ltab_siz = 10;
-    int64_t l_num_req  = 100;      // number of requests per thread
+    int64_t ltab_siz = 100000;
+    int64_t l_num_req  = 1000000;      // number of requests per thread
     int64_t cores_per_node = 0;       // Default to 0 so it won't give misleading bandwidth numbers
     int64_t num_errors = 0L, total_errors = 0L;
     int64_t printhelp = 0;
@@ -159,20 +165,19 @@ int main(int argc, char * argv[]) {
       }
     }
 
-    fprintf(stderr,"Running ig on %d threads\n", THREADS);
-    fprintf(stderr,"buf_cnt (number of buffer pkgs)      (-b)= %ld\n", buf_cnt);
-    fprintf(stderr,"Number of Request / thread           (-n)= %ld\n", l_num_req );
-    fprintf(stderr,"Table size / thread                  (-T)= %ld\n", ltab_siz);
-    fprintf(stderr,"models_mask                          (-M)= %ld\n", models_mask);
-    fprintf(stderr,"models_mask is or of 1,2,4,8,16 for agi,exstack,exstack2,conveyor,alternate)\n");
+    T0_fprintf(stderr,"Running ig on %d threads\n", THREADS);
+    T0_fprintf(stderr,"buf_cnt (number of buffer pkgs)      (-b)= %ld\n", buf_cnt);
+    T0_fprintf(stderr,"Number of Request / thread           (-n)= %ld\n", l_num_req );
+    T0_fprintf(stderr,"Table size / thread                  (-T)= %ld\n", ltab_siz);
+    T0_fprintf(stderr,"models_mask                          (-M)= %ld\n", models_mask);
+    T0_fprintf(stderr,"models_mask is or of 1,2,4,8,16 for agi,exstack,exstack2,conveyor,alternate)\n");
 
     int64_t bytes_read_per_request_per_node = 8*2*cores_per_node;
 
     // Allocate and populate the shared table array
     int64_t tab_siz = ltab_siz*THREADS;
-    int64_t * table   =  (int64_t*)shmem_malloc(ltab_siz * sizeof(int64_t));
-    assert(table != NULL);
-    int64_t *ltable  = (int64_t*) table;
+    int64_t * table  = (int64_t*)lgp_all_alloc(tab_siz, sizeof(int64_t)); assert(table != NULL);
+    int64_t *ltable  = lgp_local_part(int64_t, table);
     // fill the table with the negative of its shared index
     // so that checking is easy
     for(i=0; i<ltab_siz; i++)
@@ -194,28 +199,27 @@ int main(int argc, char * argv[]) {
 
     int64_t *tgt  =  (int64_t*)calloc(l_num_req, sizeof(int64_t)); assert(tgt != NULL);
   
-    shmem_barrier_all();
+    lgp_barrier();
   
     int64_t use_model;
     double laptime = 0.0;
     double volume_per_node = (2*8*l_num_req*cores_per_node)*(1.0E-9);
     double injection_bw = 0.0;
   
-          fprintf(stderr,"Conveyors: ");
           laptime = ig_selector(tgt, pckindx, l_num_req,  ltable);
   
        injection_bw = volume_per_node / laptime;
-       fprintf(stderr,"  %8.3lf seconds  %8.3lf GB/s/Node\n", laptime, injection_bw);
+       T0_fprintf(stderr,"  %8.3lf seconds\n", laptime);
   
        num_errors += ig_check_and_zero(use_model, tgt, index, l_num_req);
   
     total_errors = num_errors;
     if( total_errors ) {
-      fprintf(stderr,"YOU FAILED!!!!\n");
+      T0_fprintf(stderr,"YOU FAILED!!!!\n");
     }
   
-    shmem_barrier_all();
-    shmem_free(table);
+    lgp_barrier();
+    lgp_all_free(table);
     free(index);
     free(pckindx);
     free(tgt);
