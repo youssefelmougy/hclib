@@ -40,9 +40,8 @@
  * \brief Demo application that does a toposort on a permuted upper triangular matrix
  */
 #include "shmem.h"
-
 extern "C" {
-#include "toposort.h"
+#include "spmat.h"
 }
 
 double toposort_matrix_agi(SHARED int64_t *rperm, SHARED int64_t *cperm, sparsemat_t *mat, sparsemat_t *tmat) {
@@ -408,7 +407,7 @@ int main(int argc, char * argv[]) {
   int64_t use_model;
   double laptime = 0.0;
 
-      T0_fprintf(stderr,"      AGI: ");
+      T0_fprintf(stderr,"      AGI: \n");
       laptime = toposort_matrix_agi(rperminv2, cperminv2, mat, tmat);
 
     lgp_barrier();
