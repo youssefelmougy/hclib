@@ -65,10 +65,12 @@ class Mailbox {
     }
 
     void send(T pkt, int rank) {
+        assert(!buff->full());
         buff->push_back(BufferPacket<T>(pkt, rank));
     }
 
     void done() {
+        assert(!buff->full());
         buff->push_back(done_mark);
     }
 

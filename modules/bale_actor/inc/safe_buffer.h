@@ -65,6 +65,10 @@ class safe_buffer {
     size_t size() const noexcept {
         return cb.size();
     }
+
+    bool full() const noexcept {
+        return cb.full();
+    }
 }; // class safe_buffer
 
 }; // namespace conveyor
