@@ -38,11 +38,8 @@
 
 #include <shmem.h>
 extern "C" {
-#include <libgetput.h>
 #include <spmat.h>
 }
-
-#include "hclib_bale_actor.h"
 #include "selector.h"
 
 #define THREADS shmem_n_pes()
@@ -141,8 +138,7 @@ sparsemat_t * permute_matrix_selector(sparsemat_t * A, int64_t * rperminv, int64
 
   PermutationSelectorOne *ps1_ptr = new PermutationSelectorOne(tmprowcnts);
   hclib::finish([=]() {
-  hclib::selector::finish(ps1_ptr, [=]() {
-
+    ps1_ptr->start();
     for(int row=0; row<A->lnumrows; row++) {
         int64_t pe = lrperminv[row] % THREADS;
         pkg_rowcnt_t pkg_rc;
@@ -152,13 +148,13 @@ sparsemat_t * permute_matrix_selector(sparsemat_t * A, int64_t * rperminv, int64
     }
     ps1_ptr->done(0);
   });
-  });
 
   lgp_barrier();
   assert(A->nnz = lgp_reduce_add_l(ps1_ptr->lnnz));
 
   // allocate pmat to the max of the new number of nonzeros per thread
   Ap = init_matrix(A->numrows, A->numcols, ps1_ptr->lnnz);
+  delete ps1_ptr;
   if(Ap == NULL) return(NULL);
   lgp_barrier();
 
@@ -175,8 +171,7 @@ sparsemat_t * permute_matrix_selector(sparsemat_t * A, int64_t * rperminv, int64
 
   PermutationSelectorTwo *ps2_ptr = new PermutationSelectorTwo(wrkoff, Ap);
   hclib::finish([=]() {
-  hclib::selector::finish(ps2_ptr, [=]() {
-
+    ps2_ptr->start();
     for(int row=0, i=0;i < A->lnnz; i++){
         while( i == A->loffset[row+1] ) // skip empty rows
             row++;
@@ -188,9 +183,10 @@ sparsemat_t * permute_matrix_selector(sparsemat_t * A, int64_t * rperminv, int64
     }
     ps2_ptr->done(0);
   });
-  });
 
   lgp_barrier();
+  delete ps2_ptr;
+
   /* sanity check */
   int64_t error = 0L;
   for(int i = 0; i < Ap->lnumrows; i++)
@@ -205,8 +201,7 @@ sparsemat_t * permute_matrix_selector(sparsemat_t * A, int64_t * rperminv, int64
   /****************************************************************/
   PermutationSelectorThree *ps3_ptr = new PermutationSelectorThree(lcperminv, Ap);
   hclib::finish([=]() {
-  hclib::selector::finish(ps3_ptr, [=]() {
-
+    ps3_ptr->start();
     for(int i=0;i < Ap->lnnz; i++){
         pkg_inonz_t pkg_r;
         pkg_r.i = i;
@@ -216,9 +211,9 @@ sparsemat_t * permute_matrix_selector(sparsemat_t * A, int64_t * rperminv, int64
     }
     ps3_ptr->done(0);
   });
-  });
 
   lgp_barrier();
+  delete ps3_ptr;
 
   T0_printf("done\n");
   return(Ap);
@@ -327,26 +322,24 @@ int main(int argc, char * argv[]) {
     sparsemat_t * inmat = gen_erdos_renyi_graph_dist(numrows, erdos_renyi_prob, 0, 3, seed + 2);
     if(inmat == NULL){
       T0_printf("ERROR: inmat is null!\n");
-      return(-1);
+      assert(false);
     }
 
     int64_t use_model;
     sparsemat_t * outmat;
       t1 = wall_seconds();
       outmat = permute_matrix_selector(inmat, rp, cp);
-      T0_fprintf(stderr,"permute_matrix_selector:           ");
+      T0_fprintf(stderr,"permute_matrix_selector:           \n");
      
       t1 = wall_seconds() - t1;
       lgp_min_avg_max_d( stat, t1, THREADS );
-      T0_fprintf(stderr,"%8.3lf\n", stat->avg);    
+      T0_fprintf(stderr," %8.3lf seconds\n", stat->avg);    
       clear_matrix(outmat);
       
     clear_matrix(inmat);
     lgp_all_free(rp);
     lgp_all_free(cp);
     lgp_barrier();
-    lgp_finalize();
-
   });
   return 0;
 }

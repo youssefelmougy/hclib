@@ -37,15 +37,9 @@
  *****************************************************************/ 
 
 #include "shmem.h"
-
 extern "C" {
-
-#include <libgetput.h>
 #include <spmat.h>
-
 }
-
-#include "hclib_bale_actor.h"
 #include "selector.h"
 
 #define THREADS shmem_n_pes()
@@ -132,17 +126,16 @@ sparsemat_t* transpose_matrix_selector(sparsemat_t* A) {
     TransposeMatrixSelectorPhase1* phase1Selector = new TransposeMatrixSelectorPhase1(lcounts, lnnz);
 
     hclib::finish([A, phase1Selector]() {
-        hclib::selector::finish(phase1Selector, [=]() {
-            for (int64_t i = 0; i < A->lnnz; i++) {
-                int64_t col = A->lnonzero[i] / THREADS;
-                int64_t pe = A->lnonzero[i] % THREADS;
+        phase1Selector->start();
+        for (int64_t i = 0; i < A->lnnz; i++) {
+            int64_t col = A->lnonzero[i] / THREADS;
+            int64_t pe = A->lnonzero[i] % THREADS;
 
-                phase1Selector->send(REQUEST ,col, pe);
-            }
-
-            phase1Selector->done(REQUEST);
-        });
+            phase1Selector->send(REQUEST ,col, pe);
+        }
+        phase1Selector->done(REQUEST);
     });
+    delete phase1Selector;
 
     int64_t sum = lgp_reduce_add_l(lnnz);
     assert(A->nnz == sum); 
@@ -173,25 +166,24 @@ sparsemat_t* transpose_matrix_selector(sparsemat_t* A) {
     TransposeMatrixSelectorPhase2* phase2Selector = new TransposeMatrixSelectorPhase2(numtimespop, At, wrkoff);
 
     hclib::finish([A, phase2Selector]() {
-        hclib::selector::finish(phase2Selector, [=]() {
-            int64_t row = 0;
-            pkg_rowcol_t pkg_nz;
+        phase2Selector->start();
+        int64_t row = 0;
+        pkg_rowcol_t pkg_nz;
 
-            for (int64_t i = 0; i < A->lnnz; i++) {
-                while (i == A->loffset[row + 1]) row++;
+        for (int64_t i = 0; i < A->lnnz; i++) {
+            while (i == A->loffset[row + 1]) row++;
 
-                pkg_nz.row = row * THREADS + MYTHREAD;
-                pkg_nz.col = A->lnonzero[i] / THREADS;
-                int64_t pe = A->lnonzero[i] % THREADS;
+            pkg_nz.row = row * THREADS + MYTHREAD;
+            pkg_nz.col = A->lnonzero[i] / THREADS;
+            int64_t pe = A->lnonzero[i] % THREADS;
 
-                phase2Selector->send(REQUEST, pkg_nz, pe);
-            }
-
-            phase2Selector->done(REQUEST);
-        });
+            phase2Selector->send(REQUEST, pkg_nz, pe);
+        }
+        phase2Selector->done(REQUEST);
     });
   
     lgp_barrier();
+    delete phase2Selector;
 
     numtimespop = lgp_reduce_add_l(numtimespop);
     if (numtimespop != A->nnz) {
@@ -275,17 +267,16 @@ int main(int argc, char** argv) {
         inmat = gen_erdos_renyi_graph_dist(numrows, erdos_renyi_prob, 0, 3, seed + 2);
         if (!inmat) {
             T0_printf("ERROR: inmat is null!\n");
-
-            return -1;
+            assert(false);
         }
     
         t1 = wall_seconds();
         outmat = transpose_matrix_selector(inmat);
-        T0_fprintf(stderr, "Selector:     ");
+        T0_fprintf(stderr, "Selector:     \n");
         t1 = wall_seconds() - t1;
 
         lgp_min_avg_max_d(stat, t1, THREADS);
-        T0_fprintf(stderr, "%8.3lf\n", stat->avg);
+        T0_fprintf(stderr, " %8.3lf seconds\n", stat->avg);
 
         /* correctness check */
         if (check) {      
@@ -303,3 +294,4 @@ int main(int argc, char** argv) {
 
     return 0;
 }
+

@@ -1,16 +1,50 @@
+/******************************************************************
+//
+//
+//  Copyright(C) 2019, Institute for Defense Analyses
+//  4850 Mark Center Drive, Alexandria, VA; 703-845-2500
+//  This material may be reproduced by or for the US Government
+//  pursuant to the copyright license under the clauses at DFARS
+//  252.227-7013 and 252.227-7014.
+// 
+//
+//  All rights reserved.
+//  
+//  Redistribution and use in source and binary forms, with or without
+//  modification, are permitted provided that the following conditions are met:
+//    * Redistributions of source code must retain the above copyright
+//      notice, this list of conditions and the following disclaimer.
+//    * Redistributions in binary form must reproduce the above copyright
+//      notice, this list of conditions and the following disclaimer in the
+//      documentation and/or other materials provided with the distribution.
+//    * Neither the name of the copyright holder nor the
+//      names of its contributors may be used to endorse or promote products
+//      derived from this software without specific prior written permission.
+// 
+//  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+//  "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+//  LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+//  FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+//  COPYRIGHT HOLDER NOR CONTRIBUTORS BE LIABLE FOR ANY DIRECT,
+//  INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+//  (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+//  SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+//  HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+//  STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+//  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
+//  OF THE POSSIBILITY OF SUCH DAMAGE.
+// 
+ *****************************************************************/ 
+/*! \file triangle.upc
+ * \brief Demo application that counts triangles in a graph.
+ */
+
 #include <math.h>
 #include <shmem.h>
-#include <stdio.h>
-
 extern "C" {
-
-#include <spmat.h>
-
+#include "spmat.h"
 }
-
-#include "hclib_bale_actor.h"
 #include "selector.h"
-
 
 #define THREADS shmem_n_pes()
 #define MYTHREAD shmem_my_pe()
@@ -68,89 +102,66 @@ double triangle_selector(int64_t* count, int64_t* sr, sparsemat_t* L, sparsemat_
         TriangleSelector* triSelector = new TriangleSelector(count, L);
 
         hclib::finish([=, &numpushed]() {
-            hclib::selector::finish(triSelector, [=, &numpushed]() {
-                int64_t k,kk, pe;
-                int64_t l_i, L_i, L_j;
+            triSelector->start();
+            int64_t k,kk, pe;
+            int64_t l_i, L_i, L_j;
 
-                TrianglePkt pkg;
-                //foreach nonzero (i, j) in L
-                for (l_i = 0; l_i < L->lnumrows; l_i++) { 
-                    for (k = L->loffset[l_i]; k < L->loffset[l_i + 1]; k++) {
-                        L_i = l_i * THREADS + MYTHREAD;
-                        L_j = L->lnonzero[k];
+            TrianglePkt pkg;
+            //foreach nonzero (i, j) in L
+            for (l_i = 0; l_i < L->lnumrows; l_i++) {
+                for (k = L->loffset[l_i]; k < L->loffset[l_i + 1]; k++) {
+                    L_i = l_i * THREADS + MYTHREAD;
+                    L_j = L->lnonzero[k];
 
-                        pe = L_j % THREADS;
-                        pkg.vj = L_j / THREADS;
-                        for (kk = L->loffset[l_i]; kk < L->loffset[l_i + 1]; kk++) {
-                            pkg.w = L->lnonzero[kk];
+                    pe = L_j % THREADS;
+                    pkg.vj = L_j / THREADS;
+                    for (kk = L->loffset[l_i]; kk < L->loffset[l_i + 1]; kk++) {
+                        pkg.w = L->lnonzero[kk];
 
-                            if (pkg.w > L_j) {
-                                break;
-                            }
-
-                            numpushed++;
-                            // if (convey_push(conv, &pkg, pe) != convey_OK) {
-                            //     tri_convey_push_process(&cnt, conv, L, 0); 
-                            //     kk--;
-                            //     numpushed--;
-                            // }
-
-                            // block above is the original sending mechanism
-                            // assume sending will not fail
-                            triSelector->send(REQUEST, pkg, pe);
+                        if (pkg.w > L_j) {
+                            break;
                         }
-                    }    
-                }
 
-                // Indicate that we are done with sending messages to the REQUEST mailbox
-                triSelector->done(REQUEST);
-            });
+                        numpushed++;
+                        triSelector->send(REQUEST, pkg, pe);
+                    }
+                }
+            }
+            // Indicate that we are done with sending messages to the REQUEST mailbox
+            triSelector->done(REQUEST);
         });
-        
     } else {
         if (!U) {
             T0_printf("ERROR: triangle_selector: NULL U!\n");
-            
-            return -1;
+            assert(false);
         }
 
         TriangleSelector* triSelector = new TriangleSelector(count, U);
 
         hclib::finish([=, &numpushed] () {
-            hclib::selector::finish(triSelector, [=, &numpushed] () {
-                int64_t k,kk, pe;
-                int64_t l_i, L_i, L_j;
-                TrianglePkt pkg;
+            triSelector->start();
+            int64_t k,kk, pe;
+            int64_t l_i, L_i, L_j;
+            TrianglePkt pkg;
 
-                //foreach nonzero (i, j) in L
-                for (l_i = 0; l_i < L->lnumrows; l_i++) { 
-                    for (k = L->loffset[l_i]; k < L->loffset[l_i + 1]; k++) {
-                        L_i = l_i * THREADS + MYTHREAD;
-                        L_j = L->lnonzero[k];
-                
-                        pe = L_j % THREADS;
-                        pkg.vj = L_j / THREADS;
+            //foreach nonzero (i, j) in L
+            for (l_i = 0; l_i < L->lnumrows; l_i++) {
+                for (k = L->loffset[l_i]; k < L->loffset[l_i + 1]; k++) {
+                    L_i = l_i * THREADS + MYTHREAD;
+                    L_j = L->lnonzero[k];
 
-                        for (kk = U->loffset[l_i]; kk < U->loffset[l_i + 1]; kk++) {
-                            pkg.w = U->lnonzero[kk]; 
-                            numpushed++;
+                    pe = L_j % THREADS;
+                    pkg.vj = L_j / THREADS;
 
-                            // if (convey_push(conv, &pkg, pe) != convey_OK){
-                            //     tri_convey_push_process(&cnt, conv, U, 0); 
-                            //     kk--;
-                            //     numpushed--;
-                            // }
-
-                            // block above is the original sending mechanism
-                            // assume sending will not fail
-                            triSelector->send(REQUEST, pkg, pe);
-                        }
+                    for (kk = U->loffset[l_i]; kk < U->loffset[l_i + 1]; kk++) {
+                        pkg.w = U->lnonzero[kk];
+                        numpushed++;
+                        triSelector->send(REQUEST, pkg, pe);
                     }
                 }
-
-                // Indicate that we are done with sending messages to the REQUEST mailbox
-                triSelector->done(REQUEST);
-            });
+            }
+            // Indicate that we are done with sending messages to the REQUEST mailbox
+            triSelector->done(REQUEST);
         });
     }
 
@@ -255,7 +266,7 @@ int main(int argc, char* argv[]) {
         
         if (read_graph) {
             A = read_matrix_mm_to_dist(filename);
-            if (!A) return -1;
+            if (!A) assert(false);
             
             T0_fprintf(stderr,"Reading file %s...\n", filename);
             T0_fprintf(stderr, "A has %ld rows/cols and %ld nonzeros.\n", A->numrows, A->nnz);
@@ -283,7 +294,7 @@ int main(int argc, char* argv[]) {
             // read the mode
             int ret = sscanf(ptr, "%d ", &kron_graph_mode);
             if (ret == 0) ret = sscanf(ptr, "\"%d ", &kron_graph_mode);
-            if (ret == 0) { T0_fprintf(stderr, "ERROR reading kron graph string!\n"); return(1); }
+            if (ret == 0) { T0_fprintf(stderr, "ERROR reading kron graph string!\n"); assert(false); }
             T0_fprintf(stderr,"kron string: %s return = %d\n", ptr, ret);
             T0_fprintf(stderr,"kron mode: %d\n", kron_graph_mode);
             ptr += 2;
@@ -295,7 +306,8 @@ int main(int argc, char* argv[]) {
             }
 
             if (num_ints <= 1) {
-                T0_fprintf(stderr, "ERROR: invalid kronecker product string (%s): must contain at least three integers\n", kron_graph_string); return(-1);
+                T0_fprintf(stderr, "ERROR: invalid kronecker product string (%s): must contain at least three integers\n", kron_graph_string); 
+                assert(false);
             }
 
             /* calculate the number of triangles */
@@ -337,7 +349,7 @@ int main(int argc, char* argv[]) {
   
         if (!is_lower_triangular(L, 0)) {
             T0_fprintf(stderr,"ERROR: L is not lower triangular!\n");
-            return -1;
+            assert(false);
         }
     
         T0_fprintf(stderr, "Run triangle counting ...\n");
@@ -405,15 +417,14 @@ int main(int argc, char* argv[]) {
         total_sh_refs = 0;
 
         // only running selector model
-        T0_fprintf(stderr, "Running Selector: ");
+        T0_fprintf(stderr, "Running Selector: \n");
         laptime = triangle_selector(&tri_cnt, &sh_refs, L, U, alg);
         lgp_barrier();
 
         total_tri_cnt = lgp_reduce_add_l(tri_cnt);
         total_sh_refs = lgp_reduce_add_l(sh_refs);
-        T0_fprintf(stderr, "  %8.3lf seconds: %16ld triangles", laptime, total_tri_cnt);
-        T0_fprintf(stderr, "%16ld shared refs\n", total_sh_refs);
-        
+        T0_fprintf(stderr, "  %8.3lf seconds: %16ld triangles\n", laptime, total_tri_cnt);
+        //T0_fprintf(stderr, "%16ld shared refs\n", total_sh_refs);
         if ((correct_answer >= 0) && (total_tri_cnt != (int64_t)correct_answer)) {
             T0_fprintf(stderr, "ERROR: Wrong answer!\n");
         }
@@ -422,9 +433,9 @@ int main(int argc, char* argv[]) {
             correct_answer = total_tri_cnt;
         }
 
-        shmem_barrier_all();
-        
+        lgp_barrier();
     });
 
     return 0;
 }
+

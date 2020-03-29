@@ -38,7 +38,6 @@
 
 #include <shmem.h>
 extern "C" {
-#include <libgetput.h>
 #include <spmat.h>
 }
 
@@ -221,11 +220,11 @@ int main(int argc, char * argv[]) {
   sparsemat_t * outmat;
     t1 = wall_seconds();
     outmat = permute_matrix_agi(inmat, rp, cp);
-    T0_fprintf(stderr,"permute_matrix_AGI:           ");
+    T0_fprintf(stderr,"permute_matrix_AGI:           \n");
    
     t1 = wall_seconds() - t1;
     lgp_min_avg_max_d( stat, t1, THREADS );
-    T0_fprintf(stderr,"%8.3lf\n", stat->avg);    
+    T0_fprintf(stderr," %8.3lf seconds\n", stat->avg);    
     clear_matrix(outmat);
     
   clear_matrix(inmat);

@@ -36,15 +36,9 @@
 // 
  *****************************************************************/ 
 #include "shmem.h"
-
 extern "C" {
-
-#include <libgetput.h>
 #include <spmat.h>
-
 }
-
-#include "mytime.h"
 
 /*! \file randperm_conveyor.cpp
  * \brief Demo program that runs the variants of randperm kernel. This program
@@ -75,7 +69,7 @@ randperm [-h][-n num][-M mask][-s seed]
 - -s=seed Set a seed for the random number generation.
  */
 
-SHARED int64_t* copied_rand_permp_conveyor(int64_t N, int seed) {
+int64_t* copied_rand_permp_conveyor(int64_t N, int seed) {
     int ret;
     int64_t i, j, cnt, pe, pos, fromth, istart, iend;
     int64_t val;
@@ -89,11 +83,11 @@ SHARED int64_t* copied_rand_permp_conveyor(int64_t N, int seed) {
         int64_t val;
     } pkg_t;
 
-    SHARED int64_t* perm = (int64_t*)lgp_all_alloc(N, sizeof(int64_t));
+    int64_t* perm = (int64_t*)lgp_all_alloc(N, sizeof(int64_t));
     if (!perm) return nullptr;
     int64_t* lperm = lgp_local_part(int64_t, perm);
 
-    SHARED int64_t* target = (int64_t*)lgp_all_alloc(M, sizeof(int64_t));
+    int64_t* target = (int64_t*)lgp_all_alloc(M, sizeof(int64_t));
     if (!target) return nullptr;
     int64_t* ltarget = lgp_local_part(int64_t, target);
   
@@ -258,7 +252,7 @@ int main(int argc, char* argv[]) {
     double t1;
     minavgmaxD_t stat[1];
     int64_t error = 0;
-    SHARED int64_t* out;
+    int64_t* out;
 
     int64_t use_model;
   
@@ -266,9 +260,9 @@ int main(int argc, char* argv[]) {
     out = copied_rand_permp_conveyor(numrows, seed);
     t1 = wall_seconds() - t1;
 
-    T0_fprintf(stderr, "rand_permp_conveyor:           ");
+    T0_fprintf(stderr, "rand_permp_conveyor:           \n");
     lgp_min_avg_max_d(stat, t1, THREADS);
-    T0_fprintf(stderr, "%8.3lf\n", stat->avg);
+    T0_fprintf(stderr, " %8.3lf seconds\n", stat->avg);
 
     if (!is_perm(out, numrows)) {
         error++;

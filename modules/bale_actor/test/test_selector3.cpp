@@ -46,23 +46,21 @@ int main() {
 
     printf("Finished inititialization\n");
     hclib::finish([=]() {
-    hclib::selector::finish(ts_ptr, [=]() { //finish will start the ts selector and wait for ts to finish all communication
-      while (*counterPtr < 10) {
+      ts_ptr->start();
+      //while (*counterPtr < 10) {
         printf("DEBUG: counterPtr has value %lu \n", *counterPtr);
         int num = 10, dest_rank = (shmem_my_pe() + 1)%shmem_n_pes();
         for(int i=0;i<num;i++) {
             int64_t val = shmem_my_pe() * 1000 + i;
-            // ts_ptr->send(0, val, dest_rank);
-            ts_ptr->send(2, val, dest_rank);
+            ts_ptr->send(0, val, dest_rank);
         }
 
-        hclib::yield();
-        printf("DEBUG: after yield counterPtr has value %lu \n", *counterPtr);
-      }
+        //hclib::yield();
+        //printf("DEBUG: after yield counterPtr has value %lu \n", *counterPtr);
+      //}
       printf("DEBUG: ready to teardown\n");
 
-      ts_ptr->done(2); // Indicate that we are done with sending messages to the REQUEST mailbox
-    });
+      ts_ptr->done(0); // Indicate that we are done with sending messages to the REQUEST mailbox
     });
     printf("Outside Finish\n");
   });

@@ -1,7 +1,6 @@
 
 #include <shmem.h>
 #include <stdio.h>
-#include "hclib_bale_actor.h"
 #include "selector.h"
 
 class TestSelector: public hclib::Selector<1, int64_t> {

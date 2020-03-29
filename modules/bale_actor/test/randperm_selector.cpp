@@ -39,20 +39,11 @@
 #define YIELD_LOOP
 #endif
 
-#include <math.h>
 #include <shmem.h>
-#include <stdio.h>
-
 extern "C" {
-
-#include <libgetput.h>
 #include <spmat.h>
-
 }
-
-#include "hclib_bale_actor.h"
 #include "selector.h"
-
 
 #define THREADS shmem_n_pes()
 #define MYTHREAD shmem_my_pe()
@@ -126,13 +117,11 @@ private:
         if (ltarget_[pkg.idx] == -1L) {
             int64_t val = pkg.val;
 
-            // Assume send never fails
             send(REPLY, RPpkg{val, 0}, senderRank);
             ltarget_[pkg.idx] = pkg.val;
         } else {
             int64_t val = -(pkg.val + 1);
 
-            // Assume send never fails
             send(REPLY, RPpkg{val, 0}, senderRank);
         }
     }
@@ -161,7 +150,7 @@ private:
 };
 
 
-int64_t* copied_rand_permp_conveyor(int64_t N, int seed) {
+int64_t* copied_rand_permp_selector(int64_t N, int seed) {
     int64_t lN = (N + THREADS - MYTHREAD - 1) / THREADS;
     int64_t M = N * 2;
     int64_t lM = (M + THREADS - MYTHREAD - 1) / THREADS;
@@ -196,66 +185,43 @@ int64_t* copied_rand_permp_conveyor(int64_t N, int seed) {
     double t1 = wall_seconds();
 
     hclib::finish([lN, M, lperm, hitsPtr, iendPtr, phaseOneSelector]() {
-        hclib::selector::finish(phaseOneSelector, [=]() {
-            pkg_t pkg;
-            int64_t i = 0;
+        phaseOneSelector->start();
+        pkg_t pkg;
+        int64_t i = 0;
 
-            // Since a throw a fail, we need to keep track of hits
-            // instead of believing our lN request will all result in hits
-            while (*hitsPtr != lN) {
-                i = *iendPtr;
+        // Since a throw a fail, we need to keep track of hits
+        // instead of believing our lN request will all result in hits
+        while (*hitsPtr != lN) {
+            i = *iendPtr;
 
-                // Debug:
-                // T0_printf("Before sending requests");
-                // T0_printf(" i = %ld", i);
-                // T0_printf(" iend = %ld", *iendPtr);
-                // T0_printf(" hits = %ld", *hitsPtr);
-                // T0_printf(" ln = %ld", lN);
-                // T0_printf("\n");
+            while (i < lN) {
+                int64_t r = lrand48() % M;
+                int64_t pe = r % THREADS;
+                pkg.idx = r / THREADS;
+                pkg.val = lperm[i];
 
-                // per round of sending is bound by lN
-                while (i < lN) {
-                    int64_t r = lrand48() % M;
-                    int64_t pe = r % THREADS;
-                    pkg.idx = r / THREADS;
-                    pkg.val = lperm[i];
-
-                    // assume send never fails
-                    phaseOneSelector->send(THROW, pkg, pe);
-                    i++;
-                }
-
-                // remember where we left off,
-                // this number can be decrememt by the mailbox operation
-                *iendPtr = i;
-
-                // let the mailbox process in order for hits to update
-                hclib::yield();
-
-                // Debug:
-                // T0_printf("After yielding");
-                // T0_printf(" i = %ld", i);
-                // T0_printf(" iend = %ld", *iendPtr);
-                // T0_printf(" hits = %ld", *hitsPtr);
-                // T0_printf(" ln = %ld", lN);
-                // T0_printf("\n");
-
-                // If enough hits are processed, break and teardown
-                if (*hitsPtr >= lN) { break; }
+                phaseOneSelector->send(THROW, pkg, pe);
+                i++;
             }
 
-            phaseOneSelector->done(THROW);
-            // phaseOneSelector->done(REPLY);
-        });
+            *iendPtr = i;
+
+            // let the mailbox process in order for hits to update
+            hclib::yield();
+
+            // If enough hits are processed, break and teardown
+            if (*hitsPtr >= lN) { break; }
+        }
+        phaseOneSelector->done(THROW);
     });
-  
+
+    lgp_barrier();
     t1 = wall_seconds() - t1;
+    delete phaseOneSelector;
+
     // T0_printf("phase 1 t1 = %8.3lf\n", t1);
     // T0_printf("DEBUG: phase 1 finished, no task starving\n");
 
-    int64_t pos = 0;
-    RandPermSelectorPhaseTwo* phaseTwoSelector = new RandPermSelectorPhaseTwo(lperm, pos);
-  
     /* now locally pack the values you have in target */
     int64_t cnt = 0;
     for (int64_t i = 0; i < lM; i++) {
@@ -268,43 +234,41 @@ int64_t* copied_rand_permp_conveyor(int64_t N, int seed) {
     /* sanity check */
     int64_t total = lgp_reduce_add_l(cnt);
     if (total != N) {
-        T0_printf("ERROR: rand_permp_convey: total = %ld should be %ld\n", total, N);
+        T0_printf("ERROR: rand_permp_selector: total = %ld should be %ld\n", total, N);
 
         return nullptr;
     }
 
-    // Debug
-    // T0_printf("Passed the Phase 1 sanity check\n");
-
     int64_t offset = lgp_prior_add_l(cnt);
-    
+    int64_t pos = 0;
+    RandPermSelectorPhaseTwo* phaseTwoSelector = new RandPermSelectorPhaseTwo(lperm, pos);
+
     hclib::finish([phaseTwoSelector, cnt, offset, ltarget]() {
-        hclib::selector::finish(phaseTwoSelector, [=]() {
-            int64_t i = 0;
-            int64_t pe = offset % THREADS;
+        phaseTwoSelector->start();
+        int64_t i = 0;
+        int64_t pe = offset % THREADS;
 
-            while (i < cnt) {
-                // Assume send never fails
-                phaseTwoSelector->send(MSG, ltarget[i], pe);
-        
-                i++;
-                pe++;
+        while (i < cnt) {
+            phaseTwoSelector->send(MSG, ltarget[i], pe);
 
-                if (pe == THREADS) pe = 0;
-            }
+            i++;
+            pe++;
 
-            phaseTwoSelector->done(MSG);
-        });
+            if (pe == THREADS) pe = 0;
+        }
+
+        phaseTwoSelector->done(MSG);
     });
 
     pos = lgp_reduce_add_l(pos);
     if (pos != N) {
-        printf("ERROR! in rand_permp_convey! sum of pos = %ld lN = %ld\n", pos, N);
+        printf("ERROR! in rand_permp_selector! sum of pos = %ld lN = %ld\n", pos, N);
 
         return nullptr;
     }
 
     lgp_barrier();
+    delete phaseTwoSelector;
 
     return perm;
 }
@@ -352,12 +316,12 @@ int main(int argc, char* argv[]) {
   
         T0_fprintf(stderr, "Running rand_permp_selector\n");
         t1 = wall_seconds();
-        out = copied_rand_permp_conveyor(numrows, seed);
+        out = copied_rand_permp_selector(numrows, seed);
         t1 = wall_seconds() - t1;
         
-        T0_fprintf(stderr, "rand_permp_selector:           ");
+        T0_fprintf(stderr, "rand_permp_selector:           \n");
         lgp_min_avg_max_d(stat, t1, THREADS);
-        T0_fprintf(stderr, "%8.3lf\n", stat->avg);
+        T0_fprintf(stderr, " %8.3lf seconds\n", stat->avg);
 
         if (!is_perm(out, numrows)) {
             error++;
@@ -369,8 +333,8 @@ int main(int argc, char* argv[]) {
             T0_fprintf(stderr,"BALE FAIL!!!!\n"); 
         }
   
-        return error;
     });
 
     return 0;
 }
+

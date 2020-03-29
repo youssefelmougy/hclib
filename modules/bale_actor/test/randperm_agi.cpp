@@ -36,15 +36,9 @@
 // 
  *****************************************************************/ 
 #include "shmem.h"
-
 extern "C" {
-
-#include <libgetput.h>
 #include <spmat.h>
-
 }
-
-#include "mytime.h"
 
 /*! \file randperm_agi.cpp
  * \brief Demo program that runs the variants of randperm kernel. This program
@@ -75,7 +69,7 @@ randperm [-h][-n num][-M mask][-s seed]
 - -s=seed Set a seed for the random number generation.
  */
 
-SHARED int64_t* copied_rand_permp_agi(int64_t N, int seed) {  
+int64_t* copied_rand_permp_agi(int64_t N, int seed) {
     int64_t* ltarget, *lperm;
     int64_t r, i, j;
     int64_t pos, numdarts, numtargets, lnumtargets;
@@ -84,7 +78,7 @@ SHARED int64_t* copied_rand_permp_agi(int64_t N, int seed) {
 
     //T0_printf("Entering rand_permp_atomic...");fflush(0);
 
-    SHARED int64_t* perm = (int64_t*)lgp_all_alloc(N, sizeof(int64_t));
+    int64_t* perm = (int64_t*)lgp_all_alloc(N, sizeof(int64_t));
     if (!perm) return nullptr;
     lperm = lgp_local_part(int64_t, perm);
 
@@ -92,7 +86,7 @@ SHARED int64_t* copied_rand_permp_agi(int64_t N, int seed) {
     int64_t M = 2 * N;
     int64_t l_M = (M + THREADS - MYTHREAD - 1) / THREADS;
 
-    SHARED int64_t* target = (int64_t*)lgp_all_alloc(M, sizeof(int64_t));
+    int64_t* target = (int64_t*)lgp_all_alloc(M, sizeof(int64_t));
     if (!target) return nullptr;
     ltarget = lgp_local_part(int64_t, target);
   
@@ -167,7 +161,7 @@ int main(int argc, char* argv[]) {
     double t1;
     minavgmaxD_t stat[1];
     int64_t error = 0;
-    SHARED int64_t* out;
+    int64_t* out;
 
     int64_t use_model;
   
@@ -175,9 +169,9 @@ int main(int argc, char* argv[]) {
     out = copied_rand_permp_agi(numrows, seed);
     t1 = wall_seconds() - t1;
     
-    T0_fprintf(stderr, "rand_permp_AGI:           ");
+    T0_fprintf(stderr, "rand_permp_AGI:           \n");
     lgp_min_avg_max_d(stat, t1, THREADS);
-    T0_fprintf(stderr, "%8.3lf\n", stat->avg);
+    T0_fprintf(stderr, " %8.3lf seconds\n", stat->avg);
     if (!is_perm(out, numrows)) {
         error++;
         T0_printf("\nERROR: rand_permp_%ld failed!\n\n", use_model & models_mask);

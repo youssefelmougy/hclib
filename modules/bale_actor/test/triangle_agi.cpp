@@ -39,20 +39,11 @@
  * \brief Demo application that counts triangles in a graph.
  */
 
-#include <iostream>
 #include <math.h>
 #include <shmem.h>
-
 extern "C" {
-
-#include <exstack.h>
 #include <spmat.h>
-#include <libgetput.h>
-#include <convey.h>
-
 }
-
-#include "mytime.h"
 
 /*!
   \page triangles_page Triangles
@@ -423,7 +414,7 @@ int main(int argc, char * argv[]) {
   int64_t total_sh_refs;
 
   
-  SHARED int64_t * cc = (int64_t *)lgp_all_alloc( L->numrows, sizeof(int64_t));
+  int64_t * cc = (int64_t *)lgp_all_alloc( L->numrows, sizeof(int64_t));
   int64_t * l_cc = lgp_local_part(int64_t, cc);
   for(i = 0; i < L->lnumrows; i++)
     l_cc[i] = 0;
@@ -476,14 +467,14 @@ int main(int argc, char * argv[]) {
   total_tri_cnt = 0;
   sh_refs = 0;
   total_sh_refs = 0;
-  T0_fprintf(stderr,"      AGI: ");
+  T0_fprintf(stderr,"      AGI: \n");
   laptime = copied_triangle_agi(&tri_cnt, &sh_refs, L, U, alg);
     
   lgp_barrier();
   total_tri_cnt = lgp_reduce_add_l(tri_cnt);
   total_sh_refs = lgp_reduce_add_l(sh_refs);
-  T0_fprintf(stderr,"  %8.3lf seconds: %16ld triangles", laptime, total_tri_cnt);
-  T0_fprintf(stderr,"%16ld shared refs\n", total_sh_refs);
+  T0_fprintf(stderr,"  %8.3lf seconds: %16ld triangles\n", laptime, total_tri_cnt);
+  //T0_fprintf(stderr,"%16ld shared refs\n", total_sh_refs);
   if((correct_answer >= 0) && (total_tri_cnt != (int64_t)correct_answer)){
     T0_fprintf(stderr, "ERROR: Wrong answer!\n");
   }
@@ -496,3 +487,4 @@ int main(int argc, char * argv[]) {
   lgp_finalize();
   return(0);
 }
+

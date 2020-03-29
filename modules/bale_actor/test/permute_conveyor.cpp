@@ -38,7 +38,6 @@
 
 #include <shmem.h>
 extern "C" {
-#include <libgetput.h>
 #include <spmat.h>
 }
 
@@ -56,7 +55,7 @@ extern "C" {
  * cperminv[i] = j means that col i of A goes to col j in matrix Ap
  * \return a pointer to the matrix that has been produced or NULL if the model can't be used
  */
-sparsemat_t * permute_matrix_conveyor(sparsemat_t * A, SHARED int64_t * rperminv, SHARED int64_t * cperminv) {
+sparsemat_t * permute_matrix_conveyor(sparsemat_t * A, int64_t * rperminv, int64_t * cperminv) {
   typedef struct pkg_rowcol_t{
     int64_t row;    
     int64_t col;
@@ -306,11 +305,11 @@ int main(int argc, char * argv[]) {
   sparsemat_t * outmat;
     t1 = wall_seconds();
     outmat = permute_matrix_conveyor(inmat, rp, cp);
-    T0_fprintf(stderr,"permute_matrix_conveyor: ");
+    T0_fprintf(stderr,"permute_matrix_conveyor: \n");
    
     t1 = wall_seconds() - t1;
     lgp_min_avg_max_d( stat, t1, THREADS );
-    T0_fprintf(stderr,"%8.3lf\n", stat->avg);    
+    T0_fprintf(stderr," %8.3lf seconds\n", stat->avg);    
     clear_matrix(outmat);
     
   clear_matrix(inmat);
@@ -320,5 +319,4 @@ int main(int argc, char * argv[]) {
   lgp_finalize();
   return(error);
 }
-
 
