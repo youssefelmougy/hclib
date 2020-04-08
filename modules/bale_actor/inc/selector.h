@@ -200,6 +200,11 @@ class Selector {
         mb[mb_id].send(pkt, rank);
     }
 
+    void send(T pkt, int rank) {
+        assert(N==1);
+        send(0, pkt, rank);
+    }
+
     void done(int mb_id) {
         mb[mb_id].done();
         hclib::async_await_at([=]() {
@@ -214,10 +219,18 @@ class Selector {
         }, mb[mb_id].get_worker_loop_finish(), nic);
     }
 
+    void done() {
+        assert(N==1);
+        done(0);
+    }
+
     hclib::future_t<int>* get_future() {
         return end_prom.get_future();
     }
 };
+
+template<typename T>
+using Actor = Selector<1,T>;
 
 }; // namespace hclib
 

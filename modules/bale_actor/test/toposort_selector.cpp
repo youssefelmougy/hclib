@@ -441,7 +441,7 @@ int main(int argc, char * argv[]) {
   double t1;
 
   int64_t l_numrows = 100000;
-  double  nz_per_row = 35;
+  double  nz_per_row = 10;
   int64_t buf_cnt = 1024;
   int64_t rand_seed =  MYTHREAD*MYTHREAD*10000 + 5;
   int64_t numrows, numcols;

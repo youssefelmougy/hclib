@@ -68,9 +68,8 @@ enum MailBoxType{REQUEST, RESPONSE};
 
 class IgSelector: public hclib::Selector<2, IgPkt> {
   
-  //shared table array src, target  and number of requests
-  int64_t * ltable, *tgt, l_num_req;
-  int64_t num_processed = 0;
+  //shared table array src, target
+  int64_t * ltable, *tgt;
 
   void req_process(IgPkt pkt, int sender_rank) {
       pkt.val = ltable[pkt.val];
@@ -83,7 +82,7 @@ class IgSelector: public hclib::Selector<2, IgPkt> {
 
   public:
 
-    IgSelector(int64_t *ltable, int64_t *tgt, int64_t l_num_req) : ltable(ltable), tgt(tgt), l_num_req(l_num_req){
+    IgSelector(int64_t *ltable, int64_t *tgt) : ltable(ltable), tgt(tgt){
         mb[REQUEST].process = [this](IgPkt pkt, int sender_rank) { this->req_process(pkt, sender_rank); };
         mb[RESPONSE].process = [this](IgPkt pkt, int sender_rank) { this->resp_process(pkt, sender_rank); };
     }
@@ -93,7 +92,7 @@ class IgSelector: public hclib::Selector<2, IgPkt> {
 double ig_selector(int64_t *tgt, int64_t *pckindx, int64_t l_num_req,  int64_t *ltable) {
 
     minavgmaxD_t stat[1];
-    IgSelector *igs_ptr = new IgSelector(ltable, tgt, l_num_req);
+    IgSelector *igs_ptr = new IgSelector(ltable, tgt);
     igs_ptr->start();
 
     lgp_barrier();

@@ -60,21 +60,22 @@ extern "C" {
  *
  */
 
-class HistogramSelector: public hclib::Selector<1, int64_t> {
+class HistogramActor: public hclib::Actor<int64_t> {
   int64_t *lcounts;
 
-  public:
-    HistogramSelector(int64_t *lcounts) : lcounts(lcounts) {
+  void process(int64_t pkt, int sender_rank) {
+      lcounts[pkt] += 1;
+  }
 
-        mb[0].process = [this](int64_t pkt, int sender_rank) { 
-            this->lcounts[pkt] += 1;
-        };
+  public:
+    HistogramActor(int64_t *lcounts) : lcounts(lcounts) {
+        mb[0].process = [this](int64_t pkt, int sender_rank) { this->process(pkt, sender_rank);};
     }
 };
 
 double histo_selector(int64_t *pckindx, int64_t T,  int64_t *lcounts) {
   minavgmaxD_t stat[1];
-  HistogramSelector *hs_ptr = new HistogramSelector(lcounts);
+  HistogramActor *hs_ptr = new HistogramActor(lcounts);
   hs_ptr->start();
 
   lgp_barrier();
@@ -84,9 +85,9 @@ double histo_selector(int64_t *pckindx, int64_t T,  int64_t *lcounts) {
       int64_t pe, col;
       col = pckindx[i] >> 16;
       pe  = pckindx[i] & 0xffff;
-      hs_ptr->send(0, col, pe);
+      hs_ptr->send(col, pe);
     }
-    hs_ptr->done(0);
+    hs_ptr->done();
   });
   lgp_barrier();
 
