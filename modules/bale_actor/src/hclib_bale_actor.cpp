@@ -33,14 +33,13 @@ int shmem_init_thread(int, int*);
 
 HCLIB_MODULE_INITIALIZATION_FUNC(bale_actor_post_initialize) {
 
-#ifdef USE_CRAY_SHMEM_7
 #ifdef USE_LOCK
+#ifdef USE_CRAY_SHMEM_7
+    //printf("USE_CRAY_SHMEM_7\n");
     int ret = ::shmem_init_thread(SHMEM_THREAD_MULTIPLE);
     assert(ret == SHMEM_THREAD_MULTIPLE);
-#else
-    ::shmem_init();
-#endif
-#else
+#else // USE_CRAY_SHMEM_7
+    //printf("NO USE_CRAY_SHMEM_7\n");
     int major, minor;
     shmem_info_get_version(&major, &minor);
     if(major>=1 && minor>=4) {
@@ -53,9 +52,7 @@ HCLIB_MODULE_INITIALIZATION_FUNC(bale_actor_post_initialize) {
         printf("WARNING: SHMEM 1.4 or above required\n");
         ::shmem_init();
     }
-#endif
-
-#ifdef USE_LOCK
+#endif // USE_CRAY_SHMEM_7
     int n_nics;
     hclib::locale_t **nics = hclib::get_all_locales_of_type(nic_locale_id,
             &n_nics);
@@ -65,7 +62,11 @@ HCLIB_MODULE_INITIALIZATION_FUNC(bale_actor_post_initialize) {
     nic = nics[0];
 
     hclib_locale_mark_special(nic, "COMM");
-#endif
+
+#else // USE_LOCK
+    //printf("No USE_LOCK\n");
+    ::shmem_init();
+#endif // USE_LOCK
 }
 
 HCLIB_MODULE_INITIALIZATION_FUNC(bale_actor_finalize) {
