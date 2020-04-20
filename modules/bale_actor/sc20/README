@@ -1,0 +1,153 @@
+
+A Scalable Actor-based Programming System for PGAS Runtimes
+----------------------------------------------------------------
+
+Document also available at
+https://github.com/srirajpaul/hclib/blob/bale_actor/modules/bale_actor/sc20/README
+
+The whole experiment consists of five phases, 0: prepare your system,
+1: Prepare dependencies, 2: building HClib library, 3: building the 
+benchmarks, 4: running the benchmarks, 5: processing the output of 
+step 4 to correspond to figures in the paper.
+Commands to be executed starts with '>>' marker. Please ignore this
+marker while copying the commands.
+
+Getting Started
+---------------
+
+0)  Please use bash shell. Before getting started, please make sure 
+    that the following packages are available:
+
+    apt-utils
+    autoconf
+    git
+    libtool
+    pkg-config
+    vim
+    gcc
+    g++
+    libmpich-dev
+    mpich
+    unzip
+   
+    Please use a C/C++ compiler that supports -std=c++14 and -std=c11.
+    
+    Here is an example command that installs all the dependencies 
+    an Ubuntu-based system:
+    >> sudo apt-get install apt-utils autoconf git libtool pkg-config vim gcc g++ libmpich-dev mpich unzip
+
+1)  Prepare dependencies (libfabric, SOS:OpenSHMEM, bale:Conveyors)
+
+    A) Setup a working directory and install directory
+    >> mkdir work;    cd work;    export WORK_DIR=$PWD
+    >> mkdir install; cd install; export INSTALL_DIR=$PWD
+    >> cd $WORK_DIR
+
+    B) Install libfabric and SOS OpenSHMEM. Please skip the
+    installation if OpenSHMEM is already installed, instead
+    just set the CC,CXX and OSHRUN environment variables
+    
+    >> git clone https://github.com/ofiwg/libfabric.git
+    >> cd libfabric
+    >> git checkout tags/v1.10.0rc3 -b v1.10.0rc3
+    >> ./autogen.sh && ./configure --prefix=$INSTALL_DIR && make install
+
+    >> git clone https://github.com/Sandia-OpenSHMEM/SOS.git
+    >> cd SOS
+    >> git checkout tags/v1.4.5 -b v1.4.5
+    >> ./autogen.sh && ./configure --prefix=$INSTALL_DIR --with-ofi=$INSTALL_DIR --enable-pmi-simple && make install
+
+    >> export CC=/root/local/bin/oshcc
+    >> export CXX=/root/local/bin/oshc++
+    >> export OSHRUN=/root/local/bin/oshrun
+
+    Cori at NERSC has cray-shmem installed. Please skip 
+    step B and instead do the following steps:
+    >> module load cray-shmem
+    >> export CC=cc
+    >> export CXX=CC
+    >> export OSHRUN=srun
+
+    C) Install Conveyors library
+
+    >> git clone https://github.com/jdevinney/bale.git
+    >> cd bale
+    >> git checkout tags/bale-2.1 -b bale-2.1
+    >> chmod +x ./install.sh
+    >> ./install.sh -s -f
+    >> export BALE_INSTALL=$PWD/build_unknown
+
+2) HClib-Selector Installation
+
+    >> git clone https://github.com/srirajpaul/hclib.git
+    >> cd hclib
+    >> git checkout bale_actor
+    >> ./install.sh
+    >> export HCLIB_ROOT=$PWD/hclib-install
+    >> cd modules/bale_actor; make
+    >> cd inc; unzip boost.zip
+    >> export HCLIB_WORKERS=1
+    >> export LD_LIBRARY_PATH=$INSTALL_DIR/lib:$BALE_INSTALL/lib:$HCLIB_ROOT/lib:$HCLIB_ROOT/../modules/bale_actor/lib
+    >> cd $WORK_DIR
+
+0-2) Docker Container
+    There is a Dockerfile[1] that includes all dependencies
+    and sets up the environment.
+    [1] https://github.com/srirajpaul/hclib/blob/bale_actor/modules/bale_actor/sc20/Dockerfile
+    
+    Download the Dockerfile to a work directory and build it as:
+    >> docker build -t hclib_selector:1 .
+    
+    Starting for first time:
+    >> docker run -w /root -it hclib_selector:1 /bin/bash
+    
+    Running from second time onwards:
+    >> docker start <container-id>
+    >> docker attach <container-id>
+    
+    The container-id is obtained with 'docker container ls -a'
+
+Step-by-Step Instructions
+------------------------
+
+3) Build Resilience benchmarks:
+   (please make sure to set the environment variables in step 0-2)
+
+    >> cd $HCLIB_ROOT/../modules/bale_actor/sc20
+    >> make clean
+    >> make
+
+4) Run Experiments
+   
+    >> /bin/bash run.sh -h
+
+    This shows all the options as follows
+             -s <s|m|l>  default is s i.e. use small input
+             -n <1..inf> default is 5 i.e. run each experiment 5 times
+             -r <1..inf> default is 2 i.e. two ranks per node
+             -m <1..inf> default is 4 i.e. max number of nodes is 4
+             -h show options
+
+    >> /bin/bash run.sh -s l -n 5 -r 32 -m 64 |& out.log
+
+    Explanation:
+        -s l : use large inputs. use m for medium and s for small
+        -n 5 : repeat each experiment 5 times to take the average
+        -r 32: each node contains 32 ranks
+        -m 64: use a maximum of 64 nodes starting from 2 nodes
+
+        The experiment starts with 2 nodes and keeps on doubling until
+        64 nodes are reached, i.e. it runs 2,4,8,16,32 and 64 nodes.
+        Since each node has 32 ranks, the 2 node experiment has
+        64 ranks(2X32) and the 64 node experiment has 2048 ranks(64X32).
+        It prints the output on screen and also to a file 'out.log'
+        which is used in step 5 to view results.
+
+5) View Results
+
+    >> /bin/bash run.sh -n 5 -r 32 -m 64 -i out.log
+
+    Explanation:
+        Use the same parameters used for the experiments and
+        also, provide the output of step 4 as input using -i flag
+
