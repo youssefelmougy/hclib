@@ -128,7 +128,7 @@ Step-by-Step Instructions
              -m <1..inf> default is 4 i.e. max number of nodes is 4
              -h show options
 
-    >> /bin/bash run.sh -s l -n 5 -r 32 -m 64 |& out.log
+    >> /bin/bash run.sh -s l -n 5 -r 32 -m 64 |& tee out.log
 
     Explanation:
         -s l : use large inputs. use m for medium and s for small
@@ -140,8 +140,10 @@ Step-by-Step Instructions
         64 nodes are reached, i.e. it runs 2,4,8,16,32 and 64 nodes.
         Since each node has 32 ranks, the 2 node experiment has
         64 ranks(2X32) and the 64 node experiment has 2048 ranks(64X32).
-        It prints the output on screen and also to a file 'out.log'
+        'tee' prints the output on screen and also to a file 'out.log'
         which is used in step 5 to view results.
+        The configuration '-s l -n 5 -r 32 -m 64' is used in Cori
+        to get the results presented in the paper.
 
 5) View Results
 
