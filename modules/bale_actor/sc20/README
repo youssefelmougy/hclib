@@ -57,9 +57,9 @@ Getting Started
     >> git checkout tags/v1.4.5 -b v1.4.5
     >> ./autogen.sh && ./configure --prefix=$INSTALL_DIR --with-ofi=$INSTALL_DIR --enable-pmi-simple && make install
 
-    >> export CC=/root/local/bin/oshcc
-    >> export CXX=/root/local/bin/oshc++
-    >> export OSHRUN=/root/local/bin/oshrun
+    >> export CC=$INSTALL_DIR/bin/oshcc
+    >> export CXX=$INSTALL_DIR/bin/oshc++
+    >> export OSHRUN=$INSTALL_DIR/bin/oshrun
 
     Cori at NERSC has cray-shmem installed. Please skip 
     step B and instead do the following steps:
@@ -147,7 +147,7 @@ Step-by-Step Instructions
 
 5) View Results
 
-    >> /bin/bash run.sh -n 5 -r 32 -m 64 -i out.log
+    >> /bin/bash result.sh -n 5 -r 32 -m 64 -i out.log
 
     Explanation:
         Use the same parameters used for the experiments and
