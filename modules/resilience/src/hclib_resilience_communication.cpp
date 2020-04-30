@@ -92,6 +92,7 @@ int Iallreduce_helper(void *data, MPI_Datatype datatype, int64_t mpi_op, hclib_p
         auto op = (pending_mpi_op *)malloc(sizeof(pending_mpi_op));
         assert(op);
         op->serialized.size = 0;
+        op->serialized.do_free = 0;
         void *recv_data = malloc(sizeof(double));
         ::MPI_Iallreduce(data, recv_data, 1, datatype, (MPI_Op)mpi_op, comm, &req);
 
