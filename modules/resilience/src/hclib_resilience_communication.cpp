@@ -6,6 +6,10 @@
 #include "hclib_resilience.h"
 #include "hclib-module.h"
 
+#ifdef USE_FENIX
+#include<fenix.h>
+#endif
+
 namespace hclib {
 namespace resilience{
 namespace communication {
@@ -14,6 +18,11 @@ pending_mpi_op *pending = nullptr;
 hclib::locale_t *nic = nullptr;
 
 static int nic_locale_id;
+
+#ifdef USE_FENIX
+MPI_Comm new_comm;
+static int fenix_status;
+#endif
 
 HCLIB_MODULE_INITIALIZATION_FUNC(mpi_pre_initialize) {
     nic_locale_id = hclib_add_known_locale_type("Interconnect");
@@ -42,6 +51,9 @@ int64_t test_count=0,send_count=0,recv_count=0,send_size=0,recv_size=0;
 HCLIB_MODULE_INITIALIZATION_FUNC(mpi_finalize) {
 #ifdef COMM_PROFILE
     printf("test %ld, send/recv count %ld / %ld, send/recv bytes %ld / %ld\n",test_count, send_count, recv_count, send_size, recv_size);
+#endif
+#ifdef USE_FENIX
+    Fenix_Finalize();
 #endif
     MPI_Finalize();
 }
@@ -81,6 +93,11 @@ int Isend_helper(obj *data, MPI_Datatype datatype, int dest, int64_t tag, hclib_
         op->req = req;
         op->prom = prom;
         op->data = data;
+#ifdef USE_FENIX
+        op->neighbor = dest;
+        op->tag = tag;
+        op->comm  = comm;
+#endif
         hclib::append_to_pending(op, &pending, test_mpi_completion, nic);
     }, nullptr, nic);
     return 0;
@@ -103,6 +120,108 @@ int Iallreduce_helper(void *data, MPI_Datatype datatype, int64_t mpi_op, hclib_p
     }, nullptr, nic);
     return 0;
 }
+
+#ifdef USE_FENIX
+
+bool is_initial_role() {
+    return fenix_status == FENIX_ROLE_INITIAL_RANK;
+}
+
+void hclib_launch(generic_frame_ptr fct_ptr, void *arg, const char **deps,
+        int ndeps) {
+    unsigned long long start_time = 0;
+    unsigned long long end_time;
+
+    const int instrument = (getenv("HCLIB_INSTRUMENT") != NULL);
+    const int profile_launch_body = (getenv("HCLIB_PROFILE_LAUNCH_BODY") != NULL);
+
+    hclib_init(deps, ndeps, instrument);
+
+    if (profile_launch_body) {
+        start_time = hclib_current_time_ns();
+    }
+
+    //Fenix setup {
+        int old_world_size = -1, new_world_size = -1;
+        int old_rank = -1, new_rank = -1;
+        int spare_ranks=1;
+        MPI_Comm world_comm;
+        MPI_Comm_dup(MPI_COMM_WORLD, &world_comm);
+        MPI_Comm_size(world_comm, &old_world_size);
+        MPI_Comm_rank(world_comm, &old_rank);
+
+        int error;
+        Fenix_Init(&fenix_status, world_comm, &new_comm, nullptr, nullptr, spare_ranks, 0, MPI_INFO_NULL, &error);
+        MPI_Comm_rank(new_comm, &new_rank);
+#if COMM_PROFILE
+        printf("init old rank: %d, new rank: %d\n", old_rank, new_rank);
+#endif
+    //} Fenix setup
+
+    if(is_initial_role())
+        hclib_async(fct_ptr, arg, NULL, 0, hclib_get_closest_locale());
+
+    //Recovering
+    else {
+        int *fails, num_fails;
+        num_fails = Fenix_Process_fail_list(&fails);
+        assert(num_fails == 1);
+#if COMM_PROFILE
+        printf("Recovered rank %d, failed rank %d\n", new_rank, fails[0]);
+#endif
+        //Failed rank restarts from beginning
+        if(fails[0] == new_rank)
+            hclib_async(fct_ptr, arg, NULL, 0, hclib_get_closest_locale());
+        //Non failed tasks rexecutes the pending communication to all tasks
+        //and all communication to failed task
+        else {
+            //Iterate though the pending list and enqueue back the communication operations
+            //with the new status variable
+            //TODO: save all completed pending ops and reuse them here to failed task
+            pending_mpi_op *op = pending;
+            while(op) {
+                pending_mpi_op *next = op->next;
+
+                //if(op->neighbor == fails[0]) {
+                  archive_obj ar_ptr = op->serialized;
+
+                  //Isend
+                  if(op->serialized.size == 0) {
+                      ::MPI_Isend(ar_ptr.data, ar_ptr.size, MPI_BYTE, op->neighbor, op->tag, op->comm, &(op->req));
+                  }
+                  //Irecv
+                  else if (op->serialized.size > 0) {
+                      ::MPI_Irecv(ar_ptr.data, ar_ptr.size, MPI_BYTE, op->neighbor, op->tag, op->comm, &(op->req));
+                  }
+                  else {
+                      assert(false);
+                  }
+                //}
+
+                op = next;
+            }
+
+            //Restart the communication worker
+            //Remove one item and put it back to the queue
+            if(pending) {
+                pending_mpi_op *op = pending;
+                pending = pending->next;
+                hclib::append_to_pending(op, &pending, test_mpi_completion, nic);
+            }
+
+            //decrease the finish counter by one since the kill exited the task without cleanup
+            check_out_finish_worker();
+        }
+    }
+
+    hclib_finalize(instrument);
+    if (profile_launch_body) {
+        end_time = hclib_current_time_ns();
+        printf("\nHCLIB TIME %llu ns\n", end_time - start_time);
+    }
+}
+
+#endif // USE_FENIX
 
 } // namespace communication
 } // namespace resilience

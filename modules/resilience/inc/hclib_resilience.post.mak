@@ -1,6 +1,7 @@
 # Post Makefile includes are the main part of a module's build system, allowing
 # it to add flags to the overall project compile and link flags.
 HCLIB_CFLAGS+=-I$(HCLIB_ROOT)/../modules/resilience/inc
+#HCLIB_CFLAGS+= -DCOMM_PROFILE -I$(HCLIB_ROOT)/../modules/resilience/inc
 HCLIB_CXXFLAGS+=-I$(HCLIB_ROOT)/../modules/resilience/inc
 #HCLIB_LDFLAGS+=-L$(HCLIB_ROOT)/../modules/resilience/lib
 #HCLIB_LDLIBS+=-lhclib_resilience

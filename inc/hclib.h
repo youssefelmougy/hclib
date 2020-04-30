@@ -60,6 +60,13 @@ typedef void *(*future_fct_t)(void *arg);
 
 size_t hclib_current_worker_backlog();
 
+void hclib_init(const char **module_dependencies,
+                int n_module_dependencies, const int instrument);
+
+void hclib_finalize(const int instrument);
+
+void check_out_finish_worker();
+
 void hclib_launch(async_fct_t fct_ptr, void * arg, const char **deps,
         int ndeps);
 

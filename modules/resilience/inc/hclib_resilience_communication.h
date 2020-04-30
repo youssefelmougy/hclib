@@ -10,6 +10,23 @@ namespace hclib {
 namespace resilience {
 namespace communication {
 
+#ifdef USE_FENIX
+
+extern MPI_Comm new_comm;
+#define MPI_COMM_WORLD_RES communication::new_comm
+
+bool is_initial_role();
+void hclib_launch(generic_frame_ptr fct_ptr, void *arg, const char **deps, int ndeps);
+
+template <typename T>
+inline void launch(const char **deps, int ndeps, T &&lambda) {
+    typedef typename std::remove_reference<T>::type U;
+    hclib_task_t *user_task = _allocate_async(new U(lambda));
+    hclib::resilience::communication::hclib_launch((generic_frame_ptr)spawn, user_task, deps, ndeps);
+}
+
+#endif //USE_FENIX
+
 /*
 The object that will be saved to the archive.
 */
@@ -42,6 +59,11 @@ struct pending_mpi_op {
     hclib_promise_t *prom;
     obj *data;
     archive_obj serialized;
+#ifdef USE_FENIX
+    int neighbor;
+    int64_t tag;
+    MPI_Comm comm;
+#endif
     pending_mpi_op *next;
 };
 
@@ -71,7 +93,9 @@ extern int64_t recv_count, recv_size;
 #endif
 
 template<class COMMUNICATION_OBJ>
-void Irecv(int count, int source, int64_t tag, hclib::promise_t<COMMUNICATION_OBJ*> *prom, hclib::future_t<COMMUNICATION_OBJ*> *fut = nullptr, MPI_Comm comm=MPI_COMM_WORLD) {
+void Irecv(int count, int source, int64_t tag, hclib::promise_t<COMMUNICATION_OBJ*> *prom, hclib_future_t *fut = nullptr, MPI_Comm comm=MPI_COMM_WORLD) {
+
+    assert(count>0);
     if(resilience::get_index() == 0) {
         hclib::async_nb_await_at([=] {
             archive_obj ar_ptr;
@@ -94,6 +118,11 @@ void Irecv(int count, int source, int64_t tag, hclib::promise_t<COMMUNICATION_OB
             op->req = req;
             op->prom = prom;
             op->serialized = ar_ptr;
+#ifdef USE_FENIX
+            op->neighbor = source;
+            op->tag = tag;
+            op->comm = comm;
+#endif
             hclib::append_to_pending(op, &pending, test_mpi_completion, nic);
         }, fut, nic);
     }

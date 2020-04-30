@@ -14,10 +14,13 @@ MPI_TARGETS=resilience-r0-mpi resilience-d0-mpi resilience-a0-mpi resilience-r0-
 all: $(TARGETS) $(MPI_TARGETS)
 
 %: %.cpp
-	$(CXX) -g -std=c++14 $(HCLIB_CFLAGS) $(HCLIB_LDFLAGS) -o $@ $^ $(HCLIB_LDLIBS)
+	$(CXX) -g -O3 -std=c++14 $(HCLIB_CFLAGS) $(HCLIB_LDFLAGS) -o $@ $^ $(HCLIB_LDLIBS)
 
 %-mpi: %-mpi.cpp
-	$(MPICXX) -g -std=c++14 $(HCLIB_CFLAGS) $(HCLIB_LDFLAGS) -o $@ $^ $(HCLIB_LDLIBS) -lhclib_resilience
+	$(MPICXX) -O3 -g -std=c++14 $(HCLIB_CFLAGS) $(HCLIB_LDFLAGS) -o $@ $^ $(HCLIB_LDLIBS) -lhclib_resilience
+
+%-mpif: %-mpif.cpp
+	$(MPICXX) -O3 -g -std=c++14 -I $(FENIX)/include $(HCLIB_CFLAGS) $(HCLIB_LDFLAGS) -L $(FENIX)/lib -o $@ $^ -lhclib_resilience $(HCLIB_LDLIBS) -lfenix
 
 test:
 	for target in $(TARGETS); do ./$$target ; done

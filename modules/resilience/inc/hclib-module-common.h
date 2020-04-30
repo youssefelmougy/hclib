@@ -63,6 +63,8 @@ void poll_on_pending(pending_op **addr_of_head,
                     prev->next = op->next;
                 }
 
+              //Can be tuned to use a task for deserialization to free the communication worker
+              //hclib::async([=]{
                 //Deserialize the data if serialized data is present i.e Irecv
                 if (op->serialized.size > 0) {
                     op->data->deserialize(op->serialized);
@@ -84,6 +86,7 @@ void poll_on_pending(pending_op **addr_of_head,
                     //assert(false);
                 }
                 free(op);
+              //});
             } else {
                 prev = op;
             }
