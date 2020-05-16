@@ -33,7 +33,7 @@ int main(int argc, char **argv) {
 
         int recovered = !communication::is_initial_role();
         int rank;
-        MPI_Comm_rank(MPI_COMM_WORLD_RES, &rank);
+        MPI_Comm_rank(MPI_COMM_WORLD_DEFAULT, &rank);
 
         printf("in rank %d recovered %d pid %d\n", rank, recovered, getpid());
 
@@ -47,7 +47,7 @@ int main(int argc, char **argv) {
             int_obj *a = new int_obj();
             a->n = 23;
             printf("trying to send in rank %d\n", rank);
-            communication::Isend(a, kKillID-1, 1, 0, prom_send, MPI_COMM_WORLD_RES);
+            communication::Isend(a, kKillID-1, 1, 0, prom_send, MPI_COMM_WORLD_DEFAULT);
             printf("trying to send1 in rank %d\n", rank);
 
             hclib::async_await( [=]() {
@@ -57,7 +57,7 @@ int main(int argc, char **argv) {
         if(rank == kKillID-1) {
             auto prom_recv = new hclib::promise_t<int_obj*>();
             printf("trying to recv in rank %d\n", rank);
-            communication::Irecv((int)sizeof(int), kKillID, 1, prom_recv, nullptr, MPI_COMM_WORLD_RES);
+            communication::Irecv((int)sizeof(int), kKillID, 1, prom_recv, nullptr, MPI_COMM_WORLD_DEFAULT);
             printf("trying to recv1 in rank %d\n", rank);
             hclib::async_await( [=]() {
                 printf("recv %d in rank %d\n", prom_recv->get_future()->get()->n, rank);

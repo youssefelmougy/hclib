@@ -158,8 +158,25 @@ void hclib_launch(generic_frame_ptr fct_ptr, void *arg, const char **deps,
 #endif
     //} Fenix setup
 
-    if(is_initial_role())
-        hclib_async(fct_ptr, arg, NULL, 0, hclib_get_closest_locale());
+    if(is_initial_role()) {
+        //hclib_async(fct_ptr, arg, NULL, 0, hclib_get_closest_locale());
+
+        //hclib_future_t *fut = hclib_async_future((future_fct_t)fct_ptr, arg, NULL, 0, hclib_get_closest_locale());
+        //hclib::async_nb_await_at([=]() {
+        //    printf("Barrier rank %d\n", new_rank);
+        //    MPI_Barrier(MPI_COMM_WORLD_DEFAULT);
+        //}, fut, nic);
+
+        hclib::async_at([=]() {
+            hclib::finish([=]() {
+              fct_ptr(arg);
+            });
+            //Perform barrier in communication worker
+            hclib::async_at([=]() {
+                MPI_Barrier(MPI_COMM_WORLD_DEFAULT);
+            }, nic);
+        }, hclib_get_closest_locale());
+    }
 
     //Recovering
     else {
@@ -184,6 +201,11 @@ void hclib_launch(generic_frame_ptr fct_ptr, void *arg, const char **deps,
 
                 //if(op->neighbor == fails[0]) {
                   archive_obj ar_ptr = op->serialized;
+
+                  //TODO: map from old communicator to new communicator
+                  //rather than setting it to default COMM_WORLD
+                  //printf("rank %d %p %p\n", new_rank, op->comm, MPI_COMM_WORLD_DEFAULT);
+                  op->comm = MPI_COMM_WORLD_DEFAULT;
 
                   //Isend
                   if(op->serialized.size == 0) {
