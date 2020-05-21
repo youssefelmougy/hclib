@@ -8,7 +8,7 @@
 namespace hclib {
 
 template<class pending_op>
-void poll_on_pending(pending_op **addr_of_head,
+void poll_on_pending(pending_op **addr_of_head, pending_op **completed_head,
         bool (*test_completion_callback)(void *),
         hclib::locale_t *locale_to_yield_to) {
     do {
@@ -63,6 +63,11 @@ void poll_on_pending(pending_op **addr_of_head,
                     prev->next = op->next;
                 }
 
+#ifdef USE_FENIX
+                op->next = completed_head[op->neighbor];
+                completed_head[op->neighbor] = op;
+#endif
+
               //Can be tuned to use a task for deserialization to free the communication worker
               //hclib::async([=]{
                 //Deserialize the data if serialized data is present i.e Irecv
@@ -85,7 +90,9 @@ void poll_on_pending(pending_op **addr_of_head,
                     //Allow the completion notification promise to be not set
                     //assert(false);
                 }
+#ifndef USE_FENIX
                 free(op);
+#endif
               //});
             } else {
                 prev = op;
@@ -104,7 +111,7 @@ void poll_on_pending(pending_op **addr_of_head,
 }
 
 template<class pending_op>
-void append_to_pending(pending_op *op, pending_op **addr_of_head,
+void append_to_pending(pending_op *op, pending_op **addr_of_head, pending_op ** completed_head,
         bool (*test_completion_callback)(void *),
         hclib::locale_t *locale_to_yield_to) {
     pending_op *pending = *addr_of_head;
@@ -121,8 +128,8 @@ void append_to_pending(pending_op *op, pending_op **addr_of_head,
     }
 
     if (old_head == NULL) {
-        hclib::async_at([addr_of_head, test_completion_callback, locale_to_yield_to] {
-            hclib::poll_on_pending<pending_op>(addr_of_head,
+        hclib::async_at([addr_of_head, completed_head, test_completion_callback, locale_to_yield_to] {
+            hclib::poll_on_pending<pending_op>(addr_of_head, completed_head,
                 test_completion_callback, locale_to_yield_to);
         }, locale_to_yield_to);
     }

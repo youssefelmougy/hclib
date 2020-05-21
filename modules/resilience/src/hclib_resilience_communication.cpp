@@ -15,6 +15,7 @@ namespace resilience{
 namespace communication {
 
 pending_mpi_op *pending = nullptr;
+pending_mpi_op **completed = nullptr;
 hclib::locale_t *nic = nullptr;
 
 static int nic_locale_id;
@@ -98,7 +99,7 @@ int Isend_helper(obj *data, MPI_Datatype datatype, int dest, int64_t tag, hclib_
         op->tag = tag;
         op->comm  = comm;
 #endif
-        hclib::append_to_pending(op, &pending, test_mpi_completion, nic);
+        hclib::append_to_pending(op, &pending, completed, test_mpi_completion, nic);
     }, nullptr, nic);
     return 0;
 }
@@ -116,7 +117,7 @@ int Iallreduce_helper(void *data, MPI_Datatype datatype, int64_t mpi_op, hclib_p
         op->req = req;
         op->prom = prom;
         op->data = (obj*)recv_data;
-        hclib::append_to_pending(op, &pending, test_mpi_completion, nic);
+        hclib::append_to_pending(op, &pending, completed, test_mpi_completion, nic);
     }, nullptr, nic);
     return 0;
 }
@@ -125,6 +126,52 @@ int Iallreduce_helper(void *data, MPI_Datatype datatype, int64_t mpi_op, hclib_p
 
 bool is_initial_role() {
     return fenix_status == FENIX_ROLE_INITIAL_RANK;
+}
+
+void re_enqueue(pending_mpi_op* list, bool isCompletedList, int fail_rank, pending_mpi_op** pending_ptr=nullptr) {
+    pending_mpi_op *op = list;
+    while(op) {
+        pending_mpi_op *next = op->next;
+
+        //if(op->neighbor == fails[0]) {
+          archive_obj ar_ptr = op->data->serialize();
+          //archive_obj ar_ptr = op->serialized;
+
+          if(isCompletedList) {
+            //put the op into pending list and re-enqueue the operation since it is to a failed rank
+            op->prom = nullptr;
+            op->next = *pending_ptr;
+            *pending_ptr = op;
+          }
+          else {
+            //if pending operation was completed then no need to enqueue again
+            int test_flag;
+            //if(MPI_Test( &(op->req), &test_flag, MPI_STATUS_IGNORE) != FENIX_ERROR_CANCELLED
+            //  && op->neighbor != failed_rank[0])
+            //    continue;
+          }
+
+          //TODO: map from old communicator to new communicator
+          //rather than setting it to default COMM_WORLD
+          //printf("rank %d %p %p\n", new_rank, op->comm, MPI_COMM_WORLD_DEFAULT);
+          op->comm = MPI_COMM_WORLD_DEFAULT;
+
+          //Enqueue incomplete operations using new communicator
+          //Isend
+          if(op->serialized.size == 0) {
+              ::MPI_Isend(ar_ptr.data, ar_ptr.size, MPI_BYTE, op->neighbor, op->tag, op->comm, &(op->req));
+          }
+          //Irecv
+          else if (op->serialized.size > 0) {
+              ::MPI_Irecv(ar_ptr.data, ar_ptr.size, MPI_BYTE, op->neighbor, op->tag, op->comm, &(op->req));
+          }
+          else {
+              assert(false);
+          }
+        //}
+
+        op = next;
+    }
 }
 
 void hclib_launch(generic_frame_ptr fct_ptr, void *arg, const char **deps,
@@ -153,12 +200,14 @@ void hclib_launch(generic_frame_ptr fct_ptr, void *arg, const char **deps,
         int error;
         Fenix_Init(&fenix_status, world_comm, &new_comm, nullptr, nullptr, spare_ranks, 0, MPI_INFO_NULL, &error);
         MPI_Comm_rank(new_comm, &new_rank);
+        MPI_Comm_size(new_comm, &new_world_size);
 #if COMM_PROFILE
         printf("init old rank: %d, new rank: %d\n", old_rank, new_rank);
 #endif
     //} Fenix setup
 
     if(is_initial_role()) {
+        completed = new pending_mpi_op*[new_world_size]{};
         //hclib_async(fct_ptr, arg, NULL, 0, hclib_get_closest_locale());
 
         //hclib_future_t *fut = hclib_async_future((future_fct_t)fct_ptr, arg, NULL, 0, hclib_get_closest_locale());
@@ -187,48 +236,32 @@ void hclib_launch(generic_frame_ptr fct_ptr, void *arg, const char **deps,
         printf("Recovered rank %d, failed rank %d\n", new_rank, fails[0]);
 #endif
         //Failed rank restarts from beginning
-        if(fails[0] == new_rank)
+        if(fails[0] == new_rank) {
+            completed = new pending_mpi_op*[new_world_size]{};
             hclib_async(fct_ptr, arg, NULL, 0, hclib_get_closest_locale());
+        }
+
         //Non failed tasks rexecutes the pending communication to all tasks
         //and all communication to failed task
         else {
-            //Iterate though the pending list and enqueue back the communication operations
-            //with the new status variable
-            //TODO: save all completed pending ops and reuse them here to failed task
-            pending_mpi_op *op = pending;
-            while(op) {
-                pending_mpi_op *next = op->next;
+            //Iterate though the pending list and enqueue back the
+            //incomplete communication operations with the
+            //new communicator and status variable
+            bool isCompletedList = false;
+            re_enqueue(pending, isCompletedList, fails[0]);
 
-                //if(op->neighbor == fails[0]) {
-                  archive_obj ar_ptr = op->serialized;
+            //add completed_ops to the failed rank in the pending ops list and re-enqueue them
+            pending_mpi_op *completed_ops = completed[fails[0]];
+            isCompletedList = true;
+            re_enqueue(completed_ops, isCompletedList, fails[0], &pending);
 
-                  //TODO: map from old communicator to new communicator
-                  //rather than setting it to default COMM_WORLD
-                  //printf("rank %d %p %p\n", new_rank, op->comm, MPI_COMM_WORLD_DEFAULT);
-                  op->comm = MPI_COMM_WORLD_DEFAULT;
-
-                  //Isend
-                  if(op->serialized.size == 0) {
-                      ::MPI_Isend(ar_ptr.data, ar_ptr.size, MPI_BYTE, op->neighbor, op->tag, op->comm, &(op->req));
-                  }
-                  //Irecv
-                  else if (op->serialized.size > 0) {
-                      ::MPI_Irecv(ar_ptr.data, ar_ptr.size, MPI_BYTE, op->neighbor, op->tag, op->comm, &(op->req));
-                  }
-                  else {
-                      assert(false);
-                  }
-                //}
-
-                op = next;
-            }
 
             //Restart the communication worker
             //Remove one item and put it back to the queue
             if(pending) {
                 pending_mpi_op *op = pending;
                 pending = pending->next;
-                hclib::append_to_pending(op, &pending, test_mpi_completion, nic);
+                hclib::append_to_pending(op, &pending, completed, test_mpi_completion, nic);
             }
 
             //decrease the finish counter by one since the kill exited the task without cleanup
