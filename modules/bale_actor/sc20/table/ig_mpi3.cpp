@@ -70,30 +70,18 @@ double wall_seconds() {
  * \return average run time
  *
  */
-double histo_mpi3(int64_t *pckindx, int64_t T, int64_t *counts, MPI_Win win) {
-  int ret;
+double ig_mpi3(int64_t *tgt, int64_t *pckindx, int64_t l_num_req,  int64_t *table, MPI_Win win) {
   int64_t i;
-  double tm;
   int64_t pe, col;
+  double tm;
   double stat;
-  int64_t one = 1;
-  int64_t result;
 
   MPI_Win_fence(0, win); // start epoch
   tm = wall_seconds();
-  i = 0UL;
-  for(i = 0; i < T; i++) {
+  for(i = 0; i < l_num_req; i++){
     col = pckindx[i] >> 16;
     pe  = pckindx[i] & 0xffff;
-#ifdef USE_FETCH_AND_OP
-    MPI_Fetch_and_op(&one, &result, MPI_INT64_T, pe, col, MPI_SUM, win);
-#elif USE_ACCUMULATE
-    MPI_Accumulate(&one, 1, MPI_INT64_T, pe, col, 1, MPI_INT64_T, MPI_SUM, win);
-#elif USE_GET_ACCUMULATE
-    MPI_Get_accumulate(&one, 1, MPI_INT64_T, &result, 1, MPI_INT64_T, pe, col, 1, MPI_INT64_T, MPI_SUM, win);
-#else
-    MPI_Abort(MPI_COMM_WORLD, 99);
-#endif
+    MPI_Get(&tgt[i], 1, MPI_INT64_T, pe, col, 1, MPI_INT64_T, win);
   }
   MPI_Win_fence(0, win); // end epoch
   tm = wall_seconds() - tm;
@@ -101,6 +89,26 @@ double histo_mpi3(int64_t *pckindx, int64_t T, int64_t *counts, MPI_Win win) {
   MPI_Reduce(&tm, &sum, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
   stat = sum / THREADS;
   return stat;
+}
+
+int64_t ig_check_and_zero(int64_t use_model, int64_t *tgt, int64_t *index, int64_t l_num_req) {
+  int64_t errors=0;
+  int64_t i;
+  MPI_Barrier(MPI_COMM_WORLD);
+  for(i=0; i<l_num_req; i++){
+    if(tgt[i] != (-1)*(index[i] + 1)){
+      errors++;
+      if(errors < 5)  // print first five errors, report all the errors
+        fprintf(stderr,"ERROR: model %ld: Thread %d: tgt[%ld] = %ld != %ld)\n",
+                use_model,  MYTHREAD, i, tgt[i], (-1)*(index[i] + 1));
+               //use_model,  MYTHREAD, i, tgt[i],(-1)*(i*THREADS+MYTHREAD + 1) );
+    }
+    tgt[i] = 0;
+  }
+  if( errors > 0 )
+    fprintf(stderr,"ERROR: %ld: %ld total errors on thread %d\n", use_model, errors, MYTHREAD);
+  MPI_Barrier(MPI_COMM_WORLD);
+  return(errors);
 }
 
 int main(int argc, char * argv[]) {
@@ -122,25 +130,25 @@ int main(int argc, char * argv[]) {
            processor_name, MYTHREAD, THREADS);
   }
 
-  int64_t l_num_ups  = 1000000;     // per thread number of requests (updates)
-  int64_t lnum_counts = 1000;       // per thread size of the table
-
   int64_t i;
+  int64_t ltab_siz = 100000;
+  int64_t l_num_req  = 1000000;      // number of requests per thread
+  int64_t num_errors = 0L, total_errors = 0L;
+  int64_t printhelp = 0;
 
-  int printhelp = 0;
   int opt;
   while( (opt = getopt(argc, argv, "hn:T:")) != -1 ) {
     switch(opt) {
     case 'h': printhelp = 1; break;
-    case 'n': sscanf(optarg,"%ld" ,&l_num_ups);  break;
-    case 'T': sscanf(optarg,"%ld" ,&lnum_counts);  break;
+    case 'n': sscanf(optarg,"%ld" ,&l_num_req);   break;
+    case 'T': sscanf(optarg,"%ld" ,&ltab_siz);   break;
     default:  break;
     }
   }
 
-  T0_fprintf(stderr,"Running histo on %d PEs\n", THREADS);
-  T0_fprintf(stderr,"Number updates / PE              (-n)= %ld\n", l_num_ups);
-  T0_fprintf(stderr,"Table size / PE                  (-T)= %ld\n", lnum_counts);
+  T0_fprintf(stderr,"Running ig on %d PEs\n", THREADS);
+  T0_fprintf(stderr,"Number of Request / PE           (-n)= %ld\n", l_num_req );
+  T0_fprintf(stderr,"Table size / PE                  (-T)= %ld\n", ltab_siz);
   fflush(stderr);
 
   int tsize;
@@ -149,36 +157,34 @@ int main(int argc, char * argv[]) {
   assert(sizeof(int64_t) == tsize);
 
   // Allocate and zero out the counts array
-  int64_t num_counts = lnum_counts*THREADS;
-  int64_t *counts;
+  int64_t tab_siz = ltab_siz*THREADS;
+  int64_t *table;
   MPI_Win win;
-  int err = MPI_Win_allocate(lnum_counts* sizeof(int64_t), sizeof(int64_t), MPI_INFO_NULL, MPI_COMM_WORLD, &counts, &win);
-  if (err != MPI_SUCCESS || !counts) {
+  int err = MPI_Win_allocate(ltab_siz* sizeof(int64_t), sizeof(int64_t), MPI_INFO_NULL, MPI_COMM_WORLD, &table, &win);
+  if (err != MPI_SUCCESS || !table) {
     T0_fprintf(stderr, "Table allocation failed\n");
   }
 
-  int64_t *lcounts = counts;
-  for(i = 0; i < lnum_counts; i++)
-    lcounts[i] = 0L;
-
-  // index is a local array of indices into the shared counts array.
-  // This is used by the * version.
-  // To avoid paying the UPC tax of computing index[i]/THREADS and index[i]%THREADS
-  // when using the exstack and conveyor models
-  // we also store a packed version that holds the pe (= index%THREADS) and lindx (=index/THREADS)
-  int64_t *index   = (int64_t *) calloc(l_num_ups, sizeof(int64_t)); assert(index != NULL);
-  int64_t *pckindx = (int64_t *) calloc(l_num_ups, sizeof(int64_t)); assert(pckindx != NULL);
+  int64_t *ltable = table;
+  // fill the table with the negative of its shared index
+  // so that checking is easy
+  for(i=0; i<ltab_siz; i++)
+    ltable[i] = (-1)*(i*THREADS + MYTHREAD + 1);
+  // As in the histo example, index is used by the * version.
+  // pckindx is used my the buffered versions
+  int64_t *index   =  (int64_t*)calloc(l_num_req, sizeof(int64_t)); assert(index != NULL);
+  int64_t *pckindx =  (int64_t*)calloc(l_num_req, sizeof(int64_t)); assert(pckindx != NULL);
   int64_t indx, lindx, pe;
-
-  srand(MYTHREAD + 120348);
-  for(i = 0; i < l_num_ups; i++) {
-    //indx = i % num_counts;          //might want to do this for debugging
-    indx = rand() % num_counts;
+  srand(MYTHREAD+ 5 );
+  for(i = 0; i < l_num_req; i++){
+    indx = rand() % tab_siz;
     index[i] = indx;
-    lindx = indx / THREADS;
+    lindx = indx / THREADS;      // the distributed version of indx
     pe  = indx % THREADS;
-    pckindx[i]  =  (lindx << 16L) | (pe & 0xffff);
+    pckindx[i] = (lindx << 16) | (pe & 0xffff); // same thing stored as (local index, thread) "shmem style"
   }
+
+  int64_t *tgt  =  (int64_t*)calloc(l_num_req, sizeof(int64_t)); assert(tgt != NULL);
 
   MPI_Barrier(MPI_COMM_WORLD);
 
@@ -186,40 +192,22 @@ int main(int argc, char * argv[]) {
   double laptime = 0.0;
   int64_t num_models = 0L;               // number of models that are executed
   {
-    laptime = histo_mpi3(pckindx, l_num_ups, counts, win);
+    laptime = ig_mpi3(tgt, pckindx, l_num_req, ltable, win);
     num_models++;
     T0_fprintf(stderr,"  %8.3lf seconds\n", laptime);
+    num_errors += ig_check_and_zero(use_model, tgt, index, l_num_req);
   }
-  MPI_Barrier(MPI_COMM_WORLD);
 
-  // Check the results
-  // Assume that the atomic add version will correctly zero out the counts array
-  int64_t minus_num_models = - num_models;
-  int64_t result;
-  MPI_Win_fence(0, win); // start epoch
-  for(i = 0; i < l_num_ups; i++) {
-    lindx = index[i] / THREADS;
-    pe  = index[i] % THREADS;
-    MPI_Get_accumulate(&minus_num_models, 1, MPI_INT64_T, &result, 1, MPI_INT64_T, pe, lindx, 1, MPI_INT64_T, MPI_SUM, win);
+  total_errors = num_errors;
+  if( total_errors ) {
+    T0_fprintf(stderr,"YOU FAILED!!!!\n");
   }
-  MPI_Win_fence(0, win); // end epoch
-  MPI_Barrier(MPI_COMM_WORLD);
 
-  int64_t num_errors = 0, totalerrors = 0;
-  for(i = 0; i < lnum_counts; i++) {
-    if(lcounts[i] != 0L) {
-      num_errors++;
-      if(num_errors < 5)  // print first five errors, report number of errors below
-        fprintf(stderr,"ERROR: Thread %d error at %ld (= %ld)\n", MYTHREAD, i, lcounts[i]);
-    }
-  }
-  MPI_Reduce(&num_errors, &totalerrors, 1, MPI_INT64_T, MPI_SUM, 0, MPI_COMM_WORLD);
-  if(totalerrors) {
-     T0_fprintf(stderr,"FAILED!!!! total errors = %ld\n", totalerrors);
-  }
+  MPI_Barrier(MPI_COMM_WORLD);
   MPI_Win_free(&win);
   free(index);
   free(pckindx);
+  free(tgt);
 
   MPI_Finalize();
 
