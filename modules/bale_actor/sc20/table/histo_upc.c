@@ -37,22 +37,24 @@
 //
  *****************************************************************/
 
-/*! \file histo_shmem.cpp
- * \brief An implementation of histogram that uses OpenSHMEM global atomics.
+/*! \file histo_upc.cpp
+ * \brief An implementation of histogram that uses UPC global atomics.
  */
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <assert.h>
-#include <shmem.h>
-
-#define THREADS shmem_n_pes()
-#define MYTHREAD shmem_my_pe()
+//#include <upc.h>
+#include <upc_relaxed.h>
+#include <upc_atomic.h>
+#include <upc_collective.h>
 
 #include <time.h>
 #include <sys/time.h>
 
 #define T0_fprintf if(MYTHREAD==0) fprintf
+
+upc_atomicdomain_t * lgp_atomic_domain;
 
 double wall_seconds() {
   struct timeval tp;
@@ -61,32 +63,17 @@ double wall_seconds() {
   return ( (double) tp.tv_sec + (double) tp.tv_usec * 1.e-6 );
 }
 
-static void *setup_shmem_reduce_workdata(long **psync, size_t xsize) {
-  void *work;
-  int i;
-
-  work=shmem_malloc(_SHMEM_REDUCE_MIN_WRKDATA_SIZE*xsize);
-  *psync=(long *)shmem_malloc(_SHMEM_REDUCE_SYNC_SIZE*sizeof(long));
-  for(i=0;i<_SHMEM_REDUCE_SYNC_SIZE;++i) {
-    (*psync)[i]=_SHMEM_SYNC_VALUE;
-  }
-  shmem_barrier_all();
-  return work;
-}
-
 double reduce_add(double myval){
-  static double *buff=NULL, *work;
-  static long *sync;
-  if (buff==NULL) {
-    buff=(double*)shmem_malloc(2*sizeof(double));
-    work=(double*)setup_shmem_reduce_workdata(&sync,sizeof(double));
+  static shared double *dst=NULL, * src;
+  if (dst==NULL) {
+      dst = upc_all_alloc(THREADS, sizeof(double));
+      src = upc_all_alloc(THREADS, sizeof(double));
   }
-  buff[0]=myval;
-
-  shmem_double_sum_to_all(&buff[1],buff,1,0,0,shmem_n_pes(),work,sync);
-
-  shmem_barrier_all();
-  return buff[1];
+  src[MYTHREAD] = myval;
+  upc_barrier;
+  upc_all_reduceD(dst, src, UPC_ADD, THREADS, 1, NULL, UPC_IN_NOSYNC || UPC_OUT_NOSYNC);
+  upc_barrier;
+  return dst[0];
 }
 
 /*!
@@ -98,30 +85,30 @@ double reduce_add(double myval){
  * \return average run time
  *
  */
-double histo_shmem(int64_t *pckindx, int64_t T, int64_t *counts) {
+double histo_upc(int64_t *index, int64_t T, shared int64_t *counts) {
   int ret;
-  int64_t i;
+  int64_t i, one=1;
   double tm;
   int64_t pe, col;
   double stat;
 
-  shmem_barrier_all();
+  upc_barrier;
   tm = wall_seconds();
   i = 0UL;
   for(i = 0; i < T; i++) {
-    col = pckindx[i] >> 16;
-    pe  = pckindx[i] & 0xffff;
-    shmem_int64_atomic_add(counts+col, 1, pe);
-    //shmem_int64_atomic_inc(counts+col, pe);
+    //col = pckindx[i] >> 16;
+    //pe  = pckindx[i] & 0xffff;
+    #pragma pgas defer_sync
+    upc_atomic_relaxed(lgp_atomic_domain, NULL, UPC_ADD, &counts[index[i]], &one, NULL);
+    //upc_atomic_relaxed(lgp_atomic_domain, NULL, UPC_INC, &counts[index[i]], NULL, NULL);
   }
-  shmem_barrier_all();
+  upc_barrier;
   tm = wall_seconds() - tm;
-  stat = reduce_add(tm)/shmem_n_pes();
+  stat = reduce_add(tm)/THREADS;
   return stat;
 }
 
 int main(int argc, char * argv[]) {
-  shmem_init();
 
   //char hostname[1024];
   //hostname[1023] = '\0';
@@ -151,9 +138,10 @@ int main(int argc, char * argv[]) {
 
 
   // Allocate and zero out the counts array
+  lgp_atomic_domain = upc_all_atomicdomain_alloc(UPC_INT64, UPC_ADD, 0);
   int64_t num_counts = lnum_counts*THREADS;
-  int64_t * counts = (int64_t *)shmem_malloc(lnum_counts* sizeof(int64_t)); assert(counts != NULL);
-  int64_t *lcounts = counts;
+  shared int64_t * counts = upc_all_alloc(num_counts, sizeof(int64_t)); assert(counts != NULL);
+  int64_t *lcounts = (int64_t*)(counts+MYTHREAD);
   for(i = 0; i < lnum_counts; i++)
     lcounts[i] = 0L;
 
@@ -176,27 +164,27 @@ int main(int argc, char * argv[]) {
     pckindx[i]  =  (lindx << 16L) | (pe & 0xffff);
   }
 
-  shmem_barrier_all();
+  upc_barrier;
 
   int64_t use_model;
   double laptime = 0.0;
   int64_t num_models = 0L;               // number of models that are executed
 
-      laptime = histo_shmem(pckindx, l_num_ups, counts);
+      laptime = histo_upc(index, l_num_ups, counts);
       num_models++;
 
       T0_fprintf(stderr,"  %8.3lf seconds\n", laptime);
 
-  shmem_barrier_all();
+  upc_barrier;
 
   // Check the results
   // Assume that the atomic add version will correctly zero out the counts array
+  num_models = -1*num_models;
   for(i = 0; i < l_num_ups; i++) {
-    lindx = index[i] / THREADS;
-    pe  = index[i] % THREADS;
-    shmem_int64_atomic_add(counts+lindx, -num_models, pe); 
+    #pragma pgas defer_sync
+    upc_atomic_relaxed(lgp_atomic_domain, NULL, UPC_ADD, &counts[index[i]], &num_models, NULL);
   }
-  shmem_barrier_all();
+  upc_barrier;
 
   int64_t num_errors = 0, totalerrors = 0;
   for(i = 0; i < lnum_counts; i++) {
@@ -211,10 +199,9 @@ int main(int argc, char * argv[]) {
      T0_fprintf(stderr,"FAILED!!!! total errors = %ld\n", totalerrors);
   }
 
-  shmem_free(counts);
+  upc_all_free(counts);
   free(index);
   free(pckindx);
-  shmem_finalize();
 
   return 0;
 }
