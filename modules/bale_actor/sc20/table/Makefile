@@ -6,7 +6,7 @@ OSHRUN ?=oshrun
 SRUN ?=srun
 
 TARGETS=histo_shmem histo_conveyor histo_upc histo_mpi3\
-		ig_shmem ig_nbi_shmem ig_conveyor ig_upc ig_mpi3
+		ig_shmem ig_nbi_shmem ig_conveyor ig_upc ig_nbi_upc ig_mpi3
 
 all: $(TARGETS)
 

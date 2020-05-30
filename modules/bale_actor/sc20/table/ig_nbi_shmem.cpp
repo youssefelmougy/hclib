@@ -144,6 +144,10 @@ int64_t ig_check_and_zero(int64_t use_model, int64_t *tgt, int64_t *index, int64
 
 int main(int argc, char * argv[]) {
   shmem_init();
+  char hostname[1024];
+  hostname[1023] = '\0';
+  gethostname(hostname, 1023);
+  fprintf(stderr,"Hostname: %s rank: %d\n", hostname, MYTHREAD);
   
   int64_t i;
   int64_t ltab_siz = 100000;
