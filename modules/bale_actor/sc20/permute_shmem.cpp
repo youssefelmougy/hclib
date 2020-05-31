@@ -36,10 +36,13 @@
 // 
  *****************************************************************/ 
 
+#include <stdio.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <assert.h>
+#include <math.h>
 #include <shmem.h>
-extern "C" {
-#include <spmat.h>
-}
+#include "myshmem.h"
 
 /*! \file permute_matrix.upc
  * \brief Demo program that runs the variants of permute_matrix kernel. This program generates
@@ -47,156 +50,71 @@ extern "C" {
  * permutes the rows and columns of the matrix according to the two random permutations.
  */
 
-/*! \brief apply row and column permutations to a sparse matrix using conveyors 
+/*! \brief apply row and column permutations to a sparse matrix using straight UPC
  * \param A pointer to the original matrix
  * \param rperminv pointer to the global array holding the inverse of the row permutation
  * \param cperminv pointer to the global array holding the inverse of the column permutation
  * rperminv[i] = j means that row i of A goes to row j in matrix Ap
  * cperminv[i] = j means that col i of A goes to col j in matrix Ap
  * \return a pointer to the matrix that has been produced or NULL if the model can't be used
+ * \ingroup spmatgrp
  */
-sparsemat_t * permute_matrix_conveyor(sparsemat_t * A, int64_t * rperminv, int64_t * cperminv) {
-  typedef struct pkg_rowcol_t{
-    int64_t row;    
-    int64_t col;
-  }pkg_rowcol_t;
-  typedef struct pkg_rowcnt_t{
-    int64_t row;
-    int64_t cnt;
-  }pkg_rowcnt_t;
-  typedef struct pkg_inonz_t{
-    int64_t i;    
-    int64_t nonz;
-  }pkg_inonz_t;
+sparsemat_t * permute_matrix_shmem(sparsemat_t *A, int64_t *rperminv, int64_t *cperminv) {
+  //T0_printf("Permuting matrix with single puts\n");
+  int64_t i, j, col, row, pos;
+  int64_t * lrperminv = rperminv;
+  int64_t * rperm = (int64_t*)myshmem_global_malloc(A->numrows, sizeof(int64_t));
+  if( rperm == NULL ) return(NULL);
+  int64_t *lrperm = rperm;
 
-  sparsemat_t * Ap;
-  
-  int64_t i, fromth, fromth2, pe, row, lnnz;
-  int64_t * lrperminv = lgp_local_part(int64_t, rperminv);
-  int64_t * lcperminv = lgp_local_part(int64_t, cperminv);
-
-  //T0_printf("Permuting matrix with conveyors\n");
-  
-  /****************************************************************/
-  // distribute row counts to the permuted matrix and count the number of nonzeros per thread
-  // in the permuted matrix. tmprowcnts holds the post-rperminv rowcounts 
-  /****************************************************************/
-  int64_t * tmprowcnts = (int64_t*)calloc(A->lnumrows + 1, sizeof(int64_t));
-
-  pkg_rowcnt_t pkg_rc;
-  pkg_rowcnt_t pkgrc_p;
-  convey_t* cnv_rc = convey_new(SIZE_MAX, 0, NULL, convey_opt_SCATTER);
-
-  convey_begin(cnv_rc, sizeof(pkg_rowcnt_t));
-  lnnz = row = 0;
-  while(convey_advance(cnv_rc, (row == A->lnumrows))) {
-    for( ;row < A->lnumrows; row++){
-      pe = lrperminv[row] % THREADS;
-      pkg_rc.row = lrperminv[row] / THREADS;
-      pkg_rc.cnt = A->loffset[row+1] - A->loffset[row];
-      if( !convey_push(cnv_rc, &pkg_rc, pe) )
-        break;
-    }
-    while( convey_pull(cnv_rc, &pkgrc_p, NULL) == convey_OK ){
-      tmprowcnts[pkgrc_p.row] = pkgrc_p.cnt;
-      lnnz += pkgrc_p.cnt;
-    }
-  }
-  lgp_barrier();
-  convey_free(cnv_rc);  
-
-  assert(A->nnz = lgp_reduce_add_l(lnnz));
-
-  // allocate pmat to the max of the new number of nonzeros per thread  
-  Ap = init_matrix(A->numrows, A->numcols, lnnz);
-  if(Ap == NULL) return(NULL);
-  lgp_barrier();
-
-  // convert row counts to offsets 
-  Ap->loffset[0] = 0;
-  for(i = 1; i < Ap->lnumrows+1; i++)
-    Ap->loffset[i] = Ap->loffset[i-1] + tmprowcnts[i-1];
-
-  /****************************************************************/
-  // re-distribute nonzeros
-  // working offset: wrkoff[row] gives the first empty spot on row row  
-  /****************************************************************/
-  int64_t * wrkoff = (int64_t*)calloc(A->lnumrows, sizeof(int64_t)); 
-  pkg_rowcol_t pkg_nz, pkgnz_p;
-  
-  convey_t* cnv_nz = convey_new(SIZE_MAX, 0, NULL, convey_opt_SCATTER);
-  convey_begin(cnv_nz, sizeof(pkg_rowcol_t));
-
-  i = row = 0;
-  while(convey_advance(cnv_nz, (i == A->lnnz))){
-    for( ;i < A->lnnz; i++){
-      while( i == A->loffset[row+1] ) // skip empty rows 
-        row++; 
-      pkg_nz.row = lrperminv[row] / THREADS;
-      pkg_nz.col = A->lnonzero[i];
-      pe = lrperminv[row] % THREADS;
-      if( !convey_push(cnv_nz, &pkg_nz, pe) )
-        break;
-    }
-
-    while( convey_pull(cnv_nz, &pkgnz_p, NULL) == convey_OK) {
-      Ap->lnonzero[ Ap->loffset[pkgnz_p.row] + wrkoff[pkgnz_p.row] ] = pkgnz_p.col;
-      wrkoff[pkgnz_p.row]++;
-    }
-  }
-  lgp_barrier();
-  convey_free(cnv_nz);
-
-  /* sanity check */
-  int64_t error = 0L;
-  for(i = 0; i < Ap->lnumrows; i++)
-    if(wrkoff[i] != tmprowcnts[i]){printf("w[%ld] = %ld trc[%ld] = %ld\n", i, wrkoff[i], i, tmprowcnts[i]);error++;}
-  if(error){printf("ERROR! permute_matrix_conveyor: error = %ld\n", error);}
-
-  free(wrkoff);
-  free(tmprowcnts);
-
-  /****************************************************************/
-  /* do column permutation ... this is essentially an indexgather */
-  /****************************************************************/
-  pkg_inonz_t pkg_r, pkg_e, pkg_p;
-  convey_t* cnv_r = convey_new(SIZE_MAX, 0, NULL, convey_opt_SCATTER);
-  assert( cnv_r != NULL );
-  convey_t* cnv_e = convey_new(SIZE_MAX, 0, NULL, 0);
-  assert( cnv_e != NULL );
-  convey_begin(cnv_r, sizeof(pkg_inonz_t));
-  convey_begin(cnv_e, sizeof(pkg_inonz_t));
-  bool more;
-  i=0;
-  while( more = convey_advance(cnv_r,(i == Ap->lnnz)), more | convey_advance(cnv_e, !more) ){
-    for( ; i < Ap->lnnz; i++){
-      pkg_r.i = i;
-      pkg_r.nonz = Ap->lnonzero[i] / THREADS;
-      pe = Ap->lnonzero[i] % THREADS;
-      if( !convey_push(cnv_r, &pkg_r, pe) )
-        break;
-    }
-    while( convey_pull(cnv_r, &pkg_p, &fromth2) == convey_OK ){ 
-      pkg_r.i = pkg_p.i;
-      pkg_r.nonz = lcperminv[pkg_p.nonz];
-      if( !convey_push(cnv_e, &pkg_r, fromth2) ){
-        convey_unpull(cnv_r);
-        break;
-      }
-    }
-    while( convey_pull(cnv_e, &pkg_p, NULL) == convey_OK ){ 
-      Ap->lnonzero[pkg_p.i] = pkg_p.nonz;
-    }
+  //compute rperm from rperminv 
+  for(i=0; i < A->lnumrows; i++){
+    myshmem_int64_p(rperm, lrperminv[i], i*THREADS + MYTHREAD);
   }
 
-  lgp_barrier();
-  convey_free(cnv_e);
-  convey_free(cnv_r);
+  shmem_barrier_all();
   
+  int64_t cnt = 0, off, nxtoff;
+  for(i = 0; i < A->lnumrows; i++){
+    row = lrperm[i];
+    off    = myshmem_int64_g(A->offset, row);
+    nxtoff = myshmem_int64_g(A->offset, row + THREADS);
+    cnt += nxtoff - off;
+  }
+  shmem_barrier_all();
+
+  sparsemat_t * Ap = init_matrix(A->numrows, A->numcols, cnt);
+  
+  // fill in permuted rows
+  Ap->loffset[0] = pos = 0;
+  for(i = 0; i < Ap->lnumrows; i++){
+    row = lrperm[i];
+    off    = myshmem_int64_g(A->offset, row);
+    nxtoff = myshmem_int64_g(A->offset, row + THREADS);
+    for(j = off; j < nxtoff; j++){
+      Ap->lnonzero[pos++] = myshmem_int64_g(A->nonzero, j*THREADS + row%THREADS);
+    }
+    Ap->loffset[i+1] = pos;
+  }
+  
+  assert(pos == cnt);
+
+  shmem_barrier_all();
+  
+  // finally permute column indices
+  for(i = 0; i < Ap->lnumrows; i++){
+    for(j = Ap->loffset[i]; j < Ap->loffset[i+1]; j++){
+      Ap->lnonzero[j] = myshmem_int64_g(cperminv, Ap->lnonzero[j]);      
+    }
+  }
+  shmem_barrier_all();
+
+  shmem_free(rperm);
+
   T0_printf("done\n");
   return(Ap);
 }
-
+  
 /*!
  * 
  * \page permute_matrix_page Permute Matrix
@@ -233,12 +151,12 @@ permute_matrix [-h][-e prob][-M mask][-n num][-s seed][-Z num]\n\
  -s=seed Set a seed for the random number generation.\n\
  -Z=num  Set the avg number of nonzeros per row to z (default = 10, overrides Erdos-Renyi p).\n\
 \n");
-  lgp_global_exit(0);
+  shmem_global_exit(0);
 }
 
 
 int main(int argc, char * argv[]) {
-  lgp_init(argc, argv);
+  shmem_init();
 
   int64_t i;
   int64_t models_mask = 0xF;
@@ -289,7 +207,6 @@ int main(int argc, char * argv[]) {
 
 
   double t1;
-  minavgmaxD_t stat[1];
   int64_t error = 0;
   
   int64_t * rp = rand_permp(numrows, seed);
@@ -304,19 +221,20 @@ int main(int argc, char * argv[]) {
   int64_t use_model;
   sparsemat_t * outmat;
     t1 = wall_seconds();
-    outmat = permute_matrix_conveyor(inmat, rp, cp);
-    T0_fprintf(stderr,"permute_matrix_conveyor: \n");
+    outmat = permute_matrix_shmem(inmat, rp, cp);
+    T0_fprintf(stderr,"permute_matrix_AGI:           \n");
    
     t1 = wall_seconds() - t1;
-    lgp_min_avg_max_d( stat, t1, THREADS );
-    T0_fprintf(stderr," %8.3lf seconds\n", stat->avg);    
+    double stat = myshmem_reduce_add(t1) / THREADS;
+    T0_fprintf(stderr," %8.3lf seconds\n", stat);    
     clear_matrix(outmat);
     
   clear_matrix(inmat);
-  lgp_all_free(rp);
-  lgp_all_free(cp);
-  lgp_barrier();
-  lgp_finalize();
+  shmem_free(rp);
+  shmem_free(cp);
+  shmem_barrier_all();
+  shmem_finalize();
   return(error);
 }
+
 
