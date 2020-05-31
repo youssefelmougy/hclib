@@ -36,17 +36,16 @@
 // 
  *****************************************************************/ 
 
-/*! \file ig_agi.upc
- * \brief The intuitive implementation of indexgather that uses single word gets to shared addresses.
+/*! \file ig_shmem.cpp
+ * \brief An implementation of indexgather that uses single word gets to shared addresses.
  */
 
+#include <stdio.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <assert.h>
 #include <shmem.h>
-extern "C" {
-#include <spmat.h>
-}
-
-#define THREADS shmem_n_pes()
-#define MYTHREAD shmem_my_pe()
+#include "myshmem.h"
 
 /*!
  * \brief This routine implements the single word get version indexgather
@@ -57,31 +56,33 @@ extern "C" {
  * \return average run time
  *
  */
-double ig_agi(int64_t *tgt, int64_t *index, int64_t l_num_req,  int64_t *table) {
+double ig_shmem(int64_t *tgt, int64_t *pckindx, int64_t l_num_req,  int64_t *table) {
   int64_t i;
+  int64_t pe, col;
   double tm;
-  minavgmaxD_t stat[1];
+  double stat;
 
-  lgp_barrier();
+  shmem_barrier_all();
   tm = wall_seconds();
 
   for(i = 0; i < l_num_req; i++){
-    //#pragma pgas defer_sync
-    tgt[i] = lgp_get_int64(table, index[i]);
+    col = pckindx[i] >> 16;
+    pe  = pckindx[i] & 0xffff;
+    tgt[i] = shmem_int64_g(table+col, pe);
   }
 
   tm = wall_seconds() - tm;
-  lgp_barrier();
+  shmem_barrier_all();
 
-  lgp_min_avg_max_d( stat, tm, THREADS );
+  stat = myshmem_reduce_add(tm)/THREADS;
 
-  return( stat->avg );
+  return stat;
 }
 
 int64_t ig_check_and_zero(int64_t use_model, int64_t *tgt, int64_t *index, int64_t l_num_req) {
   int64_t errors=0;
   int64_t i;
-  lgp_barrier();
+  shmem_barrier_all();
   for(i=0; i<l_num_req; i++){
     if(tgt[i] != (-1)*(index[i] + 1)){
       errors++;
@@ -94,18 +95,17 @@ int64_t ig_check_and_zero(int64_t use_model, int64_t *tgt, int64_t *index, int64
   }
   if( errors > 0 )
     fprintf(stderr,"ERROR: %ld: %ld total errors on thread %d\n", use_model, errors, MYTHREAD);
-  lgp_barrier();
+  shmem_barrier_all();
   return(errors);
 }
 
 int main(int argc, char * argv[]) {
-  lgp_init(argc, argv);
-  
+  shmem_init();
   char hostname[1024];
   hostname[1023] = '\0';
   gethostname(hostname, 1023);
   fprintf(stderr,"Hostname: %s rank: %d\n", hostname, MYTHREAD);
-
+  
   int64_t i;
   int64_t ltab_siz = 100000;
   int64_t l_num_req  = 1000000;      // number of requests per thread
@@ -125,17 +125,17 @@ int main(int argc, char * argv[]) {
   T0_fprintf(stderr,"Running ig on %d PEs\n", THREADS);
   T0_fprintf(stderr,"Number of Request / PE           (-n)= %ld\n", l_num_req );
   T0_fprintf(stderr,"Table size / PE                  (-T)= %ld\n", ltab_siz);
-
+  
   // Allocate and populate the shared table array 
   int64_t tab_siz = ltab_siz*THREADS;
-  int64_t * table  = (int64_t*)lgp_all_alloc(tab_siz, sizeof(int64_t)); assert(table != NULL);
-  int64_t *ltable  = lgp_local_part(int64_t, table);
+  int64_t * table  = (int64_t*)shmem_malloc(ltab_siz* sizeof(int64_t)); assert(table != NULL);
+  int64_t *ltable  = table;
   // fill the table with the negative of its shared index
   // so that checking is easy
   for(i=0; i<ltab_siz; i++)
     ltable[i] = (-1)*(i*THREADS + MYTHREAD + 1);
   
-  // As in the histo example, index is used by the _agi version.
+  // As in the histo example, index is used by the * version.
   // pckindx is used my the buffered versions
   int64_t *index   =  (int64_t*)calloc(l_num_req, sizeof(int64_t)); assert(index != NULL);
   int64_t *pckindx =  (int64_t*)calloc(l_num_req, sizeof(int64_t)); assert(pckindx != NULL);
@@ -151,12 +151,12 @@ int main(int argc, char * argv[]) {
 
   int64_t *tgt  =  (int64_t*)calloc(l_num_req, sizeof(int64_t)); assert(tgt != NULL);
 
-  lgp_barrier();
+  shmem_barrier_all();
 
   int64_t use_model;
   double laptime = 0.0;
 
-        laptime = ig_agi(tgt, index, l_num_req,  ltable);
+        laptime = ig_shmem(tgt, pckindx, l_num_req,  ltable);
 
      T0_fprintf(stderr,"  %8.3lf seconds\n", laptime);
    
@@ -167,12 +167,12 @@ int main(int argc, char * argv[]) {
     T0_fprintf(stderr,"YOU FAILED!!!!\n");
   } 
 
-  lgp_barrier();
-  lgp_all_free(table);
+  shmem_barrier_all();
+  shmem_free(table);
   free(index);
   free(pckindx);
   free(tgt);
-  lgp_finalize();
-  return(0);
+  shmem_finalize();
+  return 0;
 }
 

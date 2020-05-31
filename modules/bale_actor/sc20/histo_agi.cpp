@@ -81,35 +81,27 @@ int main(int argc, char * argv[]) {
   char hostname[1024];
   hostname[1023] = '\0';
   gethostname(hostname, 1023);
-  printf("Hostname: %s rank: %d\n", hostname, MYTHREAD);
+  fprintf(stderr,"Hostname: %s rank: %d\n", hostname, MYTHREAD);
 
-  int64_t buf_cnt = 1024;
-  int64_t models_mask = 0; // run all the programing models
   int64_t l_num_ups  = 1000000;     // per thread number of requests (updates)
   int64_t lnum_counts = 1000;       // per thread size of the table
-  int64_t cores_per_node = 0;       // Default to 0 so it won't give misleading bandwidth numbers
 
   int64_t i;
 
   int printhelp = 0;
   int opt;
-  while( (opt = getopt(argc, argv, "hb:M:n:c:T:")) != -1 ) {
+  while( (opt = getopt(argc, argv, "hn:T:")) != -1 ) {
     switch(opt) {
     case 'h': printhelp = 1; break;
-    case 'b': sscanf(optarg,"%ld" ,&buf_cnt);  break;
-    case 'M': sscanf(optarg,"%ld" ,&models_mask);  break;
     case 'n': sscanf(optarg,"%ld" ,&l_num_ups);  break;
     case 'T': sscanf(optarg,"%ld" ,&lnum_counts);  break;
-    case 'c': sscanf(optarg,"%ld" ,&cores_per_node); break;
     default:  break;
     }
   }
 
-  T0_fprintf(stderr,"Running histo on %d threads\n", THREADS);
-  T0_fprintf(stderr,"buf_cnt (number of buffer pkgs)      (-b)= %ld\n", buf_cnt);
-  T0_fprintf(stderr,"Number updates / thread              (-n)= %ld\n", l_num_ups);
-  T0_fprintf(stderr,"Table size / thread                  (-T)= %ld\n", lnum_counts);
-  T0_fprintf(stderr,"models_mask                          (-M)= %ld\n", models_mask);
+  T0_fprintf(stderr,"Running histo on %d PEs\n", THREADS);
+  T0_fprintf(stderr,"Number updates / PE              (-n)= %ld\n", l_num_ups);
+  T0_fprintf(stderr,"Table size / PE                  (-T)= %ld\n", lnum_counts);
   fflush(stderr);
 
 
@@ -138,19 +130,16 @@ int main(int argc, char * argv[]) {
     pe  = indx % THREADS;
     pckindx[i]  =  (lindx << 16L) | (pe & 0xffff);
   }
-  double volume_per_node = (8*l_num_ups*cores_per_node)*(1.0E-9);
 
   lgp_barrier();
 
   int64_t use_model;
   double laptime = 0.0;
-  double injection_bw = 0.0;
   int64_t num_models = 0L;               // number of models that are executed
 
       laptime = histo_agi(index, l_num_ups, counts);
       num_models++;
 
-    injection_bw = volume_per_node / laptime;
     T0_fprintf(stderr,"  %8.3lf seconds\n", laptime);
 
   lgp_barrier();
