@@ -39,30 +39,33 @@
 /*! \file toposort.upc
  * \brief Demo application that does a toposort on a permuted upper triangular matrix
  */
-#include "shmem.h"
-extern "C" {
-#include "spmat.h"
-}
+#include <stdio.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <assert.h>
+#include <math.h>
+#include <shmem.h>
+#include "myshmem.h"
 
-double copied_toposort_matrix_agi(SHARED int64_t *rperm, SHARED int64_t *cperm, sparsemat_t *mat, sparsemat_t *tmat) {
+double toposort_matrix_shmem(int64_t *rperm, int64_t *cperm, sparsemat_t *mat, sparsemat_t *tmat) {
   //T0_printf("Running Toposort with UPC ...");
   int64_t nr = mat->numrows;
   int64_t nc = mat->numcols;
   int64_t col2;
 
-  SHARED int64_t * queue  = (int64_t*)lgp_all_alloc(nr+THREADS, sizeof(int64_t));
-  int64_t * lqueue  = lgp_local_part(int64_t, queue);
-  SHARED int64_t * rowsum = (int64_t*)lgp_all_alloc(nr+THREADS, sizeof(int64_t));
-  int64_t *lrowsum = lgp_local_part(int64_t, rowsum);
-  SHARED int64_t * rowcnt = (int64_t*)lgp_all_alloc(nr+THREADS, sizeof(int64_t));
-  int64_t *lrowcnt = lgp_local_part(int64_t, rowcnt);
+  int64_t * queue  = (int64_t*)myshmem_global_malloc(nr+THREADS, sizeof(int64_t));
+  int64_t * lqueue  = queue;
+  int64_t * rowsum = (int64_t*)myshmem_global_malloc(nr+THREADS, sizeof(int64_t));
+  int64_t *lrowsum = rowsum;
+  int64_t * rowcnt = (int64_t*)myshmem_global_malloc(nr+THREADS, sizeof(int64_t));
+  int64_t *lrowcnt = rowcnt;
 
-  SHARED int64_t * S_end = (int64_t*)lgp_all_alloc(THREADS, sizeof(int64_t));
-  int64_t *lS_end = lgp_local_part(int64_t, S_end);
+  int64_t * S_end = (int64_t*)myshmem_global_malloc(THREADS, sizeof(int64_t));
+  int64_t *lS_end = S_end;
   int64_t start, end;
 
-  SHARED int64_t * pivots = (int64_t*)lgp_all_alloc(THREADS, sizeof(int64_t));
-  int64_t *lpivots = lgp_local_part(int64_t, pivots);
+  int64_t * pivots = (int64_t*)myshmem_global_malloc(THREADS, sizeof(int64_t));
+  int64_t *lpivots = pivots;
   lpivots[0] = 0L;
   int64_t i, j;
 
@@ -79,7 +82,7 @@ double copied_toposort_matrix_agi(SHARED int64_t *rperm, SHARED int64_t *cperm, 
   }
   //S_end[MYTHREAD] = end;
   lS_end[0] = end;
-  lgp_barrier();
+  shmem_barrier_all();
 
   // we a pick a row with a single nonzero = col.
   // setting rperm[pos] = row and cprem[pos] = col
@@ -100,7 +103,7 @@ double copied_toposort_matrix_agi(SHARED int64_t *rperm, SHARED int64_t *cperm, 
 
   double t1 = wall_seconds();
 
-  int work_to_do = lgp_reduce_add_l(end - start);
+  int work_to_do = myshmem_reduce_add(end - start);
   int64_t pos, l_row, S_col, S_row, S_indx, colcount, level = 0;
   int64_t old_row_sum, old_row_cnt, l_pos;
 
@@ -111,47 +114,50 @@ double copied_toposort_matrix_agi(SHARED int64_t *rperm, SHARED int64_t *cperm, 
       S_col = lrowsum[l_row];  // see cool trick
 
       // claim our spot on the diag
-      pos = lgp_fetch_and_inc(pivots, 0);
-      lgp_put_int64(rperm, l_row*THREADS + MYTHREAD, nr - 1 - pos);
-      lgp_put_int64(cperm, S_col, nc - 1 - pos);
+      pos = shmem_int64_atomic_fetch_inc(pivots,0);
+      myshmem_int64_p(rperm, l_row*THREADS + MYTHREAD, nr - 1 - pos);
+      myshmem_int64_p(cperm, S_col, nc - 1 - pos);
 
       // use the global version of tmat to look at this column (tmat's row)
       // tmat->offset[S_col] is the offset local to S_col%THREADS
-      S_indx = lgp_get_int64(tmat->offset, S_col) * THREADS + S_col % THREADS;
-      colcount = lgp_get_int64(tmat->offset, S_col+THREADS) - lgp_get_int64(tmat->offset,S_col);
+      S_indx = myshmem_int64_g(tmat->offset, S_col) * THREADS + S_col % THREADS;
+      colcount = myshmem_int64_g(tmat->offset, S_col+THREADS) - myshmem_int64_g(tmat->offset,S_col);
       for(j=0; j < colcount; j++) {
-        S_row = lgp_get_int64(tmat->nonzero, S_indx + j*THREADS );
+        S_row = myshmem_int64_g(tmat->nonzero, S_indx + j*THREADS );
         assert((S_row) < mat->numrows);
-        old_row_cnt = lgp_fetch_and_add(rowcnt, S_row, -1L);
-        old_row_sum = lgp_fetch_and_add(rowsum, S_row, (-1L)*S_col);
+        int64_t lindex = S_row/shmem_n_pes();
+        int64_t pe = S_row % shmem_n_pes();
+        old_row_cnt = shmem_int64_atomic_fetch_add(rowcnt+lindex, -1L, pe);
+        old_row_sum = shmem_int64_atomic_fetch_add(rowsum+lindex, (-1L)*S_col, pe);
         if( old_row_cnt == 2L ) {
-          l_pos = lgp_fetch_and_inc(S_end, S_row % THREADS);
-          lgp_put_int64(queue, l_pos*THREADS + S_row%THREADS , S_row / THREADS);
+          int64_t index = S_row % THREADS;
+          int64_t lindex = index/shmem_n_pes();
+          int64_t pe = index % shmem_n_pes();
+          l_pos = shmem_int64_atomic_fetch_inc(S_end+lindex, pe);
+          myshmem_int64_p(queue, l_pos*THREADS + S_row%THREADS , S_row / THREADS);
         }
       }
     }
-    lgp_barrier();
+    shmem_barrier_all();
     assert( lS_end[0] >= end );
     end = lS_end[0];
-    work_to_do = lgp_reduce_add_l(end - start);
+    work_to_do = myshmem_reduce_add(end - start);
   }
 
-  minavgmaxD_t stat[1];
   t1 = wall_seconds() - t1;
-  lgp_min_avg_max_d( stat, t1, THREADS );
+  double stat = myshmem_reduce_add(t1)/THREADS;
 
-
-  if(lgp_get_int64(pivots,0) != nr){
+  if(myshmem_int64_g(pivots,0) != nr){
     printf("ERROR! toposort_matrix_upc_orig: found %ld pivots but expected %ld!\n", pivots[0], nr);
     exit(1);
   }
-  lgp_all_free(queue);
-  lgp_all_free(rowsum);
-  lgp_all_free(rowcnt);
-  lgp_all_free(S_end);
-  lgp_all_free(pivots);
+  shmem_free(queue);
+  shmem_free(rowsum);
+  shmem_free(rowcnt);
+  shmem_free(S_end);
+  shmem_free(pivots);
   //T0_printf("done\n");
-  return(stat->avg);
+  return stat;
 }
 
 /*!
@@ -244,7 +250,7 @@ topo [-h][-b count][-M mask][-n num][-f filename][-Z num][-e prob][-D]\n\
  -e prob use an Erdos Renyi matrix where prob is the probability of an entry in matrix being non-zero \n\
  -D debugging flag that dumps out input and output files.\n\
 \n");
-  lgp_global_exit(0);
+  shmem_global_exit(0);
 }
 
 
@@ -258,7 +264,7 @@ topo [-h][-b count][-M mask][-n num][-f filename][-Z num][-e prob][-D]\n\
  * \param dump_files debugging flag
  * \return 0 on success, 1 otherwise
  */
-int check_is_triangle(sparsemat_t * mat, SHARED int64_t * rperminv, SHARED int64_t * cperminv, int64_t dump_files) {
+int check_is_triangle(sparsemat_t * mat, int64_t * rperminv, int64_t * cperminv, int64_t dump_files) {
   sparsemat_t * mat2;
   int ret = 0;
 
@@ -298,20 +304,20 @@ sparsemat_t * generate_toposort_input(int64_t numrows, double prob, int64_t rand
 
   // get row and column permutations
   t = wall_seconds();
-  SHARED int64_t * rperminv = rand_permp(numrows, 1230+MYTHREAD);
-  SHARED int64_t * cperminv = rand_permp(numcols, 45+MYTHREAD);
+  int64_t * rperminv = rand_permp(numrows, 1230+MYTHREAD);
+  int64_t * cperminv = rand_permp(numcols, 45+MYTHREAD);
   T0_printf("generate perms time %lf\n", wall_seconds() - t);
-  lgp_barrier();
+  shmem_barrier_all();
 
   if(!rperminv || !cperminv){
     T0_printf("ERROR: topo_rand_permp returns NULL!\n");fflush(0);
     return(NULL);
   }
 
-  int64_t * lrperminv = lgp_local_part(int64_t, rperminv);
-  int64_t * lcperminv = lgp_local_part(int64_t, cperminv);
+  int64_t * lrperminv = rperminv;
+  int64_t * lcperminv = cperminv;
 
-  lgp_barrier();
+  shmem_barrier_all();
   t = wall_seconds();
   sparsemat_t * mat = permute_matrix(omat, rperminv, cperminv);
   T0_printf("permute matrix time %lf\n", wall_seconds() - t);
@@ -321,18 +327,18 @@ sparsemat_t * generate_toposort_input(int64_t numrows, double prob, int64_t rand
     return(NULL);
   }
 
-  lgp_barrier();
+  shmem_barrier_all();
 
   clear_matrix( omat );
   free(omat);
-  lgp_all_free(rperminv);
-  lgp_all_free(cperminv);
+  shmem_free(rperminv);
+  shmem_free(cperminv);
 
   return( mat );
 }
 
 int main(int argc, char * argv[]) {
-  lgp_init(argc, argv);
+  shmem_init();
 
   int64_t i, j, fromth, lnnz, start, end;
   int64_t pe, row, col, idx;
@@ -345,7 +351,7 @@ int main(int argc, char * argv[]) {
   int64_t pos = 0;
 
   double erdos_renyi_prob = 0.0;
-  int64_t models_mask = ALL_Models;
+  int64_t models_mask = 0xF;
   int64_t printhelp = 0;
   int64_t read_graph = 0;
   char filename[64];
@@ -391,28 +397,28 @@ int main(int argc, char * argv[]) {
   sparsemat_t * tmat = transpose_matrix(mat);
   if(!tmat){T0_printf("ERROR: tmat is NULL!\n"); exit(1);}
 
-  lgp_barrier();
+  shmem_barrier_all();
 
   T0_fprintf(stderr,"Run toposort on mat (and tmat) ...\n");
   // arrays to hold the row and col permutations
-  SHARED int64_t *rperminv2 = (int64_t*)lgp_all_alloc(numrows, sizeof(int64_t));
-  SHARED int64_t *cperminv2 = (int64_t*)lgp_all_alloc(numcols, sizeof(int64_t));
+  int64_t *rperminv2 = (int64_t*)myshmem_global_malloc(numrows, sizeof(int64_t));
+  int64_t *cperminv2 = (int64_t*)myshmem_global_malloc(numcols, sizeof(int64_t));
   double gb_th  = (mat->numrows + mat->numcols*2 + mat->nnz*2)*8;
 
   int64_t use_model;
   double laptime = 0.0;
 
-      T0_fprintf(stderr,"      AGI: \n");
-      laptime = copied_toposort_matrix_agi(rperminv2, cperminv2, mat, tmat);
+      T0_fprintf(stderr,"      shmem: \n");
+      laptime = toposort_matrix_shmem(rperminv2, cperminv2, mat, tmat);
 
-    lgp_barrier();
+    shmem_barrier_all();
     T0_fprintf(stderr,"  %8.3lf seconds\n", laptime);
 
     if( check_is_triangle(mat, rperminv2, cperminv2, dump_files) ) {
       printf("\nERROR: After toposort_matrix_upc: mat2 is not upper-triangular!\n");
     }
 
-  lgp_barrier();
-  lgp_finalize();
+  shmem_barrier_all();
+  shmem_finalize();
   return(0);
 }

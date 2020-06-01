@@ -1,12 +1,11 @@
 
-#ifndef MYSHMEM_H
-#define MYSHMEM_H
-
-#define THREADS shmem_n_pes()
-#define MYTHREAD shmem_my_pe()
+#ifndef MYUPC_H
+#define MYUPC_H
 
 #include <time.h>
 #include <sys/time.h>
+
+upc_atomicdomain_t * upc_atomic_domain;
 
 double wall_seconds() {
   struct timeval tp;
@@ -19,76 +18,43 @@ double wall_seconds() {
 
 #define T0_printf if(MYTHREAD==0) printf
 
-#define myshmem_global_malloc(nblock_on_all_threads,blocksize) shmem_malloc( ( ( (size_t)(nblock_on_all_threads)+(shmem_n_pes())-1)/(shmem_n_pes()) ) *(blocksize) ) \
-
-void myshmem_int64_p(int64_t *addr, size_t index, int64_t val) {
-    int64_t pe = index % shmem_n_pes();
-    int64_t local_index = index / shmem_n_pes();
-    shmem_int64_p(addr+local_index, val, pe);
-}
-
-int64_t myshmem_int64_g(int64_t *addr, size_t index) {
-    int64_t pe = index % shmem_n_pes();
-    int64_t local_index = index / shmem_n_pes();
-    return shmem_int64_g(addr+local_index, pe);
-}
-
-static void *setup_shmem_reduce_workdata(long **psync, size_t xsize) {
-  void *work;
-  int i;
-
-  work=shmem_malloc(_SHMEM_REDUCE_MIN_WRKDATA_SIZE*xsize);
-  *psync=(long *)shmem_malloc(_SHMEM_REDUCE_SYNC_SIZE*sizeof(long));
-  for(i=0;i<_SHMEM_REDUCE_SYNC_SIZE;++i) {
-    (*psync)[i]=_SHMEM_SYNC_VALUE;
+int64_t myupc_reduce_add_l(int64_t myval){
+  static shared int64_t *dst=NULL, * src;
+  if (dst==NULL) {
+      dst = upc_all_alloc(THREADS, sizeof(int64_t));
+      src = upc_all_alloc(THREADS, sizeof(int64_t));
   }
-  shmem_barrier_all();
-  return work;
+  src[MYTHREAD] = myval;
+  upc_barrier;
+  upc_all_reduceL(dst, src, UPC_ADD, THREADS, 1, NULL, UPC_IN_NOSYNC || UPC_OUT_NOSYNC);
+  upc_barrier;
+  return dst[0];
 }
 
-double myshmem_reduce_add(double myval){
-  static double *buff=NULL, *work;
-  static long *sync;
-  if (buff==NULL) {
-    buff=(double*)shmem_malloc(2*sizeof(double));
-    work=(double*)setup_shmem_reduce_workdata(&sync,sizeof(double));
+double myupc_reduce_add_d(double myval){
+  static shared double *dst=NULL, * src;
+  if (dst==NULL) {
+      dst = upc_all_alloc(THREADS, sizeof(double));
+      src = upc_all_alloc(THREADS, sizeof(double));
   }
-  buff[0]=myval;
-
-  shmem_double_sum_to_all(&buff[1],buff,1,0,0,shmem_n_pes(),work,sync);
-
-  shmem_barrier_all();
-  return buff[1];
+  src[MYTHREAD] = myval;
+  upc_barrier;
+  upc_all_reduceD(dst, src, UPC_ADD, THREADS, 1, NULL, UPC_IN_NOSYNC || UPC_OUT_NOSYNC);
+  upc_barrier;
+  return dst[0];
 }
 
-int64_t myshmem_reduce_add(int64_t myval){
-  static int64_t *buff=NULL, *work;
-  static long *sync;
-  if (buff==NULL) {
-    buff=(int64_t*)shmem_malloc(2*sizeof(int64_t));
-    work=(int64_t*)setup_shmem_reduce_workdata(&sync,sizeof(int64_t));
+int64_t myupc_reduce_max_l(int64_t myval){
+  static shared int64_t *dst=NULL, * src;
+  if (dst==NULL) {
+      dst = upc_all_alloc(THREADS, sizeof(int64_t));
+      src = upc_all_alloc(THREADS, sizeof(int64_t));
   }
-  buff[0]=myval;
-
-  shmem_long_sum_to_all(&buff[1],buff,1,0,0,shmem_n_pes(),work,sync);
-
-  shmem_barrier_all();
-  return buff[1];
-}
-
-int64_t myshmem_reduce_max(int64_t myval){
-  static int64_t *buff=NULL, *work;
-  static long *sync;
-  if (buff==NULL) {
-    buff=(int64_t*)shmem_malloc(2*sizeof(int64_t));
-    work=(int64_t*)setup_shmem_reduce_workdata(&sync,sizeof(int64_t));
-  }
-  buff[0]=myval;
-
-  shmem_long_max_to_all(&buff[1],buff,1,0,0,shmem_n_pes(),work,sync);
-
-  shmem_barrier_all();
-  return buff[1];
+  src[MYTHREAD] = myval;
+  upc_barrier;
+  upc_all_reduceL(dst, src, UPC_MAX, THREADS, 1, NULL, UPC_IN_NOSYNC || UPC_OUT_NOSYNC);
+  upc_barrier;
+  return dst[0];
 }
 
 /*! \struct sparsemat_t spmat.h
@@ -122,9 +88,9 @@ typedef struct sparsemat_t {
   int64_t numcols;              //!< the nonzeros have values between 0 and numcols
   int64_t nnz;                  //!< total number of nonzeros in the matrix
   int64_t lnnz;                 //!< the number of nonzeros on this PE
-  int64_t * offset;      //!< the row offsets into the array of nonzeros
+  shared int64_t * offset;      //!< the row offsets into the array of nonzeros
   int64_t * loffset;            //!< the row offsets for the row with affinity to this PE
-  int64_t * nonzero;     //!< the global array of nonzeros
+  shared int64_t * nonzero;     //!< the global array of nonzeros
   int64_t * lnonzero;           //!< the nonzeros with affinity to this PE
 }sparsemat_t;
 
@@ -137,30 +103,31 @@ typedef struct sparsemat_t {
  * \ingroup spmatgrp
  */
 sparsemat_t * init_matrix(int64_t numrows, int64_t numcols, int64_t nnz_this_thread) {
-  sparsemat_t * mat = (sparsemat_t *)calloc(1, sizeof(sparsemat_t));
+  sparsemat_t * mat = calloc(1, sizeof(sparsemat_t));
   mat->local = 0;
   mat->numrows  = numrows;
   mat->lnumrows = (numrows + THREADS - MYTHREAD - 1)/THREADS;
   mat->numcols  = numcols;  
-  mat->offset   = (int64_t*)myshmem_global_malloc(mat->numrows + THREADS, sizeof(int64_t));
+  mat->offset   = upc_all_alloc(mat->numrows + THREADS, sizeof(int64_t));
   if(mat->offset == NULL){
     T0_printf("ERROR: init_matrix: could not allocate %ld bytes for offset array\n", mat->numrows*8);
     return(NULL);
   }
-  mat->loffset  =  mat->offset;
-  int64_t max = myshmem_reduce_max(nnz_this_thread);
-  int64_t total = myshmem_reduce_add(nnz_this_thread);
-  mat->nonzero = (int64_t*)myshmem_global_malloc(max*THREADS, sizeof(int64_t));
+  mat->loffset  = (int64_t*)( mat->offset+MYTHREAD);
+  int64_t max = myupc_reduce_max_l(nnz_this_thread);
+  int64_t total = myupc_reduce_add_l(nnz_this_thread);
+  mat->nonzero = upc_all_alloc(max*THREADS, sizeof(int64_t));
   if(mat->nonzero == NULL){
     T0_printf("ERROR: init_matrix: could not allocate %ld bytes for nonzero array (max = %ld)\n", max*THREADS*8, max);
     return(NULL);
   }
-  mat->lnonzero = mat->nonzero;
+  mat->lnonzero = (int64_t*)((mat->nonzero)+MYTHREAD);
   mat->nnz = total;
   mat->lnnz = nnz_this_thread;
 
   return(mat);
 }
+
 
 /*! \brief frees the space allocated for a sparse matrix
  * \param mat pointer to the sparse matrix
@@ -171,8 +138,8 @@ void clear_matrix(sparsemat_t * mat) {
     free(mat->lnonzero);
     free(mat->loffset);
   }else{
-    shmem_free(mat->nonzero);
-    shmem_free(mat->offset);
+    upc_all_free(mat->nonzero);
+    upc_all_free(mat->offset);
   }
 }
 
@@ -191,23 +158,20 @@ sparsemat_t * transpose_matrix_agi(sparsemat_t *A) {
   
   // find the number of nnz.s per thread
 
-  int64_t * shtmp = (int64_t *)myshmem_global_malloc( A->numcols + THREADS, sizeof(int64_t));
+  shared int64_t * shtmp = upc_all_alloc( A->numcols + THREADS, sizeof(int64_t));
   if( shtmp == NULL ) return(NULL);
-  int64_t * l_shtmp =  shtmp;
+  int64_t * l_shtmp = (int64_t*)(shtmp+MYTHREAD);
   int64_t lnc = (A->numcols + THREADS - MYTHREAD - 1)/THREADS;
   for(i=0; i < lnc; i++)
     l_shtmp[i] = 0;
-  shmem_barrier_all();
+  upc_barrier;
 
   for( i=0; i< A->lnnz; i++) {                   // histogram the column counts of A
     assert( A->lnonzero[i] < A->numcols );
     assert( A->lnonzero[i] >= 0 ); 
-    int64_t index = A->lnonzero[i];
-    int64_t lindex = index/shmem_n_pes();
-    int64_t pe = index % shmem_n_pes();
-    pos = shmem_int64_atomic_fetch_inc(shtmp+lindex, pe);
+    upc_atomic_relaxed(upc_atomic_domain, &pos, UPC_INC, &shtmp[A->lnonzero[i]], NULL, NULL);
   }
-  shmem_barrier_all();
+  upc_barrier;
 
 
   lnnz = 0;
@@ -218,7 +182,7 @@ sparsemat_t * transpose_matrix_agi(sparsemat_t *A) {
   At = init_matrix(A->numcols, A->numrows, lnnz);
   if(!At){printf("ERROR: transpose_matrix_upc: init_matrix failed!\n");return(NULL);}
 
-  int64_t sum = myshmem_reduce_add(lnnz);      // check the histogram counted everything
+  int64_t sum = myupc_reduce_add_l(lnnz);      // check the histogram counted everything
   assert( A->nnz == sum ); 
 
   // compute the local offsets
@@ -230,23 +194,21 @@ sparsemat_t * transpose_matrix_agi(sparsemat_t *A) {
   for(i = 0; i < At->lnumrows; i++)
     l_shtmp[i] = MYTHREAD + THREADS * (At->loffset[i]);
     
-  shmem_barrier_all();
+  upc_barrier;
 
   //redistribute the nonzeros 
   for(row=0; row<A->lnumrows; row++) {
     for(j=A->loffset[row]; j<A->loffset[row+1]; j++){
-      int64_t index = A->lnonzero[j];
-      int64_t lindex = index/shmem_n_pes();
-      int64_t pe = index % shmem_n_pes();
-      pos = shmem_int64_atomic_fetch_add(shtmp+lindex,  (int64_t) THREADS, pe);
-      myshmem_int64_p(At->nonzero, pos, row*THREADS + MYTHREAD);
+      int64_t add_value = (int64_t) THREADS;
+      upc_atomic_relaxed(upc_atomic_domain, &pos, UPC_ADD, &shtmp[A->lnonzero[j]], &add_value, NULL);
+      (At->nonzero)[pos] = row*THREADS + MYTHREAD;
     }
   }
-  shmem_barrier_all();
+  upc_barrier;
 
-  //shmem_barrier_all();
+  //upc_barrier;
   //if(!MYTHREAD)printf("done\n");
-  shmem_free(shtmp);
+  upc_all_free(shtmp);
 
   return(At);
 }
@@ -266,7 +228,7 @@ int sort_nonzeros( sparsemat_t *mat) {
   for(i = 0; i < mat->lnumrows; i++){
      qsort( &(mat->lnonzero[mat->loffset[i]]), mat->loffset[i+1] - mat->loffset[i], sizeof(int64_t), nz_comp );
   }
-  shmem_barrier_all();
+  upc_barrier;
   return(0);
 }
 
@@ -276,7 +238,7 @@ int sort_nonzeros( sparsemat_t *mat) {
  *
  * This is wrapper for implementations written in the different models.
  * It is interest enough to be its own apps, one should experiment with it
- * within the apps framework. 
+ * within the apps framework.
  *
  * \ingroup spmatgrp
  */
@@ -287,7 +249,7 @@ sparsemat_t * transpose_matrix(sparsemat_t *omat) {
   //A = transpose_matrix_exstack2(omat, 1024);
   //A = transpose_matrix_conveyor(omat);
   if(!A){return(NULL);}
-  
+
   sort_nonzeros(A);
   return(A);
 }
@@ -341,7 +303,7 @@ sparsemat_t * gen_erdos_renyi_graph_triangle_dist(int n, double p, int64_t unit_
   if(unit_diag)
     lnnz_orig += ln;
   
-  shmem_barrier_all();
+  upc_barrier;
 
   sparsemat_t * A = init_matrix(n, n, lnnz_orig);
   if(!A){T0_printf("ERROR: gen_er_graph_dist: A is NULL!\n"); return(NULL);}
@@ -440,7 +402,7 @@ sparsemat_t * gen_erdos_renyi_graph_dist(int n, double p, int64_t unit_diag, int
     }
     A2->loffset[i+1] = lnnz;
   }
-  shmem_barrier_all();
+  upc_barrier;
   clear_matrix(U);
   clear_matrix(L);
   free(U); free(L);
@@ -448,41 +410,41 @@ sparsemat_t * gen_erdos_renyi_graph_dist(int n, double p, int64_t unit_diag, int
 }
 
 /*!
-  \brief Compute partial sums across threads.  
+  \brief Compute partial sums across threads.
   In the formulas below, \a m represents <tt>MYTHREAD</tt>.
   \note This function must be called on all threads.
   \param x input value \f$x_m\f$
-  \return \f$\sum_{i<=m} x_i\f$ 
+  \return \f$\sum_{i<=m} x_i\f$
 * \ingroup libgetputgrp
 */
-int64_t myshmem_partial_add(int64_t x) {
+int64_t myupc_partial_add(int64_t x) {
 
-  int64_t * tmp = (int64_t*)myshmem_global_malloc(THREADS, sizeof(int64_t));
+  shared int64_t * tmp = upc_all_alloc(THREADS, sizeof(int64_t));
   int64_t out = 0;
-  
-  myshmem_int64_p(tmp, MYTHREAD, x);
 
-  shmem_barrier_all();
+  tmp[MYTHREAD] = x;
+
+  upc_barrier;
 
   for (int i = 0; i <= MYTHREAD; i++) {
-    out += myshmem_int64_g(tmp, i);
+    out += tmp[i];
   }
 
-  shmem_barrier_all();
+  upc_barrier;
 
   return out;
 }
 
-/*! 
-  \brief Compute prior partial sums (not including this value) across threads.  
+/*!
+  \brief Compute prior partial sums (not including this value) across threads.
   In the formulas below, \a m represents <tt>MYTHREAD</tt>.
   \note This function must be called on all threads.
   \param x input value \f$x_m\f$
-  \return \f$\sum_{i<m} x_i\f$ 
+  \return \f$\sum_{i<m} x_i\f$
   * \ingroup libgetputgrp
   */
-int64_t myshmem_prior_add(int64_t x) {
-  return myshmem_partial_add(x) - x;
+int64_t myupc_prior_add(int64_t x) {
+  return myupc_partial_add(x) - x;
 }
 
 /*! \brief checks that a global array is in fact a permutation
@@ -491,26 +453,26 @@ int64_t myshmem_prior_add(int64_t x) {
  * \return 1 if it is permutation
  * \ingroup spmatgrp
  */
-int is_perm(int64_t * perm, int64_t N) {
+int is_perm(shared int64_t * perm, int64_t N) {
   int64_t i;
-  int64_t * lperm = perm;
-  int64_t * flag = (int64_t*)myshmem_global_malloc(N, sizeof(int64_t));
+  int64_t * lperm = (int64_t*)(perm+MYTHREAD);
+  shared int64_t * flag = upc_all_alloc(N, sizeof(int64_t));
   if( flag == NULL ) return(0);
-  int64_t * lflag = flag;
+  int64_t * lflag = (int64_t*)(flag+MYTHREAD);
   int64_t l_N = (N + THREADS - MYTHREAD - 1)/THREADS;
 
   for(i = 0; i < l_N; i++) 
     lflag[i] = 0;
-  shmem_barrier_all();
+  upc_barrier;
   for(i = 0; i < l_N; i++) 
-   myshmem_int64_p(flag, lperm[i], 1);
-  shmem_barrier_all();
+    flag[lperm[i]] = 1;
+  upc_barrier;
   int64_t err = 0L;
   for(i = 0; i < l_N; i++) 
     if(lflag[i] == 0) 
       err++;
-  shmem_free(flag);
-  err = myshmem_reduce_add(err);
+  upc_all_free(flag);
+  err = myupc_reduce_add_l(err);
   return(err == 0L);
 }
 
@@ -527,7 +489,7 @@ int is_perm(int64_t * perm, int64_t N) {
  * This gives a random permutation with spaces in it, then you squeeze out the spaces.
  * \ingroup spmatgrp
  */
-int64_t * rand_permp_agi(int64_t N, int seed) {  
+shared int64_t * rand_permp_agi(int64_t N, int seed) {  
   int64_t * ltarget, *lperm;
   int64_t r, i, j;
   int64_t pos, numdarts, numtargets, lnumtargets;
@@ -536,48 +498,49 @@ int64_t * rand_permp_agi(int64_t N, int seed) {
 
   //T0_printf("Entering rand_permp_atomic...");fflush(0);
 
-  int64_t * perm = (int64_t*)myshmem_global_malloc(N, sizeof(int64_t));
+  shared int64_t * perm = upc_all_alloc(N, sizeof(int64_t));
   if( perm == NULL ) return(NULL);
-  lperm = perm;
+  lperm = (int64_t*)( perm+MYTHREAD);
 
   int64_t l_N = (N + THREADS - MYTHREAD - 1)/THREADS;
   int64_t M = 2*N;
   int64_t l_M = (M + THREADS - MYTHREAD - 1)/THREADS;
 
-  int64_t * target = (int64_t*)myshmem_global_malloc(M, sizeof(int64_t));
+  shared int64_t * target = upc_all_alloc(M, sizeof(int64_t));
   if( target == NULL ) return(NULL);
-  ltarget = target;
+  ltarget = (int64_t*)(target+MYTHREAD);
   
   for(i=0; i<l_M; i++)
     ltarget[i] = -1L;
-  shmem_barrier_all();
+  upc_barrier;
 
   i=0;
   while(i < l_N){                // throw the darts until you get l_N hits
     r = lrand48() % M;
-    long lindex = r/shmem_n_pes();
-    long pe = r % shmem_n_pes();
-    if( shmem_long_atomic_compare_swap(target+lindex, -1L, (i*THREADS + MYTHREAD), pe) == (-1L) ){
+    int64_t ret, cmp_val = -1L, swap_val = i*THREADS + MYTHREAD;
+    upc_atomic_relaxed(upc_atomic_domain, &ret, UPC_CSWAP, &target[r], &cmp_val, &swap_val);
+    if( ret == (-1L) ) {
+    //if( lgp_cmp_and_swap(target, r, -1L, (i*THREADS + MYTHREAD)) == (-1L) ){
       i++;
     }
   }
-  shmem_barrier_all();
+  upc_barrier;
 
   numdarts = 0;
   for(i = 0; i < l_M; i++)    // count how many darts I got
     numdarts += (ltarget[i] != -1L );
 
-  pos = myshmem_prior_add(numdarts);    // my first index in the perm array is the number 
+  pos = myupc_prior_add(numdarts);    // my first index in the perm array is the number 
                                       // of elements produce by the smaller threads
   for(i = 0; i < l_M; i++){
     if(ltarget[i] != -1L ) {
-       myshmem_int64_p(perm, pos, ltarget[i]);
+       perm[pos] = ltarget[i];
        pos++;
     }
   }
 
-  shmem_free(target);
-  shmem_barrier_all();
+  upc_all_free(target);
+  upc_barrier;
   //T0_printf("done!\n");
   return(perm);
 }
@@ -599,8 +562,8 @@ int64_t * rand_permp_agi(int64_t N, int seed) {
  * This gives a random permutation with spaces in it, then you squeeze out the spaces.
  * \ingroup spmatgrp
  */
-int64_t * rand_permp(int64_t N, int seed) {
-  int64_t * p;
+shared int64_t * rand_permp(int64_t N, int seed) {
+  shared int64_t * p;
   p = rand_permp_agi(N, seed);
   //p = rand_permp_exstack(N, seed, 1024);
   //p = rand_permp_exstack2(N, seed, 1024);
@@ -612,230 +575,5 @@ int64_t * rand_permp(int64_t N, int seed) {
   return(p);
 }
 
-/*! \brief apply row and column permutations to a sparse matrix using straight UPC
- * \param A pointer to the original matrix
- * \param rperminv pointer to the global array holding the inverse of the row permutation
- * \param cperminv pointer to the global array holding the inverse of the column permutation
- * rperminv[i] = j means that row i of A goes to row j in matrix Ap
- * cperminv[i] = j means that col i of A goes to col j in matrix Ap
- * \return a pointer to the matrix that has been produced or NULL if the model can't be used
- * \ingroup spmatgrp
- */
-sparsemat_t * permute_matrix_agi(sparsemat_t *A, int64_t *rperminv, int64_t *cperminv) {
-  //T0_printf("Permuting matrix with single puts\n");
-  int64_t i, j, col, row, pos;
-  int64_t * lrperminv = rperminv;
-  int64_t * rperm = (int64_t*)myshmem_global_malloc(A->numrows, sizeof(int64_t));
-  if( rperm == NULL ) return(NULL);
-  int64_t *lrperm = rperm;
-
-  //compute rperm from rperminv 
-  for(i=0; i < A->lnumrows; i++){
-    myshmem_int64_p(rperm, lrperminv[i], i*THREADS + MYTHREAD);
-  }
-
-  shmem_barrier_all();
-  
-  int64_t cnt = 0, off, nxtoff;
-  for(i = 0; i < A->lnumrows; i++){
-    row = lrperm[i];
-    off    = myshmem_int64_g(A->offset, row);
-    nxtoff = myshmem_int64_g(A->offset, row + THREADS);
-    cnt += nxtoff - off;
-  }
-  shmem_barrier_all();
-
-  sparsemat_t * Ap = init_matrix(A->numrows, A->numcols, cnt);
-  
-  // fill in permuted rows
-  Ap->loffset[0] = pos = 0;
-  for(i = 0; i < Ap->lnumrows; i++){
-    row = lrperm[i];
-    off    = myshmem_int64_g(A->offset, row);
-    nxtoff = myshmem_int64_g(A->offset, row + THREADS);
-    for(j = off; j < nxtoff; j++){
-      Ap->lnonzero[pos++] = myshmem_int64_g(A->nonzero, j*THREADS + row%THREADS);
-    }
-    Ap->loffset[i+1] = pos;
-  }
-  
-  assert(pos == cnt);
-
-  shmem_barrier_all();
-  
-  // finally permute column indices
-  for(i = 0; i < Ap->lnumrows; i++){
-    for(j = Ap->loffset[i]; j < Ap->loffset[i+1]; j++){
-      Ap->lnonzero[j] = myshmem_int64_g(cperminv, Ap->lnonzero[j]);      
-    }
-  }
-  shmem_barrier_all();
-
-  shmem_free(rperm);
-
-  T0_printf("done\n");
-  return(Ap);
-}
-
-/*! \brief apply row and column permutations to a sparse matrix using straight UPC
- * \param omat pointer to the original matrix
- * \param rperminv pointer to the global array holding the inverse of the row permutation
- * \param cperminv pointer to the global array holding the inverse of the column permutation
- * rperminv[i] = j means that row i of A goes to row j in matrix Ap
- * cperminv[i] = j means that col i of A goes to col j in matrix Ap
- * \param mode which buffering model to use
- * \return a pointer to the matrix that has be computed or NULL on failure
- *
- * This is wrapper for implementations written in the different models.
- * It is interest enough to be its own apps, one should experiment with it
- * within the apps framework.
- *
- * \ingroup spmatgrp
- */
-sparsemat_t * permute_matrix(sparsemat_t *omat, int64_t *rperminv, int64_t *cperminv) {
-  return( permute_matrix_agi(omat, rperminv, cperminv) );
-  // return( permute_matrix_exstack(omat, rperminv, cperminv, 1024) );
-  //return( permute_matrix_exstack2(omat, rperminv, cperminv, 1024) );
-  //return( permute_matrix_conveyor(omat, rperminv, cperminv) );
-}
-
-/*! \brief checks that the sparse matrix is lower triangluar
- * \param A pointer to the sparse matrix
- * \param unit_diagonal set to 1 to make sure all pivots are nonzero
- * \return 0 on success, non-0 on error.
- * kind of a speciality routine to check that toposort might of worked
- * \ingroup spmatgrp
- */
-int is_lower_triangular(sparsemat_t *A, int64_t unit_diagonal) {
-  int64_t i,j, row, * ltri_rperm, * ltri_cperm;
-  int64_t err = 0, err2 = 0;
-
-  shmem_barrier_all();
-
-  /* we are hoping for an lower triangular matrix here */
-  for(i=0; i < A->lnumrows; i++){
-    int64_t global_row = i*THREADS + MYTHREAD;
-    int pivot = 0;
-    for(j=A->loffset[i]; j < A->loffset[i+1];j++){
-      if( A->lnonzero[j] > global_row ) {
-        err++;
-      }else if( A->lnonzero[j] == global_row){
-        pivot = 1;
-      }
-    }
-    if(!pivot)
-      err2++;
-  }
-
-  err = myshmem_reduce_add(err);
-  err2 = (unit_diagonal ? myshmem_reduce_add(err2) : 0);
-  if( err || err2 ){
-    //if(!MYTHREAD)printf("\nThere are %ld nz above diag. and %ld missing pivots in lower.\n", err, err2);
-    fflush(0);
-  }
-
-  shmem_barrier_all();
-
-  return(!(err || err2));
-}
-
-/*! \brief checks that the sparse matrix is upper triangluar
- * \param A pointer to the sparse matrix
- * \param unit_diagonal set to 1 to make sure all pivots are nonzero
- * \return 0 on success, non-0 on error.
- *
- * \ingroup spmatgrp
- */
-int is_upper_triangular(sparsemat_t *A, int64_t unit_diagonal) {
-  int64_t i,j, row, * ltri_rperm, * ltri_cperm;
-  int64_t err = 0, err2 = 0;
-  shmem_barrier_all();
-
-  /* we are hoping for an upper triangular matrix here */
-  for(i=0; i < A->lnumrows; i++){
-    int64_t global_row = i*THREADS + MYTHREAD;
-    int pivot = 0;
-    for(j=A->loffset[i]; j < A->loffset[i+1];j++){
-      if( A->lnonzero[j] < global_row ) {
-        err++;
-      }else if( A->lnonzero[j] == global_row){
-        pivot = 1;
-      }
-    }
-    if(!pivot)
-      err2++;
-  }
-
-  err = myshmem_reduce_add(err);
-  err2 = (unit_diagonal ? myshmem_reduce_add(err2) : 0);
-  if( err || err2 ){
-    //if(!MYTHREAD)printf("\nThere are %ld nz below diag. and %ld missing pivots in upper.\n", err, err2);
-    fflush(0);
-  }
-
-  shmem_barrier_all();
-
-  return(!(err || err2));
-}
-
-/*! \brief compare the structs that hold two sparse matrices
- * \param lmat pointer to the left sparse matrix
- * \param rmat pointer to the right sparse matrix
- * \return 0 on success
- * \ingroup spmatgrp
- */
-int compare_matrix(sparsemat_t *lmat, sparsemat_t *rmat) {
-  int i,j;
-
-  if( lmat->numrows != rmat->numrows ){
-    if(!MYTHREAD)printf("(lmat->numrows = %ld)  != (rmat->numrows = %ld)", lmat->numrows, rmat->numrows );
-    return(1);
-  }
-  if( lmat->lnumrows != rmat->lnumrows ){
-    fprintf(stderr,"THREAD %03d: (lmat->lnumrows = %ld)  != (rmat->lnumrows = %ld)", 
-            MYTHREAD, lmat->lnumrows, rmat->lnumrows );
-    return(1);
-  }
-  if( lmat->numcols != rmat->numcols ){
-    if(!MYTHREAD)printf("(lmat->numcols = %ld)  != (rmat->numcols = %ld)", lmat->numcols, rmat->numcols );
-    return(1);
-  }
-  if( lmat->nnz != rmat->nnz ){
-    if(!MYTHREAD)printf("(lmat->nnz = %ld)  != (rmat->nnz = %ld)", lmat->nnz, rmat->nnz );
-    return(1);
-  }
-  if( lmat->lnnz != rmat->lnnz ){
-    fprintf(stderr,"THREAD %03d: (lmat->lnnz = %ld)  != (rmat->lnnz = %ld)", 
-            MYTHREAD, lmat->lnnz, rmat->lnnz );
-    return(1);
-  }
-
-  if( lmat->loffset[0] != 0 || rmat->loffset[0] != 0 
-    || (lmat->loffset[0] != rmat->loffset[0] ) ){
-    if(!MYTHREAD)printf("THREAD %03d: (lmat->loffset[0] = %ld)  != (rmat->loffset[0] = %ld)", 
-       MYTHREAD, lmat->loffset[0], rmat->loffset[0] );
-    return(1);
-  }
-
-  
-  for(i = 0; i < lmat->lnumrows; i++){
-    if( lmat->loffset[i+1] != rmat->loffset[i+1] ){
-       if(!MYTHREAD)printf("THREAD %03d: (lmat->loffset[%d] = %ld)  != (rmat->loffset[%d] = %ld)", 
-          MYTHREAD, i+1, lmat->loffset[i+1], i+1, rmat->loffset[i+1] );
-       return(1);
-    }
-  }
-  
-  for(j=0; j< lmat->lnnz; j++) {
-    if( lmat->lnonzero[j] != rmat->lnonzero[j] ){
-      if(!MYTHREAD)printf("THREAD %03d: (lmat->lnonzero[%d] = %ld)  != (rmat->lnonzero[%d] = %ld)", 
-                MYTHREAD, j, lmat->lnonzero[j], j, rmat->lnonzero[j] );
-      return(1);
-    }
-  }
-
-  return(0);
-}
-
-#endif //MYSHMEM_H
+#endif //MYUPC_H
 

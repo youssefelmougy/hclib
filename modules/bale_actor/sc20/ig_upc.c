@@ -36,7 +36,7 @@
 // 
  *****************************************************************/ 
 
-/*! \file ig_shmem.cpp
+/*! \file ig_upc.cpp
  * \brief An implementation of indexgather that uses single word gets to shared addresses.
  */
 
@@ -45,8 +45,11 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <math.h>
-#include <shmem.h>
-#include "myshmem.h"
+//#include <upc.h>
+#include <upc_relaxed.h>
+#include <upc_atomic.h>
+#include <upc_collective.h>
+#include "myupc.h"
 
 /*!
  * \brief This routine implements the single word get version indexgather
@@ -57,25 +60,24 @@
  * \return average run time
  *
  */
-double ig_shmem(int64_t *tgt, int64_t *pckindx, int64_t l_num_req,  int64_t *table) {
+double ig_upc(int64_t *tgt, int64_t *index, int64_t l_num_req, shared int64_t *table) {
   int64_t i;
   int64_t pe, col;
   double tm;
   double stat;
 
-  shmem_barrier_all();
+  upc_barrier;
   tm = wall_seconds();
 
   for(i = 0; i < l_num_req; i++){
-    col = pckindx[i] >> 16;
-    pe  = pckindx[i] & 0xffff;
-    tgt[i] = shmem_int64_g(table+col, pe);
+    #pragma pgas defer_sync
+    tgt[i] = table[index[i]];
   }
 
   tm = wall_seconds() - tm;
-  shmem_barrier_all();
+  upc_barrier;
 
-  stat = myshmem_reduce_add(tm)/THREADS;
+  stat = myupc_reduce_add_d(tm)/THREADS;
 
   return stat;
 }
@@ -83,7 +85,7 @@ double ig_shmem(int64_t *tgt, int64_t *pckindx, int64_t l_num_req,  int64_t *tab
 int64_t ig_check_and_zero(int64_t use_model, int64_t *tgt, int64_t *index, int64_t l_num_req) {
   int64_t errors=0;
   int64_t i;
-  shmem_barrier_all();
+  upc_barrier;
   for(i=0; i<l_num_req; i++){
     if(tgt[i] != (-1)*(index[i] + 1)){
       errors++;
@@ -96,12 +98,11 @@ int64_t ig_check_and_zero(int64_t use_model, int64_t *tgt, int64_t *index, int64
   }
   if( errors > 0 )
     fprintf(stderr,"ERROR: %ld: %ld total errors on thread %d\n", use_model, errors, MYTHREAD);
-  shmem_barrier_all();
+  upc_barrier;
   return(errors);
 }
 
 int main(int argc, char * argv[]) {
-  shmem_init();
   char hostname[1024];
   hostname[1023] = '\0';
   gethostname(hostname, 1023);
@@ -129,8 +130,8 @@ int main(int argc, char * argv[]) {
   
   // Allocate and populate the shared table array 
   int64_t tab_siz = ltab_siz*THREADS;
-  int64_t * table  = (int64_t*)shmem_malloc(ltab_siz* sizeof(int64_t)); assert(table != NULL);
-  int64_t *ltable  = table;
+  shared int64_t * table  = upc_all_alloc(tab_siz, sizeof(int64_t)); assert(table != NULL);
+  int64_t *ltable  = (int64_t*)(table+MYTHREAD);
   // fill the table with the negative of its shared index
   // so that checking is easy
   for(i=0; i<ltab_siz; i++)
@@ -152,12 +153,12 @@ int main(int argc, char * argv[]) {
 
   int64_t *tgt  =  (int64_t*)calloc(l_num_req, sizeof(int64_t)); assert(tgt != NULL);
 
-  shmem_barrier_all();
+  upc_barrier;
 
   int64_t use_model;
   double laptime = 0.0;
 
-        laptime = ig_shmem(tgt, pckindx, l_num_req,  ltable);
+        laptime = ig_upc(tgt, index, l_num_req, table);
 
      T0_fprintf(stderr,"  %8.3lf seconds\n", laptime);
    
@@ -168,12 +169,11 @@ int main(int argc, char * argv[]) {
     T0_fprintf(stderr,"YOU FAILED!!!!\n");
   } 
 
-  shmem_barrier_all();
-  shmem_free(table);
+  upc_barrier;
+  upc_all_free(table);
   free(index);
   free(pckindx);
   free(tgt);
-  shmem_finalize();
   return 0;
 }
 

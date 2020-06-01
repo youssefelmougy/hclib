@@ -197,10 +197,10 @@ int main(int argc, char * argv[]) {
   if(erdos_renyi_prob > 1.0)
     erdos_renyi_prob = 1.0;  
   
-  T0_fprintf(stderr,"Running permute_matrix on %d threads\n", THREADS);
+  T0_fprintf(stderr,"Running permute_matrix on %d PEs\n", THREADS);
   T0_fprintf(stderr,"buf_cnt (stack size)         (-b)= %ld\n", buf_cnt);
   T0_fprintf(stderr,"Erdos-Renyi edge probability (-e)= %lf\n", erdos_renyi_prob);
-  T0_fprintf(stderr,"rows per thread (-n)             = %ld\n", l_numrows);
+  T0_fprintf(stderr,"rows per PE (-n)             = %ld\n", l_numrows);
   T0_fprintf(stderr,"Avg # of nonzeros per row    (-Z)= %ld\n", nz_per_row);
   T0_fprintf(stderr,"models_mask (-M)                 = %ld or of 1,2,4,8,16,32 for gets,classic,exstack2,conveyor,ex2cyclic,ex2goto\n", models_mask);
   T0_fprintf(stderr,"seed (-s)                        = %ld\n", seed);
@@ -222,7 +222,7 @@ int main(int argc, char * argv[]) {
   sparsemat_t * outmat;
     t1 = wall_seconds();
     outmat = permute_matrix_shmem(inmat, rp, cp);
-    T0_fprintf(stderr,"permute_matrix_AGI:           \n");
+    T0_fprintf(stderr,"permute_matrix_shmem:           \n");
    
     t1 = wall_seconds() - t1;
     double stat = myshmem_reduce_add(t1) / THREADS;

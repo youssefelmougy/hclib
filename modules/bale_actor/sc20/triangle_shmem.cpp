@@ -39,11 +39,13 @@
  * \brief Demo application that counts triangles in a graph.
  */
 
+#include <stdio.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <assert.h>
 #include <math.h>
 #include <shmem.h>
-extern "C" {
-#include <spmat.h>
-}
+#include "myshmem.h"
 
 /*!
   \page triangles_page Triangles
@@ -127,7 +129,7 @@ After the first number, the next numbers are the parameters for the two kronecke
 the sequence of numbers in half to get two sequences.\n\
 In our example above we would produce the product of K(3,4) and K(5,9).\n\
 \n");
-  lgp_global_exit(0);
+  shmem_global_exit(0);
 }
 
 
@@ -147,7 +149,7 @@ In our example above we would produce the product of K(3,4) and K(5,9).\n\
 have few triangles.
 * \return A distributed matrix which represents the adjacency matrix for the Kronecker product of all the stars (B and C lists).
  */
-
+#if 0
 sparsemat_t * generate_kronecker_graph(int64_t * B_spec, int64_t B_num, int64_t * C_spec, int64_t C_num, int mode){
 
   T0_fprintf(stderr,"Generating Mode %d Kronecker Product graph (A = B X C) with parameters:  ", mode);
@@ -159,7 +161,7 @@ sparsemat_t * generate_kronecker_graph(int64_t * B_spec, int64_t B_num, int64_t 
   sparsemat_t * B = gen_local_mat_from_stars(B_num, B_spec, mode);
   sparsemat_t * C = gen_local_mat_from_stars(C_num, C_spec, mode);   
   if(!B || !C){
-    T0_fprintf(stderr,"ERROR: triangles: error generating input!\n"); lgp_global_exit(1);
+    T0_fprintf(stderr,"ERROR: triangles: error generating input!\n"); shmem_global_exit(1);
   }
   
   T0_fprintf(stderr,"B has %ld rows/cols and %ld nnz\n", B->numrows, B->lnnz);
@@ -169,8 +171,9 @@ sparsemat_t * generate_kronecker_graph(int64_t * B_spec, int64_t B_num, int64_t 
   
   return(A);
 }
+#endif
 
-double copied_triangle_agi(int64_t *count, int64_t *sr, sparsemat_t * L, sparsemat_t * U, int64_t alg) {
+double triangle_shmem(int64_t *count, int64_t *sr, sparsemat_t * L, sparsemat_t * U, int64_t alg) {
   int64_t cnt=0;
   int64_t numpulled=0;
   int64_t l_i, ii, k, kk, w, L_i, L_j;
@@ -189,11 +192,11 @@ double copied_triangle_agi(int64_t *count, int64_t *sr, sparsemat_t * L, sparsem
 
         // NOW: get L[L_j,:] and count intersections with L[L_i,:]
         int64_t start = L->loffset[l_i];
-        int64_t kbegin = lgp_get_int64(L->offset,L_j); 
-        int64_t kend   = lgp_get_int64(L->offset, L_j + THREADS);
+        int64_t kbegin = myshmem_int64_g(L->offset,L_j); 
+        int64_t kend   = myshmem_int64_g(L->offset, L_j + THREADS);
         numpulled+=2;
         for( kk = kbegin; kk < kend; kk++){
-          w = lgp_get_int64(L->nonzero, L_j%THREADS + kk*THREADS);
+          w = myshmem_int64_g(L->nonzero, L_j%THREADS + kk*THREADS);
           numpulled++;
           assert( w < L_j );
           for(ii = start; ii < L->loffset[l_i + 1]; ii++) {
@@ -224,10 +227,10 @@ double copied_triangle_agi(int64_t *count, int64_t *sr, sparsemat_t * L, sparsem
         int64_t start = U->loffset[l_i + 1] - 1;
         int64_t smallest_col_in_row_i = U->lnonzero[U->loffset[l_i]];
         numpulled+=2;
-        int64_t kbegin = lgp_get_int64(U->offset, L_j + THREADS) - 1;
-        int64_t kend   = lgp_get_int64(U->offset,L_j);
+        int64_t kbegin = myshmem_int64_g(U->offset, L_j + THREADS) - 1;
+        int64_t kend   = myshmem_int64_g(U->offset,L_j);
         for( kk = kbegin; kk >= kend; kk--){
-          w = lgp_get_int64(U->nonzero, L_j%THREADS + kk*THREADS);
+          w = myshmem_int64_g(U->nonzero, L_j%THREADS + kk*THREADS);
           numpulled++;
           if (w < smallest_col_in_row_i) break; // there can't be any more intersections in these rows
           assert( w >= L_j );
@@ -248,21 +251,20 @@ double copied_triangle_agi(int64_t *count, int64_t *sr, sparsemat_t * L, sparsem
     
   }
 
-  lgp_barrier();
-  minavgmaxD_t stat[1];
+  shmem_barrier_all();
   t1 = wall_seconds() - t1;
-  lgp_min_avg_max_d( stat, t1, THREADS );
+  double stat = myshmem_reduce_add(t1)/ THREADS;
 
   *sr = numpulled; 
   *count = cnt;
-  return(stat->avg);
+  return(stat);
 }
 
 int main(int argc, char * argv[]) {
 
-  lgp_init(argc, argv);
+  shmem_init();
 
-  int64_t models_mask = ALL_Models;  // default is running all models
+  int64_t models_mask = 0xF;  // default is running all models
   int64_t l_numrows = 10000;         // number of a rows per thread
   int64_t nz_per_row = 35;           // target number of nonzeros per row (only for Erdos-Renyi)
   int64_t read_graph = 0L;           // read graph from a file
@@ -311,7 +313,7 @@ int main(int argc, char * argv[]) {
   T0_fprintf(stderr,"algorithm (a) = %ld (0 for L & L*U, 1 for L & U*L)\n", alg);
   
   if( printhelp )
-    lgp_global_exit(0);
+    shmem_global_exit(0);
 
   // alg = 0 only needs L
   // alg = 1 needs both U and L
@@ -320,9 +322,12 @@ int main(int argc, char * argv[]) {
   
   sparsemat_t *A, *L, *U;
   if(read_graph){
+    T0_fprintf(stderr, "Reading graph from file not supported\n");
+    assert(false);
+#if 0
     A = read_matrix_mm_to_dist(filename);
     if(!A)
-      lgp_global_exit(1);
+      shmem_global_exit(1);
     T0_fprintf(stderr,"Reading file %s...\n", filename);
     T0_fprintf(stderr, "A has %ld rows/cols and %ld nonzeros.\n", A->numrows, A->nnz);
 
@@ -336,8 +341,11 @@ int main(int argc, char * argv[]) {
       L = A;
     
     sort_nonzeros(L);
-
+#endif
   }else if (gen_kron_graph){
+    T0_fprintf(stderr, "kronecker graph not supported\n");
+    assert(false);
+#if 0
     // string should be <mode> # # ... #
     // we will break the string of numbers (#s) into two groups and create
     // two local kronecker graphs out of them.
@@ -385,22 +393,23 @@ int main(int argc, char * argv[]) {
     int64_t half = num_ints/2;
     
     L = generate_kronecker_graph(kron_specs, half, &kron_specs[half], num_ints - half, kron_graph_mode);
+#endif
   }else{
     L = gen_erdos_renyi_graph_dist(numrows, erdos_renyi_prob, 0, 1, 12345);
   }
 
-  lgp_barrier();
+  shmem_barrier_all();
   
   if(alg == 1)
     U = transpose_matrix(L);
 
-  lgp_barrier();
+  shmem_barrier_all();
 
   T0_fprintf(stderr,"L has %ld rows/cols and %ld nonzeros.\n", L->numrows, L->nnz);
   
   if(!is_lower_triangular(L, 0)){
     T0_fprintf(stderr,"ERROR: L is not lower triangular!\n");
-    lgp_global_exit(1);
+    shmem_global_exit(1);
   }
     
   T0_fprintf(stderr,"Run triangle counting ...\n");
@@ -410,18 +419,21 @@ int main(int argc, char * argv[]) {
   int64_t total_sh_refs;
 
   
-  int64_t * cc = (int64_t *)lgp_all_alloc( L->numrows, sizeof(int64_t));
-  int64_t * l_cc = lgp_local_part(int64_t, cc);
+  int64_t * cc = (int64_t *)myshmem_global_malloc( L->numrows, sizeof(int64_t));
+  int64_t * l_cc = cc;
   for(i = 0; i < L->lnumrows; i++)
     l_cc[i] = 0;
-  lgp_barrier();
+  shmem_barrier_all();
   
   /* calculate col sums */
   for(i = 0; i < L->lnnz; i++){
-    lgp_fetch_and_inc(cc, L->lnonzero[i]);
+    int64_t index = L->lnonzero[i];
+    int64_t lindex = index/shmem_n_pes();
+    int64_t pe = index % shmem_n_pes();
+    shmem_int64_atomic_fetch_inc(cc+lindex, pe);
   }
   
-  lgp_barrier();
+  shmem_barrier_all();
   
   int64_t rtimesc_calc = 0;
   for(i = 0; i < L->lnumrows; i++){
@@ -445,14 +457,14 @@ int main(int argc, char * argv[]) {
   int64_t pulls_calc = 0;
   int64_t pushes_calc = 0;
   if(alg == 0){
-    pulls_calc = lgp_reduce_add_l(rtimesc_calc);
-    pushes_calc = lgp_reduce_add_l(rchoose2_calc);
+    pulls_calc =  myshmem_reduce_add(rtimesc_calc);
+    pushes_calc = myshmem_reduce_add(rchoose2_calc);
   }else{
-    pushes_calc = lgp_reduce_add_l(rtimesc_calc);
-    pulls_calc = lgp_reduce_add_l(cchoose2_calc);
+    pushes_calc = myshmem_reduce_add(rtimesc_calc);
+    pulls_calc =  myshmem_reduce_add(cchoose2_calc);
   }
 
-  lgp_all_free(cc);
+  shmem_free(cc);
   
   T0_fprintf(stderr,"Calculated: Pulls = %ld\n            Pushes = %ld\n\n",pulls_calc, pushes_calc);
   
@@ -463,12 +475,12 @@ int main(int argc, char * argv[]) {
   total_tri_cnt = 0;
   sh_refs = 0;
   total_sh_refs = 0;
-  T0_fprintf(stderr,"      AGI: \n");
-  laptime = copied_triangle_agi(&tri_cnt, &sh_refs, L, U, alg);
+  T0_fprintf(stderr,"      shmem: \n");
+  laptime = triangle_shmem(&tri_cnt, &sh_refs, L, U, alg);
     
-  lgp_barrier();
-  total_tri_cnt = lgp_reduce_add_l(tri_cnt);
-  total_sh_refs = lgp_reduce_add_l(sh_refs);
+  shmem_barrier_all();
+  total_tri_cnt = myshmem_reduce_add(tri_cnt);
+  total_sh_refs = myshmem_reduce_add(sh_refs);
   T0_fprintf(stderr,"  %8.3lf seconds: %16ld triangles\n", laptime, total_tri_cnt);
   //T0_fprintf(stderr,"%16ld shared refs\n", total_sh_refs);
   if((correct_answer >= 0) && (total_tri_cnt != (int64_t)correct_answer)){
@@ -479,8 +491,8 @@ int main(int argc, char * argv[]) {
     correct_answer = total_tri_cnt;
   }
   
-  lgp_barrier();
-  lgp_finalize();
+  shmem_barrier_all();
+  shmem_finalize();
   return(0);
 }
 

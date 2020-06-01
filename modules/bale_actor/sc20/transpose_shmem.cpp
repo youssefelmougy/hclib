@@ -36,10 +36,13 @@
 // 
  *****************************************************************/ 
 
-#include "shmem.h"
-extern "C" {
-#include <spmat.h>
-}
+#include <stdio.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <assert.h>
+#include <math.h>
+#include <shmem.h>
+#include "myshmem.h"
 
 /*! \file transpose_matrix.upc
  * \brief Demo program that runs the variants of transpose_matrix kernel.
@@ -66,122 +69,78 @@ extern "C" {
  * - -Z=z Set the avg number of nonzeros per row to z (default = 10, overrides Erdos-Renyi p).
  */
 
-sparsemat_t* copied_transpose_matrix_conveyor(sparsemat_t* A) {
-    typedef struct pkg_rowcol_t {
-        int64_t row;    
-        int64_t col;
-    } pkg_rowcol_t;
-
-    int64_t ret, pe;
-    int64_t lnnz, i, col, row, fromth; 
-    int64_t idx, idxp;
-
-    /* get the colcnts */
-    int64_t lnumcols = (A->numrows + THREADS - MYTHREAD - 1) / THREADS;  
-    int64_t* lcounts = (int64_t*)calloc(lnumcols, sizeof(int64_t));
-    lgp_barrier();
+sparsemat_t * transpose_matrix_shmem(sparsemat_t *A) {
+  int64_t counted_nnz_At;
+  int64_t lnnz, i, j, col, row, fromth, idx;
+  int64_t pos;
+  sparsemat_t * At;
   
-    convey_t* cnv_cnt = convey_new(SIZE_MAX, 0, NULL, convey_opt_SCATTER);
-    convey_begin(cnv_cnt, sizeof(long));
+  //T0_printf("UPC version of matrix transpose...");
+  
+  // find the number of nnz.s per thread
 
-    lnnz = 0;
-    i = 0;
-    while (convey_advance(cnv_cnt, (i == A->lnnz))) {
-        for (;i < A->lnnz; i++) {
-            col = A->lnonzero[i] / THREADS;
-            pe = A->lnonzero[i] % THREADS;
-            
-            if (!convey_push(cnv_cnt, &col, pe))
-            break;
-        }
+  int64_t * shtmp = (int64_t *)myshmem_global_malloc( A->numcols + THREADS, sizeof(int64_t));
+  if( shtmp == NULL ) return(NULL);
+  int64_t * l_shtmp =  shtmp;
+  int64_t lnc = (A->numcols + THREADS - MYTHREAD - 1)/THREADS;
+  for(i=0; i < lnc; i++)
+    l_shtmp[i] = 0;
+  shmem_barrier_all();
 
-        while (convey_pull(cnv_cnt, &idxp, NULL) == convey_OK) {
-            lcounts[idxp]++; 
-            lnnz++;
-        }
+  for( i=0; i< A->lnnz; i++) {                   // histogram the column counts of A
+    assert( A->lnonzero[i] < A->numcols );
+    assert( A->lnonzero[i] >= 0 ); 
+    int64_t index = A->lnonzero[i];
+    int64_t lindex = index/shmem_n_pes();
+    int64_t pe = index % shmem_n_pes();
+    pos = shmem_int64_atomic_fetch_inc(shtmp+lindex, pe);
+  }
+  shmem_barrier_all();
+
+
+  lnnz = 0;
+  for( i = 0; i < lnc; i++) {
+    lnnz += l_shtmp[i];
+  }
+  
+  At = init_matrix(A->numcols, A->numrows, lnnz);
+  if(!At){printf("ERROR: transpose_matrix_upc: init_matrix failed!\n");return(NULL);}
+
+  int64_t sum = myshmem_reduce_add(lnnz);      // check the histogram counted everything
+  assert( A->nnz == sum ); 
+
+  // compute the local offsets
+  At->loffset[0] = 0;
+  for(i = 1; i < At->lnumrows+1; i++)
+    At->loffset[i] = At->loffset[i-1] + l_shtmp[i-1];
+
+  // get the global indices of the start of each row of At
+  for(i = 0; i < At->lnumrows; i++)
+    l_shtmp[i] = MYTHREAD + THREADS * (At->loffset[i]);
+    
+  shmem_barrier_all();
+
+  //redistribute the nonzeros 
+  for(row=0; row<A->lnumrows; row++) {
+    for(j=A->loffset[row]; j<A->loffset[row+1]; j++){
+      int64_t index = A->lnonzero[j];
+      int64_t lindex = index/shmem_n_pes();
+      int64_t pe = index % shmem_n_pes();
+      pos = shmem_int64_atomic_fetch_add(shtmp+lindex,  (int64_t) THREADS, pe);
+      myshmem_int64_p(At->nonzero, pos, row*THREADS + MYTHREAD);
     }
-    convey_free(cnv_cnt);
+  }
+  shmem_barrier_all();
 
-    int64_t sum = lgp_reduce_add_l(lnnz);
-    assert(A->nnz == sum); 
-  
-    sparsemat_t* At = init_matrix(A->numcols, A->numrows, lnnz);
-    if (!At) {
-        printf("ERROR: transpose_matrix: init_matrix failed!\n");
-        
-        return nullptr;
-    }
+  //shmem_barrier_all();
+  //if(!MYTHREAD)printf("done\n");
+  shmem_free(shtmp);
 
-    /* convert colcounts to offsets */
-    At->loffset[0] = 0;  
-    for (i = 1; i < At->lnumrows+1; i++)
-        At->loffset[i] = At->loffset[i-1] + lcounts[i-1];
-
-    lgp_barrier();
-  
-    /* redistribute the nonzeros */
-    int64_t* wrkoff = (int64_t*)calloc(At->lnumrows, sizeof(int64_t));
-    if (!wrkoff) {
-        printf("ERROR: transpose_matrix: wrkoff alloc fail!\n");
-        
-        return nullptr;
-    }
-
-    pkg_rowcol_t pkg_nz, pkg_p;
-  
-    convey_t* cnv_rd = convey_new(SIZE_MAX, 0, NULL, convey_opt_SCATTER);
-    convey_begin(cnv_rd, sizeof(pkg_rowcol_t));
-
-    uint64_t numtimespop = 0;
-    i = row = 0;
-    while (convey_advance(cnv_rd, (i == A->lnnz))) {
-        for(; i < A->lnnz; i++) {
-            while(i == A->loffset[row+1]) 
-                row++;
-        
-            pkg_nz.row = row * THREADS + MYTHREAD;
-            pkg_nz.col = A->lnonzero[i] / THREADS;
-            pe = A->lnonzero[i] % THREADS;
-
-            if (!convey_push(cnv_rd, &pkg_nz, pe))
-                break;
-        }
-
-        while (convey_pull(cnv_rd, &pkg_p, NULL ) == convey_OK) {
-            numtimespop++;
-            At->lnonzero[At->loffset[pkg_p.col] + wrkoff[pkg_p.col]] = pkg_p.row;
-            wrkoff[pkg_p.col]++;
-        }
-    }
-  
-    lgp_barrier();
-    convey_free(cnv_rd);
-
-    numtimespop = lgp_reduce_add_l(numtimespop);
-    if (numtimespop != A->nnz) {
-        printf("ERROR: numtimespop %ld \n", numtimespop);
-        printf("%d wrkoff %ld\n", MYTHREAD, wrkoff[0]);
-
-        return nullptr;
-    }
-
-    for (i = 0; i < At->lnumrows; i++) {
-        if (wrkoff[i] != lcounts[i]) {
-            printf("ERROR: %d wrkoff[%ld] = %ld !=  %ld = lcounts[%ld]\n", MYTHREAD, i, wrkoff[i], lcounts[i], i);
-        
-            return nullptr;
-        }
-    }
-  
-  
-    free(wrkoff);
-    free(lcounts);
-
-    return At;
+  return(At);
 }
 
 int main(int argc, char** argv) {
-    lgp_init(argc, argv);
+    shmem_init();
 
     int64_t i;
     int64_t check = 1;
@@ -230,7 +189,6 @@ int main(int argc, char** argv) {
 
 
     double t1;
-    minavgmaxD_t stat[1];
     int64_t error = 0;
     
     inmat = gen_erdos_renyi_graph_dist(numrows, erdos_renyi_prob, 0, 3, seed + 2);
@@ -241,12 +199,12 @@ int main(int argc, char** argv) {
     }
   
     t1 = wall_seconds();
-    outmat = copied_transpose_matrix_conveyor(inmat);
-    T0_fprintf(stderr, "Conveyor:     \n");
+    outmat = transpose_matrix_shmem(inmat);
+    T0_fprintf(stderr, "shmem:     \n");
     t1 = wall_seconds() - t1;
 
-    lgp_min_avg_max_d(stat, t1, THREADS);
-    T0_fprintf(stderr, " %8.3lf seconds\n", stat->avg);
+    double stat = myshmem_reduce_add(t1)/THREADS;
+    T0_fprintf(stderr, " %8.3lf  seconds\n", stat);
 
     /* correctness check */
     if (check) {      
@@ -259,8 +217,7 @@ int main(int argc, char** argv) {
 
     clear_matrix(outmat);
     clear_matrix(inmat);
-    lgp_barrier();
-    lgp_finalize();
-    
-    return error;
+    shmem_barrier_all();
+    shmem_finalize();
+    return(error);
 }

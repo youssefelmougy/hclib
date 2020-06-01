@@ -192,13 +192,11 @@ int main (int argc, char* argv[]) {
 
     lgp_init(argc, argv);
 
-    int64_t buf_cnt = 1024;
     int64_t models_mask = ALL_Models;  // default is running all models
     int64_t l_numrows = 10000;         // number of a rows per thread
     int64_t nz_per_row = 35;           // target number of nonzeros per row (only for Erdos-Renyi)
     int64_t read_graph = 0L;           // read graph from a file
     char filename[64];
-    int64_t cores_per_node = 0;
   
     double t1;
     int64_t i, j;
@@ -210,11 +208,9 @@ int main (int argc, char* argv[]) {
   
     int printhelp = 0;
     int opt;
-    while ((opt = getopt(argc, argv, "hb:c:M:n:f:a:e:K:")) != -1) {
+    while ((opt = getopt(argc, argv, "hM:n:f:a:e:K:")) != -1) {
         switch (opt) {
             case 'h': printhelp = 1; break;
-            case 'b': sscanf(optarg,"%ld", &buf_cnt);  break;
-            case 'c': sscanf(optarg,"%ld" ,&cores_per_node); break;
             case 'M': sscanf(optarg,"%ld", &models_mask);  break;
             case 'n': sscanf(optarg,"%ld", &l_numrows); break;
             case 'f': read_graph = 1; sscanf(optarg,"%s", filename); break;
