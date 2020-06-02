@@ -4,6 +4,7 @@ include $(HCLIB_ROOT)/../modules/bale_actor/inc/hclib_bale_actor.post.mak
 
 CXX ?= CC
 UPCC ?= upcc
+SRUN ?= srun
 
 TARGETS=histo_agi histo_shmem histo_conveyor histo_selector \
         ig_agi ig_shmem ig_conveyor ig_selector \
@@ -28,7 +29,10 @@ all: $(TARGETS)
 	$(CXX) -g -O3 -o $@ $^ -lm
 
 %_upc: %_upc.c
-	$(UPCC) -O -o $@ $^ -lm
+	$(UPCC) -gupc -O -o $@ $^ -lm
+
+test:
+	for target in $(TARGETS); do $(SRUN) ./$$target; done
 
 clean:
 	rm -f $(TARGETS)
