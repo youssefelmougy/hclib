@@ -333,7 +333,7 @@ topo [-h][-b count][-M mask][-n num][-f filename][-Z num][-e prob][-D]\n\
  -h prints this help message\n\
  -b count is the number of packages in an exstack(2) buffer\n\
  -M mask is the or of 1,2,4,8,16 for the models: agi,exstack,exstack2,conveyor,alternate\n\
- -n num is the number of rows per thread\n\
+ -n num is the number of rows per PE\n\
  -f filename read the input matrix from filename (in Matrix Market format)\n\
  -Z num use an Erdos Renyi matrix with num being the expected number of nonzeros in a row \n\
  -e prob use an Erdos Renyi matrix where prob is the probability of an entry in matrix being non-zero \n\
@@ -442,7 +442,6 @@ int main(int argc, char * argv[]) {
 
   int64_t l_numrows = 100000;
   double  nz_per_row = 10;
-  int64_t buf_cnt = 1024;
   int64_t rand_seed =  MYTHREAD*MYTHREAD*10000 + 5;
   int64_t numrows, numcols;
   int64_t pos = 0;
@@ -453,14 +452,11 @@ int main(int argc, char * argv[]) {
   int64_t read_graph = 0;
   char filename[64];
   int64_t dump_files = 0;
-  int64_t cores_per_node = 1;
 
   int opt;
-  while( (opt = getopt(argc, argv, "hb:c:M:n:f:Z:p:")) != -1 ) {
+  while( (opt = getopt(argc, argv, "hM:n:f:Z:p:")) != -1 ) {
     switch(opt) {
     case 'h': printhelp = 1; break;
-    case 'b': sscanf(optarg,"%ld" , &buf_cnt);  break;
-    case 'c': sscanf(optarg,"%ld" ,&cores_per_node); break;
     case 'M': sscanf(optarg,"%ld" , &models_mask);  break;
     case 'n': sscanf(optarg,"%ld" , &l_numrows);  break;
     case 'f': read_graph = 1; sscanf(optarg,"%s", filename); break;
@@ -483,9 +479,8 @@ int main(int argc, char * argv[]) {
     nz_per_row = erdos_renyi_prob * numrows;
   }
 
-  T0_fprintf(stderr,"Running toposort on %d threads\n", THREADS);
-  T0_fprintf(stderr,"buf_cnt (stack size)           (-b)   %ld\n", buf_cnt);
-  T0_fprintf(stderr,"Number of rows per thread      (-n)   %ld\n", l_numrows);
+  T0_fprintf(stderr,"Running toposort on %d PEs\n", THREADS);
+  T0_fprintf(stderr,"Number of rows per PE      (-n)   %ld\n", l_numrows);
   T0_fprintf(stderr,"Avg # of nonzeros per row      (-Z)   %2.2lf\n", nz_per_row);
   T0_fprintf(stderr,"Erdos-Renyi edge probability   (-e)   %lf\n", erdos_renyi_prob);
   T0_fprintf(stderr,"task mask (M) = %ld (should be 1,2,4,8,16 for agi, exstack, exstack2, conveyors, alternates\n", models_mask);

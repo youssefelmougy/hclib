@@ -36,10 +36,16 @@
 // 
  *****************************************************************/ 
 
-#include <shmem.h>
-extern "C" {
-#include <spmat.h>
-}
+#include <stdio.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <assert.h>
+#include <math.h>
+#include <upc.h>
+//#include <upc_relaxed.h>
+#include <upc_atomic.h>
+#include <upc_collective.h>
+#include "myupc.h"
 
 /*! \file permute_matrix.upc
  * \brief Demo program that runs the variants of permute_matrix kernel. This program generates
@@ -56,29 +62,29 @@ extern "C" {
  * \return a pointer to the matrix that has been produced or NULL if the model can't be used
  * \ingroup spmatgrp
  */
-sparsemat_t * copied_permute_matrix_agi(sparsemat_t *A, int64_t *rperminv, int64_t *cperminv) {
+sparsemat_t * permute_matrix_upc(sparsemat_t *A, shared int64_t *rperminv, shared int64_t *cperminv) {
   //T0_printf("Permuting matrix with single puts\n");
   int64_t i, j, col, row, pos;
-  int64_t * lrperminv = lgp_local_part(int64_t, rperminv);
-  int64_t * rperm = (int64_t*)lgp_all_alloc(A->numrows, sizeof(int64_t));
+  int64_t * lrperminv = (int64_t *)(rperminv+MYTHREAD);
+  shared int64_t * rperm = upc_all_alloc(A->numrows, sizeof(int64_t));
   if( rperm == NULL ) return(NULL);
-  int64_t *lrperm = lgp_local_part(int64_t, rperm);
+  int64_t *lrperm = (int64_t *)(rperm+MYTHREAD);
 
   //compute rperm from rperminv 
   for(i=0; i < A->lnumrows; i++){
-    lgp_put_int64(rperm, lrperminv[i], i*THREADS + MYTHREAD);
+    rperm[lrperminv[i]] = i*THREADS + MYTHREAD;
   }
 
-  lgp_barrier();
+  upc_barrier;
   
   int64_t cnt = 0, off, nxtoff;
   for(i = 0; i < A->lnumrows; i++){
     row = lrperm[i];
-    off    = lgp_get_int64(A->offset, row);
-    nxtoff = lgp_get_int64(A->offset, row + THREADS);
+    off    = (A->offset)[row];
+    nxtoff = (A->offset)[row + THREADS];
     cnt += nxtoff - off;
   }
-  lgp_barrier();
+  upc_barrier;
 
   sparsemat_t * Ap = init_matrix(A->numrows, A->numcols, cnt);
   
@@ -86,27 +92,27 @@ sparsemat_t * copied_permute_matrix_agi(sparsemat_t *A, int64_t *rperminv, int64
   Ap->loffset[0] = pos = 0;
   for(i = 0; i < Ap->lnumrows; i++){
     row = lrperm[i];
-    off    = lgp_get_int64(A->offset, row);
-    nxtoff = lgp_get_int64(A->offset, row + THREADS);
+    off    = (A->offset)[row];
+    nxtoff = (A->offset)[row + THREADS];
     for(j = off; j < nxtoff; j++){
-      Ap->lnonzero[pos++] = lgp_get_int64(A->nonzero, j*THREADS + row%THREADS);
+      Ap->lnonzero[pos++] = (A->nonzero)[j*THREADS + row%THREADS];
     }
     Ap->loffset[i+1] = pos;
   }
   
   assert(pos == cnt);
 
-  lgp_barrier();
+  upc_barrier;
   
   // finally permute column indices
   for(i = 0; i < Ap->lnumrows; i++){
     for(j = Ap->loffset[i]; j < Ap->loffset[i+1]; j++){
-      Ap->lnonzero[j] = lgp_get_int64(cperminv, Ap->lnonzero[j]);      
+      Ap->lnonzero[j] = cperminv[Ap->lnonzero[j]];
     }
   }
-  lgp_barrier();
+  upc_barrier;
 
-  lgp_all_free(rperm);
+  upc_all_free(rperm);
 
   T0_printf("done\n");
   return(Ap);
@@ -148,12 +154,11 @@ permute_matrix [-h][-e prob][-M mask][-n num][-s seed][-Z num]\n\
  -s=seed Set a seed for the random number generation.\n\
  -Z=num  Set the avg number of nonzeros per row to z (default = 10, overrides Erdos-Renyi p).\n\
 \n");
-  lgp_global_exit(0);
+  upc_global_exit(0);
 }
 
 
 int main(int argc, char * argv[]) {
-  lgp_init(argc, argv);
 
   int64_t i;
   int64_t models_mask = 0xF;
@@ -182,6 +187,8 @@ int main(int argc, char * argv[]) {
   }
   if(printhelp) usage();
 
+  upc_atomic_domain = upc_all_atomicdomain_alloc(UPC_INT64, UPC_ADD|UPC_INC|UPC_CSWAP, 0);
+
   numrows = l_numrows * THREADS;
 
   /* set erdos_renyi_prob and nz_per_row to be consistent */
@@ -204,11 +211,10 @@ int main(int argc, char * argv[]) {
 
 
   double t1;
-  minavgmaxD_t stat[1];
   int64_t error = 0;
   
-  int64_t * rp = rand_permp(numrows, seed);
-  int64_t * cp = rand_permp(numrows, seed + 1);  
+  shared int64_t * rp = rand_permp(numrows, seed);
+  shared int64_t * cp = rand_permp(numrows, seed + 1);  
   
   sparsemat_t * inmat = gen_erdos_renyi_graph_dist(numrows, erdos_renyi_prob, 0, 3, seed + 2);
   if(inmat == NULL){
@@ -219,19 +225,18 @@ int main(int argc, char * argv[]) {
   int64_t use_model;
   sparsemat_t * outmat;
     t1 = wall_seconds();
-    outmat = copied_permute_matrix_agi(inmat, rp, cp);
+    outmat = permute_matrix_upc(inmat, rp, cp);
     T0_fprintf(stderr,"permute_matrix_AGI:           \n");
    
     t1 = wall_seconds() - t1;
-    lgp_min_avg_max_d( stat, t1, THREADS );
-    T0_fprintf(stderr," %8.3lf seconds\n", stat->avg);    
+    double stat = myupc_reduce_add_d(t1)/THREADS;
+    T0_fprintf(stderr," %8.3lf seconds\n", stat);    
     clear_matrix(outmat);
     
   clear_matrix(inmat);
-  lgp_all_free(rp);
-  lgp_all_free(cp);
-  lgp_barrier();
-  lgp_finalize();
+  upc_all_free(rp);
+  upc_all_free(cp);
+  upc_barrier;
   return(error);
 }
 

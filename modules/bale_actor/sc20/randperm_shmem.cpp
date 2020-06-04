@@ -35,12 +35,15 @@
 //  OF THE POSSIBILITY OF SUCH DAMAGE.
 // 
  *****************************************************************/ 
-#include "shmem.h"
-extern "C" {
-#include <spmat.h>
-}
+#include <stdio.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <assert.h>
+#include <math.h>
+#include <shmem.h>
+#include "myshmem.h"
 
-/*! \file randperm_conveyor.cpp
+/*! \file randperm_shmem.cpp
  * \brief Demo program that runs the variants of randperm kernel. This program
  * generates a random permutation in parallel.
  */
@@ -69,154 +72,65 @@ randperm [-h][-n num][-M mask][-s seed]
 - -s=seed Set a seed for the random number generation.
  */
 
-int64_t* copied_rand_permp_conveyor(int64_t N, int seed) {
-    int ret;
-    int64_t i, j, cnt, pe, pos, fromth, istart, iend;
-    int64_t val;
-  
-    int64_t lN = (N + THREADS - MYTHREAD - 1) / THREADS;
-    int64_t M = N * 2;
-    int64_t lM = (M + THREADS - MYTHREAD - 1) / THREADS;
-
-    typedef struct pkg_t {
-        int64_t idx; 
-        int64_t val;
-    } pkg_t;
-
-    int64_t* perm = (int64_t*)lgp_all_alloc(N, sizeof(int64_t));
-    if (!perm) return nullptr;
-    int64_t* lperm = lgp_local_part(int64_t, perm);
-
-    int64_t* target = (int64_t*)lgp_all_alloc(M, sizeof(int64_t));
-    if (!target) return nullptr;
-    int64_t* ltarget = lgp_local_part(int64_t, target);
-  
-    /* initialize perm[i] = i,  the darts*/
-    for (i = 0; i < lN; i++)
-        lperm[i] = i * THREADS + MYTHREAD;
-
-    /* initialize target[i] = -1 */
-    for (i = 0; i < lM; i++)
-        ltarget[i] = -1L;
+int64_t* rand_permp_shmem(int64_t N, int seed) {
+    int64_t* ltarget, *lperm;
+    int64_t r, i, j;
+    int64_t pos, numdarts, numtargets, lnumtargets;
 
     if (seed != 0) srand48(seed);
 
-    lgp_barrier();
-  
-    double t1 = wall_seconds();
-    int64_t rejects = 0;
-    pkg_t pkg;
-    convey_t* conv_throw = convey_new(SIZE_MAX, 0, NULL, convey_opt_PROGRESS);
-    convey_t* conv_reply = convey_new(SIZE_MAX, 0, NULL, convey_opt_PROGRESS);
-    if (!conv_throw) { return nullptr; }
-    if (!conv_reply) { return nullptr; }
+    //T0_printf("Entering rand_permp_atomic...");fflush(0);
 
-    convey_begin(conv_throw, sizeof(pkg_t));
-    convey_begin(conv_reply, sizeof(int64_t));
+    int64_t* perm = (int64_t*)myshmem_global_malloc(N, sizeof(int64_t));
+    if (!perm) return nullptr;
+    lperm = perm;
+
+    int64_t l_N = (N + THREADS - MYTHREAD - 1) / THREADS;
+    int64_t M = 2 * N;
+    int64_t l_M = (M + THREADS - MYTHREAD - 1) / THREADS;
+
+    int64_t* target = (int64_t*)myshmem_global_malloc(M, sizeof(int64_t));
+    if (!target) return nullptr;
+    ltarget = target;
   
-    bool more;
-    int64_t hits = 0;
-    iend = 0;
-    while (more = convey_advance(conv_throw, (hits == lN)), more | convey_advance(conv_reply, !more)) {
-        i = iend;
-        while (i < lN) {
-            int64_t r = lrand48() % M;
-            pe = r % THREADS;
-            pkg.idx = r / THREADS;
-            pkg.val = lperm[i];
-            
-            if (!convey_push(conv_throw, &pkg, pe)) { break; }
+    for(i=0; i<l_M; i++)
+        ltarget[i] = -1L;
+  
+    shmem_barrier_all();
+
+    i = 0;
+    while (i < l_N) {                // throw the darts until you get l_N hits
+        r = lrand48() % M;
+        long lindex = r/shmem_n_pes();
+        long pe = r % shmem_n_pes();
+        if( shmem_long_atomic_compare_swap(target+lindex, -1L, (i*THREADS + MYTHREAD), pe) == (-1L) ){
             i++;
-        }
-
-        iend = i;
-    
-        while (convey_pull(conv_throw, &pkg, &fromth) == convey_OK) {
-            if (ltarget[pkg.idx] == -1L) {
-                val = pkg.val;
-                if (!convey_push(conv_reply, &val, fromth)) {
-                    convey_unpull(conv_throw);
-                    break;
-                }
-
-                ltarget[pkg.idx] = pkg.val;
-            } else {
-                val = -(pkg.val + 1);
-                if (!convey_push(conv_reply, &val, fromth)) {
-                    convey_unpull(conv_throw);
-                    rejects++;
-                    break;
-                }
-            }
-        }
-
-        while (convey_pull(conv_reply, &val, NULL) == convey_OK) {
-            if (val < 0L) {
-                lperm[--iend] = -val - 1;
-            } else {
-                hits++;
-            }
         }
     }
   
-    lgp_barrier();
-    t1 = wall_seconds() - t1;
-    //T0_printf("phase 1 t1 = %8.3lf\n", t1);
-    //rejects = lgp_reduce_add_l(rejects);
-    //T0_printf("rejects = %ld\n", rejects);
+    shmem_barrier_all();
 
-    convey_free(conv_throw);
-    convey_reset(conv_reply);
-    convey_begin(conv_reply, sizeof(int64_t));
-  
-    /* now locally pack the values you have in target */
-    cnt = 0;
-    for (i = 0; i < lM; i++) {
+    numdarts = 0;
+    for (i = 0; i < l_M; i++)    // count how many darts I got
+        numdarts += (ltarget[i] != -1L);
+
+    pos = myshmem_prior_add(numdarts);    // my first index in the perm array is the number 
+                                        // of elements produce by the smaller threads
+    for (i = 0; i < l_M; i++) {
         if (ltarget[i] != -1L) {
-            ltarget[cnt++] = ltarget[i];
-        }
-    }
-    lgp_barrier();
-  
-    /* sanity check */
-    int64_t total = lgp_reduce_add_l(cnt);
-    if (total != N) {
-        T0_printf("ERROR: rand_permp_convey: total = %ld should be %ld\n", total, N);
-        return nullptr;
-    }
-
-    int64_t offset = lgp_prior_add_l(cnt);
-    pe = offset % THREADS;
-    i = pos = 0;
-    while (convey_advance(conv_reply, (i == cnt))) {
-        while (i < cnt) {
-            if (!convey_push(conv_reply, &ltarget[i], pe)) break;
-        
-            i++;
-            pe++;
-
-            if (pe == THREADS) pe = 0;
-        }
-
-        while (convey_pull(conv_reply, &val, &fromth)) {
-            lperm[pos++] = val;
+            myshmem_int64_p(perm, pos, ltarget[i]);
+            pos++;
         }
     }
 
-    pos = lgp_reduce_add_l(pos);
-    if (pos != N) {
-        printf("ERROR! in rand_permp_convey! sum of pos = %ld lN = %ld\n", pos, N);
-        return nullptr;
-    }
-    lgp_barrier();
-  
-    convey_free(conv_reply);
-
+    shmem_free(target);
+    shmem_barrier_all();
+    //T0_printf("done!\n");
     return perm;
 }
 
 int main(int argc, char* argv[]) {
-    lgp_init(argc, argv);
+    shmem_init();
   
     int64_t i;
     int64_t models_mask = 0xF;
@@ -250,31 +164,29 @@ int main(int argc, char* argv[]) {
     numrows = l_numrows * THREADS;
 
     double t1;
-    minavgmaxD_t stat[1];
     int64_t error = 0;
     int64_t* out;
 
     int64_t use_model;
   
     t1 = wall_seconds();
-    out = copied_rand_permp_conveyor(numrows, seed);
+    out = rand_permp_shmem(numrows, seed);
     t1 = wall_seconds() - t1;
-
-    T0_fprintf(stderr, "rand_permp_conveyor:           \n");
-    lgp_min_avg_max_d(stat, t1, THREADS);
-    T0_fprintf(stderr, " %8.3lf seconds\n", stat->avg);
-
+    
+    T0_fprintf(stderr, "rand_permp_shmem:           \n");
+    double stat = myshmem_reduce_add(t1)/THREADS;
+    T0_fprintf(stderr, " %8.3lf seconds\n", stat);
     if (!is_perm(out, numrows)) {
         error++;
         T0_printf("\nERROR: rand_permp_%ld failed!\n\n", use_model & models_mask);
     }
-    lgp_all_free(out);
+    shmem_free(out);
   
     if (error) {
         T0_fprintf(stderr,"BALE FAIL!!!!\n"); 
     }
   
-    lgp_finalize();
+    shmem_finalize();
   
     return error;
 }

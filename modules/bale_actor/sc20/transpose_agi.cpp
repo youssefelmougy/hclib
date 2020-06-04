@@ -1,7 +1,7 @@
 /******************************************************************
 //
 //
-//  Copyright(C) 2018, Institute for Defense Analyses
+//  Copyright(C) 2019, Institute for Defense Analyses
 //  4850 Mark Center Drive, Alexandria, VA; 703-845-2500
 //  This material may be reproduced by or for the US Government
 //  pursuant to the copyright license under the clauses at DFARS
@@ -141,19 +141,15 @@ int main(int argc, char** argv) {
     int printhelp = 0;
     double erdos_renyi_prob = 0.0;
     int64_t nz_per_row = -1;
-    int64_t buf_cnt = 1024;
     int64_t l_numrows = 10000;
     int64_t numrows;
     int64_t seed = 101892+MYTHREAD;
     sparsemat_t * inmat, * outmat;
-    int64_t cores_per_node = 1;  
 
     int opt; 
-    while( (opt = getopt(argc, argv, "hb:c:Ce:n:M:s:Z:")) != -1 ) {
+    while( (opt = getopt(argc, argv, "hCe:n:M:s:Z:")) != -1 ) {
         switch(opt) {
             case 'h': printhelp = 1; break;
-            case 'b': sscanf(optarg,"%ld", &buf_cnt);  break;
-            case 'c': sscanf(optarg,"%ld" ,&cores_per_node); break;
             case 'C': check = 0; break;
             case 'e': sscanf(optarg,"%lf", &erdos_renyi_prob); break;
             case 'n': sscanf(optarg,"%ld", &l_numrows);   break;
@@ -177,8 +173,7 @@ int main(int argc, char** argv) {
     if (erdos_renyi_prob > 1.0)
         erdos_renyi_prob = 1.0;
 
-    T0_fprintf(stderr,"Running transpose_matrix on %d threads\n", THREADS);
-    T0_fprintf(stderr,"buf_cnt (stack size)        (-b) = %ld\n", buf_cnt);
+    T0_fprintf(stderr,"Running transpose_matrix on %d PEs\n", THREADS);
     T0_fprintf(stderr,"Erdos-Renyi edge probability(-e) = %lf\n", erdos_renyi_prob);
     T0_fprintf(stderr,"rows per PE (-n)                 = %ld\n", l_numrows);
     T0_fprintf(stderr,"models_mask (-M)                 = %ld or of 1,2,4,8,16 for gets,classic,exstack2,conveyor,alternate\n", models_mask);

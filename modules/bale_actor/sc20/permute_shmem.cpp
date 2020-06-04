@@ -36,10 +36,13 @@
 // 
  *****************************************************************/ 
 
+#include <stdio.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <assert.h>
+#include <math.h>
 #include <shmem.h>
-extern "C" {
-#include <spmat.h>
-}
+#include "myshmem.h"
 
 /*! \file permute_matrix.upc
  * \brief Demo program that runs the variants of permute_matrix kernel. This program generates
@@ -56,29 +59,29 @@ extern "C" {
  * \return a pointer to the matrix that has been produced or NULL if the model can't be used
  * \ingroup spmatgrp
  */
-sparsemat_t * copied_permute_matrix_agi(sparsemat_t *A, int64_t *rperminv, int64_t *cperminv) {
+sparsemat_t * permute_matrix_shmem(sparsemat_t *A, int64_t *rperminv, int64_t *cperminv) {
   //T0_printf("Permuting matrix with single puts\n");
   int64_t i, j, col, row, pos;
-  int64_t * lrperminv = lgp_local_part(int64_t, rperminv);
-  int64_t * rperm = (int64_t*)lgp_all_alloc(A->numrows, sizeof(int64_t));
+  int64_t * lrperminv = rperminv;
+  int64_t * rperm = (int64_t*)myshmem_global_malloc(A->numrows, sizeof(int64_t));
   if( rperm == NULL ) return(NULL);
-  int64_t *lrperm = lgp_local_part(int64_t, rperm);
+  int64_t *lrperm = rperm;
 
   //compute rperm from rperminv 
   for(i=0; i < A->lnumrows; i++){
-    lgp_put_int64(rperm, lrperminv[i], i*THREADS + MYTHREAD);
+    myshmem_int64_p(rperm, lrperminv[i], i*THREADS + MYTHREAD);
   }
 
-  lgp_barrier();
+  shmem_barrier_all();
   
   int64_t cnt = 0, off, nxtoff;
   for(i = 0; i < A->lnumrows; i++){
     row = lrperm[i];
-    off    = lgp_get_int64(A->offset, row);
-    nxtoff = lgp_get_int64(A->offset, row + THREADS);
+    off    = myshmem_int64_g(A->offset, row);
+    nxtoff = myshmem_int64_g(A->offset, row + THREADS);
     cnt += nxtoff - off;
   }
-  lgp_barrier();
+  shmem_barrier_all();
 
   sparsemat_t * Ap = init_matrix(A->numrows, A->numcols, cnt);
   
@@ -86,27 +89,27 @@ sparsemat_t * copied_permute_matrix_agi(sparsemat_t *A, int64_t *rperminv, int64
   Ap->loffset[0] = pos = 0;
   for(i = 0; i < Ap->lnumrows; i++){
     row = lrperm[i];
-    off    = lgp_get_int64(A->offset, row);
-    nxtoff = lgp_get_int64(A->offset, row + THREADS);
+    off    = myshmem_int64_g(A->offset, row);
+    nxtoff = myshmem_int64_g(A->offset, row + THREADS);
     for(j = off; j < nxtoff; j++){
-      Ap->lnonzero[pos++] = lgp_get_int64(A->nonzero, j*THREADS + row%THREADS);
+      Ap->lnonzero[pos++] = myshmem_int64_g(A->nonzero, j*THREADS + row%THREADS);
     }
     Ap->loffset[i+1] = pos;
   }
   
   assert(pos == cnt);
 
-  lgp_barrier();
+  shmem_barrier_all();
   
   // finally permute column indices
   for(i = 0; i < Ap->lnumrows; i++){
     for(j = Ap->loffset[i]; j < Ap->loffset[i+1]; j++){
-      Ap->lnonzero[j] = lgp_get_int64(cperminv, Ap->lnonzero[j]);      
+      Ap->lnonzero[j] = myshmem_int64_g(cperminv, Ap->lnonzero[j]);      
     }
   }
-  lgp_barrier();
+  shmem_barrier_all();
 
-  lgp_all_free(rperm);
+  shmem_free(rperm);
 
   T0_printf("done\n");
   return(Ap);
@@ -148,12 +151,12 @@ permute_matrix [-h][-e prob][-M mask][-n num][-s seed][-Z num]\n\
  -s=seed Set a seed for the random number generation.\n\
  -Z=num  Set the avg number of nonzeros per row to z (default = 10, overrides Erdos-Renyi p).\n\
 \n");
-  lgp_global_exit(0);
+  shmem_global_exit(0);
 }
 
 
 int main(int argc, char * argv[]) {
-  lgp_init(argc, argv);
+  shmem_init();
 
   int64_t i;
   int64_t models_mask = 0xF;
@@ -204,7 +207,6 @@ int main(int argc, char * argv[]) {
 
 
   double t1;
-  minavgmaxD_t stat[1];
   int64_t error = 0;
   
   int64_t * rp = rand_permp(numrows, seed);
@@ -219,19 +221,19 @@ int main(int argc, char * argv[]) {
   int64_t use_model;
   sparsemat_t * outmat;
     t1 = wall_seconds();
-    outmat = copied_permute_matrix_agi(inmat, rp, cp);
-    T0_fprintf(stderr,"permute_matrix_AGI:           \n");
+    outmat = permute_matrix_shmem(inmat, rp, cp);
+    T0_fprintf(stderr,"permute_matrix_shmem:           \n");
    
     t1 = wall_seconds() - t1;
-    lgp_min_avg_max_d( stat, t1, THREADS );
-    T0_fprintf(stderr," %8.3lf seconds\n", stat->avg);    
+    double stat = myshmem_reduce_add(t1) / THREADS;
+    T0_fprintf(stderr," %8.3lf seconds\n", stat);    
     clear_matrix(outmat);
     
   clear_matrix(inmat);
-  lgp_all_free(rp);
-  lgp_all_free(cp);
-  lgp_barrier();
-  lgp_finalize();
+  shmem_free(rp);
+  shmem_free(cp);
+  shmem_barrier_all();
+  shmem_finalize();
   return(error);
 }
 

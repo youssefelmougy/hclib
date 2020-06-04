@@ -37,76 +37,55 @@
 //
  *****************************************************************/
 
-/*! \file histo_selector.upc
- * \brief A Selector implementation of histogram.
+/*! \file histo_shmem.cpp
+ * \brief An implementation of histogram that uses OpenSHMEM global atomics.
  */
-
+#include <stdio.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <assert.h>
+#include <math.h>
 #include <shmem.h>
-extern "C" {
-#include <spmat.h>
-}
-#include "selector.h"
-
-#define THREADS shmem_n_pes()
-#define MYTHREAD shmem_my_pe()
-
+#include "myshmem.h"
 
 /*!
- * \brief This routine implements histogram using conveyors
- * \param *pckindx array of packed indices for the distributed version of the global array of counts.
- * \param T the length of the pcindx array
- * \param *lcounts localized pointer to the count array.
+ * \brief This routine implements straight forward,
+ *         single word atomic updates to implement histogram.
+ * \param *index array of indices into the shared array of counts.
+ * \param l_num_ups the local length of the index array
+ * \param *counts SHARED pointer to the count array.
  * \return average run time
  *
  */
+double histo_shmem(int64_t *pckindx, int64_t T, int64_t *counts) {
+  int ret;
+  int64_t i;
+  double tm;
+  int64_t pe, col;
+  double stat;
 
-class HistogramActor: public hclib::Actor<int64_t> {
-  int64_t *lcounts;
-
-  void process(int64_t pkt, int sender_rank) {
-      lcounts[pkt] += 1;
+  shmem_barrier_all();
+  tm = wall_seconds();
+  i = 0UL;
+  for(i = 0; i < T; i++) {
+    col = pckindx[i] >> 16;
+    pe  = pckindx[i] & 0xffff;
+    shmem_int64_atomic_add(counts+col, 1, pe);
+    //shmem_int64_atomic_inc(counts+col, pe);
   }
-
-  public:
-    HistogramActor(int64_t *lcounts) : lcounts(lcounts) {
-        mb[0].process = [this](int64_t pkt, int sender_rank) { this->process(pkt, sender_rank);};
-    }
-};
-
-double histo_selector(int64_t *pckindx, int64_t T,  int64_t *lcounts) {
-  minavgmaxD_t stat[1];
-  HistogramActor *hs_ptr = new HistogramActor(lcounts);
-  hs_ptr->start();
-
-  lgp_barrier();
-  double tm = wall_seconds();
-  hclib::finish([=]() {
-    for(int i=0; i< T; i++){
-      int64_t pe, col;
-      col = pckindx[i] >> 16;
-      pe  = pckindx[i] & 0xffff;
-      hs_ptr->send(col, pe);
-    }
-    hs_ptr->done();
-  });
-  lgp_barrier();
-
+  shmem_barrier_all();
   tm = wall_seconds() - tm;
-  lgp_min_avg_max_d( stat, tm, THREADS );
-
-  delete hs_ptr;
-  return stat->avg;
+  stat = myshmem_reduce_add(tm)/THREADS;
+  return stat;
 }
 
 int main(int argc, char * argv[]) {
-
-  const char *deps[] = { "system", "bale_actor" };
-  hclib::launch(deps, 2, [=] {
+  shmem_init();
 
   char hostname[1024];
   hostname[1023] = '\0';
   gethostname(hostname, 1023);
-  fprintf(stderr, "Hostname: %s rank: %d\n", hostname, MYTHREAD);
+  fprintf(stderr,"Hostname: %s rank: %d\n", hostname, MYTHREAD);
 
   int64_t l_num_ups  = 1000000;     // per thread number of requests (updates)
   int64_t lnum_counts = 1000;       // per thread size of the table
@@ -132,13 +111,13 @@ int main(int argc, char * argv[]) {
 
   // Allocate and zero out the counts array
   int64_t num_counts = lnum_counts*THREADS;
-  int64_t * counts = (int64_t *)lgp_all_alloc(num_counts, sizeof(int64_t)); assert(counts != NULL);
-  int64_t *lcounts = lgp_local_part(int64_t, counts);
+  int64_t * counts = (int64_t *)shmem_malloc(lnum_counts* sizeof(int64_t)); assert(counts != NULL);
+  int64_t *lcounts = counts;
   for(i = 0; i < lnum_counts; i++)
     lcounts[i] = 0L;
 
   // index is a local array of indices into the shared counts array.
-  // This is used by the _agi version.
+  // This is used by the * version.
   // To avoid paying the UPC tax of computing index[i]/THREADS and index[i]%THREADS
   // when using the exstack and conveyor models
   // we also store a packed version that holds the pe (= index%THREADS) and lindx (=index/THREADS)
@@ -156,25 +135,27 @@ int main(int argc, char * argv[]) {
     pckindx[i]  =  (lindx << 16L) | (pe & 0xffff);
   }
 
-  lgp_barrier();
+  shmem_barrier_all();
 
   int64_t use_model;
   double laptime = 0.0;
   int64_t num_models = 0L;               // number of models that are executed
 
-      laptime = histo_selector(pckindx, l_num_ups, lcounts);
+      laptime = histo_shmem(pckindx, l_num_ups, counts);
       num_models++;
 
-    T0_fprintf(stderr,"  %8.3lf seconds\n", laptime);
- 
-  lgp_barrier();
+      T0_fprintf(stderr,"  %8.3lf seconds\n", laptime);
+
+  shmem_barrier_all();
 
   // Check the results
   // Assume that the atomic add version will correctly zero out the counts array
   for(i = 0; i < l_num_ups; i++) {
-    lgp_atomic_add(counts, index[i], -num_models);
+    lindx = index[i] / THREADS;
+    pe  = index[i] % THREADS;
+    shmem_int64_atomic_add(counts+lindx, -num_models, pe); 
   }
-  lgp_barrier();
+  shmem_barrier_all();
 
   int64_t num_errors = 0, totalerrors = 0;
   for(i = 0; i < lnum_counts; i++) {
@@ -184,15 +165,15 @@ int main(int argc, char * argv[]) {
         fprintf(stderr,"ERROR: Thread %d error at %ld (= %ld)\n", MYTHREAD, i, lcounts[i]);
     }
   }
-  totalerrors = lgp_reduce_add_l(num_errors);
+  totalerrors = (double)myshmem_reduce_add((double)num_errors);
   if(totalerrors) {
      T0_fprintf(stderr,"FAILED!!!! total errors = %ld\n", totalerrors);
   }
 
-  lgp_all_free(counts);
+  shmem_free(counts);
   free(index);
   free(pckindx);
-  });
+  shmem_finalize();
 
   return 0;
 }

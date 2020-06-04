@@ -1,7 +1,7 @@
 /******************************************************************
 //
 //
-//  Copyright(C) 2018, Institute for Defense Analyses
+//  Copyright(C) 2019, Institute for Defense Analyses
 //  4850 Mark Center Drive, Alexandria, VA; 703-845-2500
 //  This material may be reproduced by or for the US Government
 //  pursuant to the copyright license under the clauses at DFARS
@@ -298,10 +298,10 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        T0_fprintf(stderr, "Running randperm on %d threads\n", THREADS);
+        T0_fprintf(stderr, "Running randperm on %d PEs\n", THREADS);
         T0_fprintf(stderr, "This is a demo program that runs various implementations of the randperm kernel.\n");
         T0_fprintf(stderr, "Usage:\n");
-        T0_fprintf(stderr, "Permutation size per thread (-n) = %ld\n", l_numrows);
+        T0_fprintf(stderr, "Permutation size per PE (-n) = %ld\n", l_numrows);
         T0_fprintf(stderr, "models_mask (-M)                 = %ld or of 1,2,4,8 for atomics,classic,exstack2,conveyor\n", models_mask);
         T0_fprintf(stderr, "seed (-s)                        = %ld\n", seed);
 

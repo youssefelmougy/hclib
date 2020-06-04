@@ -1,7 +1,7 @@
 /******************************************************************
 //
 //
-//  Copyright(C) 2018, Institute for Defense Analyses
+//  Copyright(C) 2019, Institute for Defense Analyses
 //  4850 Mark Center Drive, Alexandria, VA; 703-845-2500
 //  This material may be reproduced by or for the US Government
 //  pursuant to the copyright license under the clauses at DFARS
@@ -55,7 +55,7 @@ extern "C" {
  * cperminv[i] = j means that col i of A goes to col j in matrix Ap
  * \return a pointer to the matrix that has been produced or NULL if the model can't be used
  */
-sparsemat_t * permute_matrix_conveyor(sparsemat_t * A, int64_t * rperminv, int64_t * cperminv) {
+sparsemat_t * copied_permute_matrix_conveyor(sparsemat_t * A, int64_t * rperminv, int64_t * cperminv) {
   typedef struct pkg_rowcol_t{
     int64_t row;    
     int64_t col;
@@ -279,10 +279,10 @@ int main(int argc, char * argv[]) {
   if(erdos_renyi_prob > 1.0)
     erdos_renyi_prob = 1.0;  
   
-  T0_fprintf(stderr,"Running permute_matrix on %d threads\n", THREADS);
+  T0_fprintf(stderr,"Running permute_matrix on %d PEs\n", THREADS);
   T0_fprintf(stderr,"buf_cnt (stack size)         (-b)= %ld\n", buf_cnt);
   T0_fprintf(stderr,"Erdos-Renyi edge probability (-e)= %lf\n", erdos_renyi_prob);
-  T0_fprintf(stderr,"rows per thread (-n)             = %ld\n", l_numrows);
+  T0_fprintf(stderr,"rows per PE (-n)             = %ld\n", l_numrows);
   T0_fprintf(stderr,"Avg # of nonzeros per row    (-Z)= %ld\n", nz_per_row);
   T0_fprintf(stderr,"models_mask (-M)                 = %ld or of 1,2,4,8,16,32 for gets,classic,exstack2,conveyor,ex2cyclic,ex2goto\n", models_mask);
   T0_fprintf(stderr,"seed (-s)                        = %ld\n", seed);
@@ -304,7 +304,7 @@ int main(int argc, char * argv[]) {
   int64_t use_model;
   sparsemat_t * outmat;
     t1 = wall_seconds();
-    outmat = permute_matrix_conveyor(inmat, rp, cp);
+    outmat = copied_permute_matrix_conveyor(inmat, rp, cp);
     T0_fprintf(stderr,"permute_matrix_conveyor: \n");
    
     t1 = wall_seconds() - t1;

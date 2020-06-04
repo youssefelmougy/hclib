@@ -1,7 +1,7 @@
 /******************************************************************
 //
 //
-//  Copyright(C) 2018, Institute for Defense Analyses
+//  Copyright(C) 2019, Institute for Defense Analyses
 //  4850 Mark Center Drive, Alexandria, VA; 703-845-2500
 //  This material may be reproduced by or for the US Government
 //  pursuant to the copyright license under the clauses at DFARS
@@ -142,36 +142,30 @@ int main(int argc, char * argv[]) {
   const char *deps[] = { "system", "bale_actor" };
   hclib::launch(deps, 2, [=] {
 
+    char hostname[1024];
+    hostname[1023] = '\0';
+    gethostname(hostname, 1023);
+    fprintf(stderr, "Hostname: %s rank: %d\n", hostname, MYTHREAD);
+
     int64_t i;
-    int64_t buf_cnt = 1024;
-    int64_t models_mask = 0; // run all the programing models
     int64_t ltab_siz = 100000;
     int64_t l_num_req  = 1000000;      // number of requests per thread
-    int64_t cores_per_node = 0;       // Default to 0 so it won't give misleading bandwidth numbers
     int64_t num_errors = 0L, total_errors = 0L;
     int64_t printhelp = 0;
 
     int opt;
-    while( (opt = getopt(argc, argv, "hb:M:n:c:T:")) != -1 ) {
+    while( (opt = getopt(argc, argv, "hn:T:")) != -1 ) {
       switch(opt) {
       case 'h': printhelp = 1; break;
-      case 'b': sscanf(optarg,"%ld" ,&buf_cnt);   break;
-      case 'M': sscanf(optarg,"%ld" ,&models_mask);  break;
       case 'n': sscanf(optarg,"%ld" ,&l_num_req);   break;
       case 'T': sscanf(optarg,"%ld" ,&ltab_siz);   break;
-      case 'c': sscanf(optarg,"%ld" ,&cores_per_node); break;
       default:  break;
       }
     }
 
-    T0_fprintf(stderr,"Running ig on %d threads\n", THREADS);
-    T0_fprintf(stderr,"buf_cnt (number of buffer pkgs)      (-b)= %ld\n", buf_cnt);
-    T0_fprintf(stderr,"Number of Request / thread           (-n)= %ld\n", l_num_req );
-    T0_fprintf(stderr,"Table size / thread                  (-T)= %ld\n", ltab_siz);
-    T0_fprintf(stderr,"models_mask                          (-M)= %ld\n", models_mask);
-    T0_fprintf(stderr,"models_mask is or of 1,2,4,8,16 for agi,exstack,exstack2,conveyor,alternate)\n");
-
-    int64_t bytes_read_per_request_per_node = 8*2*cores_per_node;
+    T0_fprintf(stderr,"Running ig on %d PEs\n", THREADS);
+    T0_fprintf(stderr,"Number of Request / PE           (-n)= %ld\n", l_num_req );
+    T0_fprintf(stderr,"Table size / PE                  (-T)= %ld\n", ltab_siz);
 
     // Allocate and populate the shared table array
     int64_t tab_siz = ltab_siz*THREADS;
@@ -202,12 +196,10 @@ int main(int argc, char * argv[]) {
   
     int64_t use_model;
     double laptime = 0.0;
-    double volume_per_node = (2*8*l_num_req*cores_per_node)*(1.0E-9);
     double injection_bw = 0.0;
   
           laptime = ig_selector(tgt, pckindx, l_num_req,  ltable);
   
-       injection_bw = volume_per_node / laptime;
        T0_fprintf(stderr,"  %8.3lf seconds\n", laptime);
   
        num_errors += ig_check_and_zero(use_model, tgt, index, l_num_req);

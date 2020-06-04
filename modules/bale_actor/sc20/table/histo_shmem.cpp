@@ -111,8 +111,8 @@ double histo_shmem(int64_t *pckindx, int64_t T, int64_t *counts) {
   for(i = 0; i < T; i++) {
     col = pckindx[i] >> 16;
     pe  = pckindx[i] & 0xffff;
-    //shmem_int64_atomic_add(counts+col, 1, pe);
-    shmem_int64_atomic_inc(counts+col, pe);
+    shmem_int64_atomic_add(counts+col, 1, pe);
+    //shmem_int64_atomic_inc(counts+col, pe);
   }
   shmem_barrier_all();
   tm = wall_seconds() - tm;
@@ -123,10 +123,10 @@ double histo_shmem(int64_t *pckindx, int64_t T, int64_t *counts) {
 int main(int argc, char * argv[]) {
   shmem_init();
 
-  //char hostname[1024];
-  //hostname[1023] = '\0';
-  //gethostname(hostname, 1023);
-  //printf("Hostname: %s rank: %d\n", hostname, MYTHREAD);
+  char hostname[1024];
+  hostname[1023] = '\0';
+  gethostname(hostname, 1023);
+  fprintf(stderr,"Hostname: %s rank: %d\n", hostname, MYTHREAD);
 
   int64_t l_num_ups  = 1000000;     // per thread number of requests (updates)
   int64_t lnum_counts = 1000;       // per thread size of the table

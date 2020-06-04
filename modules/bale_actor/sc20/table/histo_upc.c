@@ -37,76 +37,83 @@
 //
  *****************************************************************/
 
-/*! \file histo_selector.upc
- * \brief A Selector implementation of histogram.
+/*! \file histo_upc.cpp
+ * \brief An implementation of histogram that uses UPC global atomics.
  */
+#include <stdio.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <assert.h>
+//#include <upc.h>
+#include <upc_relaxed.h>
+#include <upc_atomic.h>
+#include <upc_collective.h>
 
-#include <shmem.h>
-extern "C" {
-#include <spmat.h>
+#include <time.h>
+#include <sys/time.h>
+
+#define T0_fprintf if(MYTHREAD==0) fprintf
+
+upc_atomicdomain_t * lgp_atomic_domain;
+
+double wall_seconds() {
+  struct timeval tp;
+  int retVal = gettimeofday(&tp,NULL);
+  if (retVal == -1) { perror("gettimeofday:"); fflush(stderr); }
+  return ( (double) tp.tv_sec + (double) tp.tv_usec * 1.e-6 );
 }
-#include "selector.h"
 
-#define THREADS shmem_n_pes()
-#define MYTHREAD shmem_my_pe()
-
+double reduce_add(double myval){
+  static shared double *dst=NULL, * src;
+  if (dst==NULL) {
+      dst = upc_all_alloc(THREADS, sizeof(double));
+      src = upc_all_alloc(THREADS, sizeof(double));
+  }
+  src[MYTHREAD] = myval;
+  upc_barrier;
+  upc_all_reduceD(dst, src, UPC_ADD, THREADS, 1, NULL, UPC_IN_NOSYNC || UPC_OUT_NOSYNC);
+  upc_barrier;
+  return dst[0];
+}
 
 /*!
- * \brief This routine implements histogram using conveyors
- * \param *pckindx array of packed indices for the distributed version of the global array of counts.
- * \param T the length of the pcindx array
- * \param *lcounts localized pointer to the count array.
+ * \brief This routine implements straight forward,
+ *         single word atomic updates to implement histogram.
+ * \param *index array of indices into the shared array of counts.
+ * \param l_num_ups the local length of the index array
+ * \param *counts SHARED pointer to the count array.
  * \return average run time
  *
  */
+double histo_upc(int64_t *index, int64_t T, shared int64_t *counts) {
+  int ret;
+  int64_t i, one=1;
+  double tm;
+  int64_t pe, col;
+  double stat;
 
-class HistogramActor: public hclib::Actor<int64_t> {
-  int64_t *lcounts;
-
-  void process(int64_t pkt, int sender_rank) {
-      lcounts[pkt] += 1;
+  upc_barrier;
+  tm = wall_seconds();
+  i = 0UL;
+  for(i = 0; i < T; i++) {
+    //col = pckindx[i] >> 16;
+    //pe  = pckindx[i] & 0xffff;
+    #pragma pgas defer_sync
+    upc_atomic_relaxed(lgp_atomic_domain, NULL, UPC_ADD, &counts[index[i]], &one, NULL);
+    //upc_atomic_relaxed(lgp_atomic_domain, NULL, UPC_INC, &counts[index[i]], NULL, NULL);
   }
-
-  public:
-    HistogramActor(int64_t *lcounts) : lcounts(lcounts) {
-        mb[0].process = [this](int64_t pkt, int sender_rank) { this->process(pkt, sender_rank);};
-    }
-};
-
-double histo_selector(int64_t *pckindx, int64_t T,  int64_t *lcounts) {
-  minavgmaxD_t stat[1];
-  HistogramActor *hs_ptr = new HistogramActor(lcounts);
-  hs_ptr->start();
-
-  lgp_barrier();
-  double tm = wall_seconds();
-  hclib::finish([=]() {
-    for(int i=0; i< T; i++){
-      int64_t pe, col;
-      col = pckindx[i] >> 16;
-      pe  = pckindx[i] & 0xffff;
-      hs_ptr->send(col, pe);
-    }
-    hs_ptr->done();
-  });
-  lgp_barrier();
-
+  upc_barrier;
   tm = wall_seconds() - tm;
-  lgp_min_avg_max_d( stat, tm, THREADS );
-
-  delete hs_ptr;
-  return stat->avg;
+  stat = reduce_add(tm)/THREADS;
+  return stat;
 }
 
 int main(int argc, char * argv[]) {
 
-  const char *deps[] = { "system", "bale_actor" };
-  hclib::launch(deps, 2, [=] {
-
   char hostname[1024];
   hostname[1023] = '\0';
   gethostname(hostname, 1023);
-  fprintf(stderr, "Hostname: %s rank: %d\n", hostname, MYTHREAD);
+  fprintf(stderr,"Hostname: %s rank: %d\n", hostname, MYTHREAD);
 
   int64_t l_num_ups  = 1000000;     // per thread number of requests (updates)
   int64_t lnum_counts = 1000;       // per thread size of the table
@@ -131,14 +138,15 @@ int main(int argc, char * argv[]) {
 
 
   // Allocate and zero out the counts array
+  lgp_atomic_domain = upc_all_atomicdomain_alloc(UPC_INT64, UPC_ADD, 0);
   int64_t num_counts = lnum_counts*THREADS;
-  int64_t * counts = (int64_t *)lgp_all_alloc(num_counts, sizeof(int64_t)); assert(counts != NULL);
-  int64_t *lcounts = lgp_local_part(int64_t, counts);
+  shared int64_t * counts = upc_all_alloc(num_counts, sizeof(int64_t)); assert(counts != NULL);
+  int64_t *lcounts = (int64_t*)(counts+MYTHREAD);
   for(i = 0; i < lnum_counts; i++)
     lcounts[i] = 0L;
 
   // index is a local array of indices into the shared counts array.
-  // This is used by the _agi version.
+  // This is used by the * version.
   // To avoid paying the UPC tax of computing index[i]/THREADS and index[i]%THREADS
   // when using the exstack and conveyor models
   // we also store a packed version that holds the pe (= index%THREADS) and lindx (=index/THREADS)
@@ -156,25 +164,27 @@ int main(int argc, char * argv[]) {
     pckindx[i]  =  (lindx << 16L) | (pe & 0xffff);
   }
 
-  lgp_barrier();
+  upc_barrier;
 
   int64_t use_model;
   double laptime = 0.0;
   int64_t num_models = 0L;               // number of models that are executed
 
-      laptime = histo_selector(pckindx, l_num_ups, lcounts);
+      laptime = histo_upc(index, l_num_ups, counts);
       num_models++;
 
-    T0_fprintf(stderr,"  %8.3lf seconds\n", laptime);
- 
-  lgp_barrier();
+      T0_fprintf(stderr,"  %8.3lf seconds\n", laptime);
+
+  upc_barrier;
 
   // Check the results
   // Assume that the atomic add version will correctly zero out the counts array
+  num_models = -1*num_models;
   for(i = 0; i < l_num_ups; i++) {
-    lgp_atomic_add(counts, index[i], -num_models);
+    #pragma pgas defer_sync
+    upc_atomic_relaxed(lgp_atomic_domain, NULL, UPC_ADD, &counts[index[i]], &num_models, NULL);
   }
-  lgp_barrier();
+  upc_barrier;
 
   int64_t num_errors = 0, totalerrors = 0;
   for(i = 0; i < lnum_counts; i++) {
@@ -184,15 +194,14 @@ int main(int argc, char * argv[]) {
         fprintf(stderr,"ERROR: Thread %d error at %ld (= %ld)\n", MYTHREAD, i, lcounts[i]);
     }
   }
-  totalerrors = lgp_reduce_add_l(num_errors);
+  totalerrors = (double)reduce_add((double)num_errors);
   if(totalerrors) {
      T0_fprintf(stderr,"FAILED!!!! total errors = %ld\n", totalerrors);
   }
 
-  lgp_all_free(counts);
+  upc_all_free(counts);
   free(index);
   free(pckindx);
-  });
 
   return 0;
 }
