@@ -39,5 +39,5 @@ test:
 	for target in $(TARGETS); do $(SRUN) ./$$target; done
 
 clean:
-	rm -f $(TARGETS)
+	rm -f $(TARGETS) $(TARGETS_UPC)
 
