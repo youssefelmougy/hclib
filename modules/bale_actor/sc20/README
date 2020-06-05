@@ -36,16 +36,16 @@ Getting Started
     an Ubuntu-based system:
     >> sudo apt-get install apt-utils autoconf git libtool pkg-config vim gcc g++ libmpich-dev mpich unzip
 
-1)  Prepare dependencies (libfabric, SOS:OpenSHMEM, bale:Conveyors)
+1)  Prepare dependencies (libfabric, SOS:OpenSHMEM, BUPC:UPC, bale:Conveyors)
 
     A) Setup a working directory and install directory
     >> mkdir work;    cd work;    export WORK_DIR=$PWD
     >> mkdir install; cd install; export INSTALL_DIR=$PWD
     >> cd $WORK_DIR
 
-    B) Install libfabric and SOS OpenSHMEM. Please skip the
-    installation if OpenSHMEM is already installed, instead
-    just set the CC,CXX and OSHRUN environment variables
+    B) Install libfabric, SOS OpenSHMEM, BUPC. Please skip the
+    installation if OpenSHMEM and UPC is already installed,
+    instead set the CC,CXX and SRUN environment variables
     
     >> git clone https://github.com/ofiwg/libfabric.git
     >> cd libfabric
@@ -57,16 +57,38 @@ Getting Started
     >> git checkout tags/v1.4.5 -b v1.4.5
     >> ./autogen.sh && ./configure --prefix=$INSTALL_DIR --with-ofi=$INSTALL_DIR --enable-pmi-simple && make install
 
+    # Installing UPC might take long time (hours)
+    >> sudo apt-get install wget curl python cmake
+    >> wget https://github.com/Intrepid/clang-upc/releases/download/clang-upc-3.9.1-1/clang-upc-all-3.9.1-1.tar.gz
+    >> tar -xvzf clang-upc-all-3.9.1-1.tar.gz
+    >> cd clang-upc-3.9.1-1
+    >> mkdir INSTALL build
+    >> cd build
+    >> cmake -DCMAKE_INSTALL_PREFIX=$PWD/../INSTALL -DCMAKE_BUILD_TYPE=Release -DLLVM_USE_LINKER=gold ../
+    >> make
+    >> make install
+    >> cd ../../
+    >> wget https://upc.lbl.gov/download/release/berkeley_upc-2020.4.0.tar.gz
+    >> tar -xvzf berkeley_upc-2020.4.0.tar.gz
+    >> cd berkeley_upc-2020.4.0
+    >> mkdir INSTALL build
+    >> cd build
+    >> ../configure --prefix=$PWD/../INSTALL CUPC2C_TRANS=$PWD/../../clang-upc-3.9.1-1/INSTALL/bin/clang-upc2c --with-multiconf=+dbg_cupc2c,+opt_cupc2c
+    >> #if it asks, then reconfigure with --enable-force-gettimeofday or --enable-force-posix-realtime
+    >> make install
+    >> export PATH=$PWD/../INSTALL/bin:$PATH
+    >> cd ../../
+
     >> export CC=$INSTALL_DIR/bin/oshcc
     >> export CXX=$INSTALL_DIR/bin/oshc++
-    >> export OSHRUN=$INSTALL_DIR/bin/oshrun
+    >> export SRUN=$INSTALL_DIR/bin/oshrun
 
-    Cori at NERSC has cray-shmem installed. Please skip 
+    Cori at NERSC has cray-shmem and bupc installed. Please skip
     step B and instead do the following steps:
-    >> module swap PrgEnv-intel PrgEnv-gnu; module load cray-shmem
+    >> module swap PrgEnv-intel PrgEnv-gnu; module load cray-shmem bupc
     >> export CC=cc
     >> export CXX=CC
-    >> export OSHRUN=srun
+    >> export SRUN=srun
 
     C) Install Conveyors library
 
@@ -92,7 +114,8 @@ Getting Started
 
 0-2) Docker Container
     There is a Dockerfile[1] that includes all dependencies
-    and sets up the environment.
+    except UPC and sets up the environment.
+    Use installation instructions from above if UPC is needed.
     [1] https://github.com/srirajpaul/hclib/blob/bale_actor/modules/bale_actor/sc20/Dockerfile
     
     Download the Dockerfile to a work directory and build it as:
@@ -116,6 +139,7 @@ Step-by-Step Instructions
     >> cd $HCLIB_ROOT/../modules/bale_actor/sc20
     >> make clean
     >> make
+    >> make upc  # in case UPC is avalilable
 
 4) Run Experiments
    
@@ -125,15 +149,18 @@ Step-by-Step Instructions
              -s <s|m|l>  default is s i.e. use small input
              -n <1..inf> default is 5 i.e. run each experiment 5 times
              -r <1..inf> default is 2 i.e. two ranks per node
+             -t <1..inf> default is 2 i.e. start number of nodes is 2
              -m <1..inf> default is 4 i.e. max number of nodes is 4
+             -u <0|1> default is 0 i.e do not run UPC version
              -h show options
 
-    >> /bin/bash run.sh -s l -n 5 -r 32 -m 64 |& tee out.log
+    >> /bin/bash run.sh -s l -n 5 -r 32 -t 2 -m 64 |& tee out.log
 
     Explanation:
         -s l : use large inputs. use m for medium and s for small
         -n 5 : repeat each experiment 5 times to take the average
         -r 32: each node contains 32 ranks
+        -t 2 : start experiments with 2 nodes and then double
         -m 64: use a maximum of 64 nodes starting from 2 nodes
 
         The experiment starts with 2 nodes and keeps on doubling until
@@ -142,14 +169,16 @@ Step-by-Step Instructions
         64 ranks(2X32) and the 64 node experiment has 2048 ranks(64X32).
         'tee' prints the output on screen and also to a file 'out.log'
         which is used in step 5 to view results.
-        The configuration '-s l -n 5 -r 32 -m 64' is used in Cori
-        to get the results presented in the paper.
+        The configuration '-s l -n 5 -r 32 -t $N -m $N -u 1' is used in Cori
+        to get the results presented in the paper, where N=2,4,..,64.
+        The 'cori.slurm' file is a sample slurm script that does the same,
+        and the cori configuration is available in misc/cori_env.txt
         We use the time reported by the kernel. Benchmarks perform
         additional activities such as i/p generation and o/p validation.
 
 5) View Results
 
-    >> /bin/bash result.sh -n 5 -r 32 -m 64 -i out.log
+    >> /bin/bash result.sh -n 5 -r 32 -t 2 -m 64 -i out.log
 
     Explanation:
         Use the same parameters used for the experiments in step 4 and

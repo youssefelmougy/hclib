@@ -1,8 +1,11 @@
+#module swap PrgEnv-intel PrgEnv-gnu; module load cray-shmem bupc openmpi
 
+CXX ?= CC
 OSHCC ?=oshcc
+#OSHCC ?=CC
 UPCC ?=upcc
 MPICC ?=mpicc
-OSHRUN ?=oshrun
+#MPICC ?=CC
 SRUN ?=srun
 
 TARGETS=histo_shmem histo_conveyor histo_upc histo_mpi3\
