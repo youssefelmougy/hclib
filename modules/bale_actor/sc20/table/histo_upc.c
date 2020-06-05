@@ -71,7 +71,7 @@ double reduce_add(double myval){
   }
   src[MYTHREAD] = myval;
   upc_barrier;
-  upc_all_reduceD(dst, src, UPC_ADD, THREADS, 1, NULL, UPC_IN_NOSYNC || UPC_OUT_NOSYNC);
+  upc_all_reduceD(dst, src, UPC_ADD, THREADS, 1, NULL, UPC_IN_NOSYNC | UPC_OUT_NOSYNC);
   upc_barrier;
   return dst[0];
 }
