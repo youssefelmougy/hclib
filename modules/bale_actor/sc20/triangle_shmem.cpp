@@ -323,7 +323,7 @@ int main(int argc, char * argv[]) {
   sparsemat_t *A, *L, *U;
   if(read_graph){
     T0_fprintf(stderr, "Reading graph from file not supported\n");
-    assert(false);
+    assert(0);
 #if 0
     A = read_matrix_mm_to_dist(filename);
     if(!A)
@@ -344,7 +344,7 @@ int main(int argc, char * argv[]) {
 #endif
   }else if (gen_kron_graph){
     T0_fprintf(stderr, "kronecker graph not supported\n");
-    assert(false);
+    assert(0);
 #if 0
     // string should be <mode> # # ... #
     // we will break the string of numbers (#s) into two groups and create

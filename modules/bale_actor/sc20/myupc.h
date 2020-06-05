@@ -26,7 +26,7 @@ int64_t myupc_reduce_add_l(int64_t myval){
   }
   src[MYTHREAD] = myval;
   upc_barrier;
-  upc_all_reduceL(dst, src, UPC_ADD, THREADS, 1, NULL, UPC_IN_NOSYNC || UPC_OUT_NOSYNC);
+  upc_all_reduceL(dst, src, UPC_ADD, THREADS, 1, NULL, UPC_IN_NOSYNC | UPC_OUT_NOSYNC);
   upc_barrier;
   return dst[0];
 }
@@ -39,7 +39,7 @@ double myupc_reduce_add_d(double myval){
   }
   src[MYTHREAD] = myval;
   upc_barrier;
-  upc_all_reduceD(dst, src, UPC_ADD, THREADS, 1, NULL, UPC_IN_NOSYNC || UPC_OUT_NOSYNC);
+  upc_all_reduceD(dst, src, UPC_ADD, THREADS, 1, NULL, UPC_IN_NOSYNC | UPC_OUT_NOSYNC);
   upc_barrier;
   return dst[0];
 }
@@ -52,7 +52,7 @@ int64_t myupc_reduce_max_l(int64_t myval){
   }
   src[MYTHREAD] = myval;
   upc_barrier;
-  upc_all_reduceL(dst, src, UPC_MAX, THREADS, 1, NULL, UPC_IN_NOSYNC || UPC_OUT_NOSYNC);
+  upc_all_reduceL(dst, src, UPC_MAX, THREADS, 1, NULL, UPC_IN_NOSYNC | UPC_OUT_NOSYNC);
   upc_barrier;
   return dst[0];
 }
@@ -573,6 +573,231 @@ shared int64_t * rand_permp(int64_t N, int seed) {
     return(NULL);
   }
   return(p);
+}
+
+/*! \brief apply row and column permutations to a sparse matrix using straight UPC
+ * \param A pointer to the original matrix
+ * \param rperminv pointer to the global array holding the inverse of the row permutation
+ * \param cperminv pointer to the global array holding the inverse of the column permutation
+ * rperminv[i] = j means that row i of A goes to row j in matrix Ap
+ * cperminv[i] = j means that col i of A goes to col j in matrix Ap
+ * \return a pointer to the matrix that has been produced or NULL if the model can't be used
+ * \ingroup spmatgrp
+ */
+sparsemat_t * permute_matrix_agi(sparsemat_t *A, shared int64_t *rperminv, shared int64_t *cperminv) {
+  //T0_printf("Permuting matrix with single puts\n");
+  int64_t i, j, col, row, pos;
+  int64_t * lrperminv = (int64_t *)(rperminv+MYTHREAD);
+  shared int64_t * rperm = upc_all_alloc(A->numrows, sizeof(int64_t));
+  if( rperm == NULL ) return(NULL);
+  int64_t *lrperm = (int64_t *)(rperm+MYTHREAD);
+
+  //compute rperm from rperminv 
+  for(i=0; i < A->lnumrows; i++){
+    rperm[lrperminv[i]] = i*THREADS + MYTHREAD;
+  }
+
+  upc_barrier;
+  
+  int64_t cnt = 0, off, nxtoff;
+  for(i = 0; i < A->lnumrows; i++){
+    row = lrperm[i];
+    off    = (A->offset)[row];
+    nxtoff = (A->offset)[row + THREADS];
+    cnt += nxtoff - off;
+  }
+  upc_barrier;
+
+  sparsemat_t * Ap = init_matrix(A->numrows, A->numcols, cnt);
+  
+  // fill in permuted rows
+  Ap->loffset[0] = pos = 0;
+  for(i = 0; i < Ap->lnumrows; i++){
+    row = lrperm[i];
+    off    = (A->offset)[row];
+    nxtoff = (A->offset)[row + THREADS];
+    for(j = off; j < nxtoff; j++){
+      Ap->lnonzero[pos++] = (A->nonzero)[j*THREADS + row%THREADS];
+    }
+    Ap->loffset[i+1] = pos;
+  }
+  
+  assert(pos == cnt);
+
+  upc_barrier;
+  
+  // finally permute column indices
+  for(i = 0; i < Ap->lnumrows; i++){
+    for(j = Ap->loffset[i]; j < Ap->loffset[i+1]; j++){
+      Ap->lnonzero[j] = cperminv[Ap->lnonzero[j]];
+    }
+  }
+  upc_barrier;
+
+  upc_all_free(rperm);
+
+  T0_printf("done\n");
+  return(Ap);
+}
+
+/*! \brief apply row and column permutations to a sparse matrix using straight UPC
+ * \param omat pointer to the original matrix
+ * \param rperminv pointer to the global array holding the inverse of the row permutation
+ * \param cperminv pointer to the global array holding the inverse of the column permutation
+ * rperminv[i] = j means that row i of A goes to row j in matrix Ap
+ * cperminv[i] = j means that col i of A goes to col j in matrix Ap
+ * \param mode which buffering model to use 
+ * \return a pointer to the matrix that has be computed or NULL on failure
+ *
+ * This is wrapper for implementations written in the different models.
+ * It is interest enough to be its own apps, one should experiment with it
+ * within the apps framework. 
+ *
+ * \ingroup spmatgrp
+ */
+sparsemat_t * permute_matrix(sparsemat_t *omat, shared int64_t *rperminv, shared int64_t *cperminv) {
+  return( permute_matrix_agi(omat, rperminv, cperminv) );
+  //return( permute_matrix_exstack(omat, rperminv, cperminv, 1024) );
+  //return( permute_matrix_exstack2(omat, rperminv, cperminv, 1024) );
+  //return( permute_matrix_conveyor(omat, rperminv, cperminv) );
+}
+
+/*! \brief checks that the sparse matrix is lower triangluar
+ * \param A pointer to the sparse matrix
+ * \param unit_diagonal set to 1 to make sure all pivots are nonzero
+ * \return 0 on success, non-0 on error.
+ * kind of a speciality routine to check that toposort might of worked
+ * \ingroup spmatgrp
+ */
+int is_lower_triangular(sparsemat_t *A, int64_t unit_diagonal) {
+  int64_t i,j, row, * ltri_rperm, * ltri_cperm;
+  int64_t err = 0, err2 = 0;
+
+  upc_barrier;
+
+  /* we are hoping for an lower triangular matrix here */
+  for(i=0; i < A->lnumrows; i++){
+    int64_t global_row = i*THREADS + MYTHREAD;
+    int pivot = 0;
+    for(j=A->loffset[i]; j < A->loffset[i+1];j++){
+      if( A->lnonzero[j] > global_row ) {
+        err++;
+      }else if( A->lnonzero[j] == global_row){
+        pivot = 1;
+      }
+    }
+    if(!pivot)
+      err2++;
+  }
+
+  err = myupc_reduce_add_l(err);
+  err2 = (unit_diagonal ? myupc_reduce_add_l(err2) : 0);
+  if( err || err2 ){
+    //if(!MYTHREAD)printf("\nThere are %ld nz above diag. and %ld missing pivots in lower.\n", err, err2);
+    fflush(0);
+  }
+
+  upc_barrier;
+
+  return(!(err || err2));
+}
+
+/*! \brief checks that the sparse matrix is upper triangluar
+ * \param A pointer to the sparse matrix
+ * \param unit_diagonal set to 1 to make sure all pivots are nonzero
+ * \return 0 on success, non-0 on error.
+ *
+ * \ingroup spmatgrp
+ */
+int is_upper_triangular(sparsemat_t *A, int64_t unit_diagonal) {
+  int64_t i,j, row, * ltri_rperm, * ltri_cperm;
+  int64_t err = 0, err2 = 0;
+  upc_barrier;
+
+  /* we are hoping for an upper triangular matrix here */
+  for(i=0; i < A->lnumrows; i++){
+    int64_t global_row = i*THREADS + MYTHREAD;
+    int pivot = 0;
+    for(j=A->loffset[i]; j < A->loffset[i+1];j++){
+      if( A->lnonzero[j] < global_row ) {
+        err++;
+      }else if( A->lnonzero[j] == global_row){
+        pivot = 1;
+      }
+    }
+    if(!pivot)
+      err2++;
+  }
+
+  err = myupc_reduce_add_l(err);
+  err2 = (unit_diagonal ? myupc_reduce_add_l(err2) : 0);
+  if( err || err2 ){
+    //if(!MYTHREAD)printf("\nThere are %ld nz below diag. and %ld missing pivots in upper.\n", err, err2);
+    fflush(0);
+  }
+
+  upc_barrier;
+
+  return(!(err || err2));
+}
+
+/*! \brief compare the structs that hold two sparse matrices
+ * \param lmat pointer to the left sparse matrix
+ * \param rmat pointer to the right sparse matrix
+ * \return 0 on success
+ * \ingroup spmatgrp
+ */
+int compare_matrix(sparsemat_t *lmat, sparsemat_t *rmat) {
+  int i,j;
+
+  if( lmat->numrows != rmat->numrows ){
+    if(!MYTHREAD)printf("(lmat->numrows = %ld)  != (rmat->numrows = %ld)", lmat->numrows, rmat->numrows );
+    return(1);
+  }
+  if( lmat->lnumrows != rmat->lnumrows ){
+    fprintf(stderr,"THREAD %03d: (lmat->lnumrows = %ld)  != (rmat->lnumrows = %ld)", 
+            MYTHREAD, lmat->lnumrows, rmat->lnumrows );
+    return(1);
+  }
+  if( lmat->numcols != rmat->numcols ){
+    if(!MYTHREAD)printf("(lmat->numcols = %ld)  != (rmat->numcols = %ld)", lmat->numcols, rmat->numcols );
+    return(1);
+  }
+  if( lmat->nnz != rmat->nnz ){
+    if(!MYTHREAD)printf("(lmat->nnz = %ld)  != (rmat->nnz = %ld)", lmat->nnz, rmat->nnz );
+    return(1);
+  }
+  if( lmat->lnnz != rmat->lnnz ){
+    fprintf(stderr,"THREAD %03d: (lmat->lnnz = %ld)  != (rmat->lnnz = %ld)", 
+            MYTHREAD, lmat->lnnz, rmat->lnnz );
+    return(1);
+  }
+
+  if( lmat->loffset[0] != 0 || rmat->loffset[0] != 0 
+    || (lmat->loffset[0] != rmat->loffset[0] ) ){
+    if(!MYTHREAD)printf("THREAD %03d: (lmat->loffset[0] = %ld)  != (rmat->loffset[0] = %ld)", 
+       MYTHREAD, lmat->loffset[0], rmat->loffset[0] );
+    return(1);
+  }
+
+  
+  for(i = 0; i < lmat->lnumrows; i++){
+    if( lmat->loffset[i+1] != rmat->loffset[i+1] ){
+       if(!MYTHREAD)printf("THREAD %03d: (lmat->loffset[%d] = %ld)  != (rmat->loffset[%d] = %ld)", 
+          MYTHREAD, i+1, lmat->loffset[i+1], i+1, rmat->loffset[i+1] );
+       return(1);
+    }
+  }
+  
+  for(j=0; j< lmat->lnnz; j++) {
+    if( lmat->lnonzero[j] != rmat->lnonzero[j] ){
+      if(!MYTHREAD)printf("THREAD %03d: (lmat->lnonzero[%d] = %ld)  != (rmat->lnonzero[%d] = %ld)", 
+                MYTHREAD, j, lmat->lnonzero[j], j, rmat->lnonzero[j] );
+      return(1);
+    }
+  }
+
+  return(0);
 }
 
 #endif //MYUPC_H

@@ -10,11 +10,15 @@ TARGETS=histo_agi histo_shmem histo_conveyor histo_selector \
         ig_agi ig_shmem ig_conveyor ig_selector \
         toposort_agi toposort_shmem toposort_conveyor toposort_selector \
 		triangle_agi triangle_shmem triangle_conveyor triangle_selector \
-		randperm_agi randperm_shmem randperm_conveyor randperm_selector \
+		randperm_agi randperm_shmem  randperm_conveyor randperm_selector \
         permute_agi permute_shmem permute_conveyor permute_selector \
 		transpose_agi transpose_shmem transpose_conveyor transpose_selector
 
+TARGETS_UPC=histo_upc ig_upc toposort_upc triangle_upc randperm_upc permute_upc transpose_upc
+
 all: $(TARGETS)
+
+upc: $(TARGETS_UPC)
 
 %_agi: %_agi.cpp
 	$(CXX) -g -O3 -std=c++11 -I$(BALE_INSTALL)/include -L$(BALE_INSTALL)/lib -o $@ $^ -lspmat -lconvey -lexstack -llibgetput -lm
@@ -29,10 +33,11 @@ all: $(TARGETS)
 	$(CXX) -g -O3 -o $@ $^ -lm
 
 %_upc: %_upc.c
-	$(UPCC) -gupc -O -o $@ $^ -lm
+	$(UPCC) -cupc2c -O -o $@ $^ -lm
 
 test:
 	for target in $(TARGETS); do $(SRUN) ./$$target; done
 
 clean:
 	rm -f $(TARGETS)
+

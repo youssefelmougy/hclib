@@ -431,11 +431,6 @@ int main(int argc, char * argv[]) {
   const char *deps[] = { "system", "bale_actor" };
   hclib::launch(deps, 2, [=] {
 
-  char hostname[1024];
-  hostname[1023] = '\0';
-  gethostname(hostname, 1023);
-  printf("Hostname: %s rank: %d\n", hostname, MYTHREAD);
-
   int64_t i, j, fromth, lnnz, start, end;
   int64_t pe, row, col, idx;
   double t1;
