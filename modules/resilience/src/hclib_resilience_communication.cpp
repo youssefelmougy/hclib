@@ -53,9 +53,10 @@ HCLIB_MODULE_INITIALIZATION_FUNC(mpi_finalize) {
 #ifdef COMM_PROFILE
     printf("test %ld, send/recv count %ld / %ld, send/recv bytes %ld / %ld\n",test_count, send_count, recv_count, send_size, recv_size);
 #endif
-#ifdef USE_FENIX
-    Fenix_Finalize();
-#endif
+//#ifdef USE_FENIX
+//    MPI_Barrier(MPI_COMM_WORLD_DEFAULT);
+//    Fenix_Finalize();
+//#endif
     MPI_Finalize();
 }
 
@@ -131,11 +132,18 @@ bool is_initial_role() {
 void re_enqueue(pending_mpi_op* list, bool isCompletedList, int fail_rank, pending_mpi_op** pending_ptr=nullptr) {
     pending_mpi_op *op = list;
     while(op) {
+            int new_rank;
+            MPI_Comm_rank(MPI_COMM_WORLD_DEFAULT, &new_rank);
+            printf("re_enqueue in %d with neighbor %d\n", new_rank, op->neighbor);
         pending_mpi_op *next = op->next;
 
         //if(op->neighbor == fails[0]) {
-          archive_obj ar_ptr = op->data->serialize();
-          //archive_obj ar_ptr = op->serialized;
+          //archive_obj ar_ptr = op->data->serialize();
+          //op->serialized = ar_ptr;
+          //TODO: use a seperate field to distinguish between send/recv rather
+          //than usingop->serialized.size() so that the previous op->serialized
+          //data can be reused instead of calling op->data->serialize() again
+          archive_obj ar_ptr = op->serialized;
 
           if(isCompletedList) {
             //put the op into pending list and re-enqueue the operation since it is to a failed rank
@@ -146,9 +154,10 @@ void re_enqueue(pending_mpi_op* list, bool isCompletedList, int fail_rank, pendi
           else {
             //if pending operation was completed then no need to enqueue again
             int test_flag;
-            //if(MPI_Test( &(op->req), &test_flag, MPI_STATUS_IGNORE) != FENIX_ERROR_CANCELLED
-            //  && op->neighbor != failed_rank[0])
-            //    continue;
+            //#define FENIX_ERROR_CANCELLED -50
+            if(MPI_Test( &(op->req), &test_flag, MPI_STATUS_IGNORE) != FENIX_ERROR_CANCELLED
+              && op->neighbor != fail_rank)
+                continue;
           }
 
           //TODO: map from old communicator to new communicator
@@ -159,10 +168,14 @@ void re_enqueue(pending_mpi_op* list, bool isCompletedList, int fail_rank, pendi
           //Enqueue incomplete operations using new communicator
           //Isend
           if(op->serialized.size == 0) {
+              printf("send again to %d from %d\n", op->neighbor, new_rank);fflush(stdout);
+          ar_ptr = op->data->serialize();
+          op->serialized = ar_ptr;
               ::MPI_Isend(ar_ptr.data, ar_ptr.size, MPI_BYTE, op->neighbor, op->tag, op->comm, &(op->req));
           }
           //Irecv
           else if (op->serialized.size > 0) {
+              printf("recv again from %d on %d\n", op->neighbor, new_rank);fflush(stdout);
               ::MPI_Irecv(ar_ptr.data, ar_ptr.size, MPI_BYTE, op->neighbor, op->tag, op->comm, &(op->req));
           }
           else {
@@ -188,6 +201,7 @@ void hclib_launch(generic_frame_ptr fct_ptr, void *arg, const char **deps,
         start_time = hclib_current_time_ns();
     }
 
+      hclib::async_at([=](){
     //Fenix setup {
         int old_world_size = -1, new_world_size = -1;
         int old_rank = -1, new_rank = -1;
@@ -206,16 +220,20 @@ void hclib_launch(generic_frame_ptr fct_ptr, void *arg, const char **deps,
 #endif
     //} Fenix setup
 
+        printf("init old rank: %d, new rank: %d\n", old_rank, new_rank);
     if(is_initial_role()) {
         completed = new pending_mpi_op*[new_world_size]{};
         //hclib_async(fct_ptr, arg, NULL, 0, hclib_get_closest_locale());
 
+        //hclib::finish([=]() {
         //hclib_future_t *fut = hclib_async_future((future_fct_t)fct_ptr, arg, NULL, 0, hclib_get_closest_locale());
         //hclib::async_nb_await_at([=]() {
         //    printf("Barrier rank %d\n", new_rank);
         //    MPI_Barrier(MPI_COMM_WORLD_DEFAULT);
         //}, fut, nic);
+        //});
 
+        hclib::finish([=]() {
         hclib::async_at([=]() {
             hclib::finish([=]() {
               fct_ptr(arg);
@@ -225,25 +243,32 @@ void hclib_launch(generic_frame_ptr fct_ptr, void *arg, const char **deps,
                 MPI_Barrier(MPI_COMM_WORLD_DEFAULT);
             }, nic);
         }, hclib_get_closest_locale());
+        });
     }
 
     //Recovering
     else {
         int *fails, num_fails;
         num_fails = Fenix_Process_fail_list(&fails);
+        printf("num_fails %d\n", num_fails);fflush(stdout);
         assert(num_fails == 1);
 #if COMM_PROFILE
         printf("Recovered rank %d, failed rank %d\n", new_rank, fails[0]);
 #endif
         //Failed rank restarts from beginning
         if(fails[0] == new_rank) {
+            hclib::finish([=]() {
             completed = new pending_mpi_op*[new_world_size]{};
             hclib_async(fct_ptr, arg, NULL, 0, hclib_get_closest_locale());
+            });
         }
 
         //Non failed tasks rexecutes the pending communication to all tasks
         //and all communication to failed task
         else {
+            //check_out_finish_worker();
+            check_out_finish_worker();
+            hclib::finish([=]() {
             //Iterate though the pending list and enqueue back the
             //incomplete communication operations with the
             //new communicator and status variable
@@ -255,7 +280,6 @@ void hclib_launch(generic_frame_ptr fct_ptr, void *arg, const char **deps,
             isCompletedList = true;
             re_enqueue(completed_ops, isCompletedList, fails[0], &pending);
 
-
             //Restart the communication worker
             //Remove one item and put it back to the queue
             if(pending) {
@@ -265,9 +289,17 @@ void hclib_launch(generic_frame_ptr fct_ptr, void *arg, const char **deps,
             }
 
             //decrease the finish counter by one since the kill exited the task without cleanup
-            check_out_finish_worker();
+            //check_out_finish_worker();
+            });
         }
+        //hclib_end_finish();
     }
+    printf("MPI_Barrier start new rank %d old rank %d\n", new_rank, old_rank);fflush(stdout);
+    MPI_Barrier(MPI_COMM_WORLD_DEFAULT);
+    printf("MPI_Barrier end new rank %d old rank %d\n", new_rank, old_rank);fflush(stdout);
+    Fenix_Finalize();
+    printf("Fenix_Finalize end new rank %d old rank %d\n", new_rank, old_rank);fflush(stdout);
+  }, nic);
 
     hclib_finalize(instrument);
     if (profile_launch_body) {

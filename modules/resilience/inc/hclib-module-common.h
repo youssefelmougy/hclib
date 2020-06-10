@@ -64,8 +64,12 @@ void poll_on_pending(pending_op **addr_of_head, pending_op **completed_head,
                 }
 
 #ifdef USE_FENIX
-                op->next = completed_head[op->neighbor];
-                completed_head[op->neighbor] = op;
+                if(completed_head !=nullptr) {
+                    //printf("completed_head add start to %d\n", op->neighbor);
+                    op->next = completed_head[op->neighbor];
+                    completed_head[op->neighbor] = op;
+                    //printf("completed_head add end to %d\n", op->neighbor); fflush(stdout);
+                }
 #endif
 
               //Can be tuned to use a task for deserialization to free the communication worker
