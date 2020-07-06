@@ -7,7 +7,9 @@ size=s
 numtimes=5
 agi=0
 upc=0
-SRUN?=srun
+if [[ -z "$SRUN" ]]; then
+   SRUN=srun
+fi
 
 while getopts s:n:r:t:m:a:u:h option
 do
