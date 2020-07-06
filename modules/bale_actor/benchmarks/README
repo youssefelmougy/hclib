@@ -3,7 +3,7 @@ A Scalable Actor-based Programming System for PGAS Runtimes
 ----------------------------------------------------------------
 
 Document also available at
-https://github.com/srirajpaul/hclib/blob/bale_actor/modules/bale_actor/sc20/README
+https://github.com/srirajpaul/hclib/blob/bale_actor/modules/bale_actor/benchmarks/README
 
 The whole experiment consists of five phases, 0: prepare your system,
 1: Prepare dependencies, 2: building HClib library, 3: building the 
@@ -116,7 +116,7 @@ Getting Started
     There is a Dockerfile[1] that includes all dependencies
     except UPC and sets up the environment.
     Use installation instructions from above if UPC is needed.
-    [1] https://github.com/srirajpaul/hclib/blob/bale_actor/modules/bale_actor/sc20/Dockerfile
+    [1] https://github.com/srirajpaul/hclib/blob/bale_actor/modules/bale_actor/benchmarks/Dockerfile
     
     Download the Dockerfile to a work directory and build it as:
     >> docker build -t hclib_selector:1 .
@@ -136,7 +136,7 @@ Step-by-Step Instructions
 3) Build Selector benchmarks:
    (please make sure to set the environment variables in step 0-2)
 
-    >> cd $HCLIB_ROOT/../modules/bale_actor/sc20
+    >> cd $HCLIB_ROOT/../modules/bale_actor/benchmarks
     >> make clean
     >> make
     >> make upc  # in case UPC is avalilable

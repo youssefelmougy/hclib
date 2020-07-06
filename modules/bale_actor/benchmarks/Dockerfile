@@ -49,7 +49,7 @@ RUN ./install.sh
 ENV HCLIB_ROOT=/root/hclib/hclib-install
 RUN cd modules/bale_actor && make
 
-WORKDIR /root/hclib/modules/bale_actor/sc20
+WORKDIR /root/hclib/modules/bale_actor/benchmarks
 RUN unzip ../inc/boost.zip -d ../inc/
 
 ENV LD_LIBRARY_PATH=$LOCAL/lib:$BALE_INSTALL/lib:$HCLIB_ROOT/lib:$HCLIB_ROOT/../modules/bale_actor/lib
