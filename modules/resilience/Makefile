@@ -4,8 +4,8 @@ include $(HCLIB_ROOT)/../modules/ref-count/inc/hclib_ref-count.post.mak
 
 #ifeq (1, 0)
 
-DEFINES=-DHC_ASSERTION_CHECK
-#DEFINES=-DHC_ASSERTION_CHECK -DUSE_FENIX
+#DEFINES=-DHC_ASSERTION_CHECK
+DEFINES=-DHC_ASSERTION_CHECK -DUSE_FENIX
 #DEFINES=-DHC_ASSERTION_CHECK -DCOMM_PROFILE
 
 OBJS=obj/hclib_resilience.o obj/hclib_resilience_communication.o

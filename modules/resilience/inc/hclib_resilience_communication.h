@@ -73,6 +73,7 @@ struct pending_mpi_op {
 extern pending_mpi_op *pending;
 extern pending_mpi_op **completed;
 extern hclib::locale_t *nic;
+extern int callback_source;
 
 bool test_mpi_completion(void *generic_op);
 
@@ -112,6 +113,7 @@ void Irecv(int count, int source, int64_t tag, hclib::promise_t<COMMUNICATION_OB
             if(ar_ptr.data == nullptr)
                 ar_ptr.data = malloc(count);
 
+            //callback_source = 2;
             MPI_Request req;
             ::MPI_Irecv(ar_ptr.data, count, MPI_BYTE, source, tag, comm, &req);
 #ifdef COMM_PROFILE

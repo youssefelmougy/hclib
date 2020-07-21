@@ -30,8 +30,11 @@ class int_obj : public communication::obj {
 };
 
 int main(int argc, char **argv) {
+    int iskill=1;
+    if(argc>1)
+        iskill = atoi(argv[1]);
     const char *deps[] = { "system", "resilience" };
-    communication::launch(deps, 2, [] () {
+    communication::launch(deps, 2, [iskill] () {
 
         int recovered = !communication::is_initial_role();
         int rank;
@@ -39,10 +42,10 @@ int main(int argc, char **argv) {
 
         printf("in rank %d recovered %d pid %d\n", rank, recovered, getpid());
 
-        if (rank == kKillID &&  recovered == 0) {
-          pid_t pid = getpid();
-          kill(pid, SIGTERM);
-        }
+        //if (rank == kKillID &&  recovered == 0) {
+        //  pid_t pid = getpid();
+        //  kill(pid, SIGTERM);
+        //}
 
         if(rank == send_rank && !recovered) {
             auto prom_send = new hclib::promise_t<int_obj*>();
@@ -89,6 +92,7 @@ int main(int argc, char **argv) {
 
             if(!recovered) {
                 pid_t pid = getpid();
+                if(iskill)
                 kill(pid, SIGTERM);
             }
         }

@@ -28,8 +28,11 @@ class int_obj : public communication::obj {
 };
 
 int main(int argc, char **argv) {
+    int iskill=1;
+    if(argc>1)
+        iskill = atoi(argv[1]);
     const char *deps[] = { "system", "resilience" };
-    communication::launch(deps, 2, [] () {
+    communication::launch(deps, 2, [iskill] () {
 
         int recovered = !communication::is_initial_role();
         int rank;
@@ -39,6 +42,7 @@ int main(int argc, char **argv) {
 
         if (rank == kKillID &&  recovered == 0) {
           pid_t pid = getpid();
+          if(iskill)
           kill(pid, SIGTERM);
         }
 
