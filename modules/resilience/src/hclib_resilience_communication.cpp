@@ -1,4 +1,3 @@
-
 #ifndef MPI_COMMUNICATION
 #define MPI_COMMUNICATION
 #endif
@@ -22,6 +21,7 @@ static int nic_locale_id;
 
 #ifdef USE_FENIX
 //TODO: see which of these variables can be made local
+comm_op *comm_operations = nullptr;
 bool just_recovered = false;
 int old_rank = -1, new_rank = -1;
 MPI_Comm new_comm;
@@ -113,14 +113,16 @@ int Isend_helper(obj *data, MPI_Datatype datatype, int dest, int64_t tag, hclib_
 #endif
 
         op->serialized = ar_ptr;
-        op->serialized.size = 0;
         op->req = req;
         op->prom = prom;
         op->data = data;
 #ifdef USE_FENIX
+        op->msg_type = ISEND;
         op->neighbor = dest;
         op->tag = tag;
         op->comm  = comm;
+#else
+        op->serialized.size = 0;
 #endif
         hclib::append_to_pending(op, &pending, completed, test_mpi_completion, nic);
     }, nullptr, nic);
@@ -151,22 +153,99 @@ bool is_initial_role() {
     return fenix_status == FENIX_ROLE_INITIAL_RANK;
 }
 
+void Cart_create(MPI_Comm comm, int dim, int dims[], int periods[], int reorder, MPI_Comm *cart_comm) {
+    comm_op *op = new comm_op(comm, dim, dims, periods, reorder, cart_comm);
+
+    //TODO: For now we only allow one Cart_create before all MPI operations.
+    //Allow multiple Cart_create in future.
+    assert(comm_operations == nullptr);
+    comm_operations = op;
+    *cart_comm = comm;
+
+    //MPI_Cart_create(comm, dim, dims, periods, reorder, cart_comm);
+}
+
+void Cart_shift(MPI_Comm comm, int direction, int disp, int *rank_source, int *rank_dest) {
+    //TODO: For now we only allow one Cart_create before all MPI operations.
+    //Allow multiple Cart_create in future.
+    assert(comm == comm_operations->comm);
+
+    int factor, thisdirection = 0, thisperiod = 0, ord;
+    int srcord, destord, i, *d, *q;
+    MPI_Comm_rank(comm, &ord);
+    MPI_Comm_size(comm, &factor);
+
+    d = comm_operations->dims;
+    q = comm_operations->periods;
+
+    for (i = 0; (i < comm_operations->ndims) && (i <= direction); ++i, ++d, ++q) {
+        thisdirection = *d;
+        thisperiod = *q;
+
+        ord %= factor;
+        factor /= thisdirection;
+    }
+    ord /= factor;
+
+    *rank_source = *rank_dest = MPI_UNDEFINED;
+
+    srcord = ord - disp;
+    destord = ord + disp;
+
+    if ( ((destord < 0) || (destord >= thisdirection)) && (!thisperiod) ) {
+        *rank_dest = MPI_PROC_NULL;
+    } else {
+        destord %= thisdirection;
+        if (destord < 0) destord += thisdirection;
+        MPI_Comm_rank(comm, rank_dest);
+        *rank_dest += ((destord - ord) * factor);
+    }
+    if ( ((srcord < 0) || (srcord >= thisdirection)) && (!thisperiod) ) {
+        *rank_source = MPI_PROC_NULL;
+    } else {
+        srcord %= thisdirection;
+        if (srcord < 0) srcord += thisdirection;
+        MPI_Comm_rank(comm, rank_source);
+        *rank_source += ((srcord - ord) * factor);
+    }
+}
+
+void re_execute_comm(comm_op *comm_operations) {
+    comm_op *op=comm_operations;
+    while(op) {
+        //printf("re_execute_comm in %d\n", new_rank);
+        //TODO: Allow other communicators in future.
+        op->comm = MPI_COMM_WORLD_DEFAULT;
+        *(op->cart_comm) = MPI_COMM_WORLD_DEFAULT;
+
+        //MPI_Cart_create(op->comm, op->dim, op->dims, op->periods, op->reorder, op->cart_comm);
+        op = op->next;
+
+        //TODO: Allow multiple communicator operations in future
+        assert(op == nullptr);
+    }
+}
+
 void re_enqueue(pending_mpi_op* list, bool isCompletedList, int fail_rank, pending_mpi_op** pending_ptr=nullptr) {
     pending_mpi_op *op = list;
+    //printf("re_enqueue in %d with isCompletedList %d\n", new_rank, isCompletedList);
     while(op) {
+        //printf("re_enqueue loop in %d with isCompletedList %d\n", new_rank, isCompletedList);
         pending_mpi_op *next = op->next;
 
         //if(op->neighbor == fails[0]) {
           //archive_obj ar_ptr = op->data->serialize();
           //op->serialized = ar_ptr;
           //TODO: use a seperate field to distinguish between send/recv rather
-          //than usingop->serialized.size() so that the previous op->serialized
+          //than using op->serialized.size() so that the previous op->serialized
           //data can be reused instead of calling op->data->serialize() again
           archive_obj ar_ptr = op->serialized;
 
           if(isCompletedList) {
             //if(op->neighbor == fail_rank) {
-            if(op->neighbor == fail_rank || op->serialized.size == 0) {
+            //printf("re_enqueue out :isCompletedList in %d neighbor %d type %d tag %d\n", new_rank, op->neighbor, op->msg_type, op->tag);
+            if(op->neighbor == fail_rank || op->msg_type == ISEND) {
+                //printf("re_enqueue yes :isCompletedList in %d neighbor %d type %d tag %d\n", new_rank, op->neighbor, op->msg_type, op->tag);
                 //put the op into pending list and re-enqueue the operation since it is to a failed rank
                 //TODO:For now we enqueue sends to any rank. This should be removed.
                 op->prom = nullptr;
@@ -174,6 +253,7 @@ void re_enqueue(pending_mpi_op* list, bool isCompletedList, int fail_rank, pendi
                 *pending_ptr = op;
             }
             else {
+                //printf("re_enqueue no :isCompletedList in %d neighbor %d type %d tag %d\n", new_rank, op->neighbor, op->msg_type, op->tag);
                 op = next;
                 continue;;
             }
@@ -181,12 +261,16 @@ void re_enqueue(pending_mpi_op* list, bool isCompletedList, int fail_rank, pendi
           else {
             //if pending operation was completed to a non failed rank then no need to enqueue again
             int test_flag;
+            //printf("try MPI_Test in\n");
+            //MPI_Test( &(op->req), &test_flag, MPI_STATUS_IGNORE);
+            //printf("try MPI_Test out\n");
             if(MPI_Test( &(op->req), &test_flag, MPI_STATUS_IGNORE) != FENIX_ERROR_CANCELLED
               && op->neighbor != fail_rank) {
                 //TODO: for now we enqueue all sends. But once MPI_Issend completion can
                 //be detected we can remove the check and ignore all completed operations
                 //to non failed ranks.
-                if(op->serialized.size > 0){
+                if(op->msg_type == IRECV){
+                    //printf("re_enqueue no :MPI_Test in %d neighbor %d type %d tag %d\n", new_rank, op->neighbor, op->msg_type, op->tag);
                     op = next;
                     continue;
                 }
@@ -200,17 +284,17 @@ void re_enqueue(pending_mpi_op* list, bool isCompletedList, int fail_rank, pendi
 
           //Enqueue incomplete operations using new communicator
           //Isend
-          if(op->serialized.size == 0) {
-              //printf("send again to %d from %d\n", op->neighbor, new_rank);fflush(stdout);
+          if(op->msg_type == ISEND) {
           //TODO: remove the additional serialization by adding a new field for send/recv to op
-          ar_ptr = op->data->serialize();
-          op->serialized = ar_ptr;
+          //ar_ptr = op->data->serialize();
+          //op->serialized = ar_ptr;
+              //printf("re_enqueue yes :Isend in %d neighbor %d type %d tag %d\n", new_rank, op->neighbor, op->msg_type, op->tag);
               ::MPI_Isend(ar_ptr.data, ar_ptr.size, MPI_BYTE, op->neighbor, op->tag, op->comm, &(op->req));
-          op->serialized.size = 0;
+          //op->serialized.size = 0;
           }
           //Irecv
-          else if (op->serialized.size > 0) {
-              //printf("recv again from %d on %d\n", op->neighbor, new_rank);fflush(stdout);
+          else if (op->msg_type == IRECV) {
+              //printf("re_enqueue yes :Irecv in %d neighbor %d type %d tag %d\n", new_rank, op->neighbor, op->msg_type, op->tag);
               ::MPI_Irecv(ar_ptr.data, ar_ptr.size, MPI_BYTE, op->neighbor, op->tag, op->comm, &(op->req));
           }
           else {
@@ -220,6 +304,7 @@ void re_enqueue(pending_mpi_op* list, bool isCompletedList, int fail_rank, pendi
 
         op = next;
     }
+    //printf("re_enqueue out in %d\n", new_rank);
 }
 
 void my_recover_callback( MPI_Comm new_comm_world, int error, void *callback_data) {
@@ -249,6 +334,11 @@ void my_recover_callback( MPI_Comm new_comm_world, int error, void *callback_dat
             //check_out_finish_worker();
             //check_out_finish_worker();
             //hclib::finish([=]() {
+
+            //re-execute communicator operations since
+            //the old communicator is invalid
+            re_execute_comm(comm_operations);
+
             //Iterate though the pending list and enqueue back the
             //incomplete communication operations with the
             //new communicator and status variable

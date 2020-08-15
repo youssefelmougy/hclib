@@ -12,6 +12,8 @@ namespace communication {
 
 #ifdef USE_FENIX
 
+enum op_type {ISEND, IRECV};
+
 bool is_initial_role();
 void hclib_launch(generic_frame_ptr fct_ptr, void *arg, const char **deps, int ndeps);
 
@@ -63,6 +65,7 @@ struct pending_mpi_op {
     obj *data;
     archive_obj serialized;
 #ifdef USE_FENIX
+    op_type msg_type;
     int neighbor;
     int64_t tag;
     MPI_Comm comm;
@@ -74,6 +77,25 @@ extern pending_mpi_op *pending;
 extern pending_mpi_op **completed;
 extern hclib::locale_t *nic;
 extern int callback_source;
+
+#ifdef USE_FENIX
+struct comm_op {
+    MPI_Comm comm;
+    int ndims;
+    int *dims;
+    int *periods;
+    int reorder;
+    MPI_Comm *cart_comm;
+
+    comm_op *next;
+
+    comm_op(MPI_Comm comm, int ndims, int dims[], int periods[], int reorder, MPI_Comm *cart_comm, comm_op *next=nullptr):
+        comm(comm), ndims(ndims), dims(dims), periods(periods), reorder(reorder), cart_comm(cart_comm), next(next) {}
+};
+
+void Cart_create(MPI_Comm comm, int ndims, int dims[], int periods[], int reorder, MPI_Comm *cart_comm);
+void Cart_shift(MPI_Comm comm, int direction, int disp, int *rank_source, int *rank_dest);
+#endif // USE_FENIX
 
 bool test_mpi_completion(void *generic_op);
 
@@ -125,6 +147,7 @@ void Irecv(int count, int source, int64_t tag, hclib::promise_t<COMMUNICATION_OB
             op->prom = prom;
             op->serialized = ar_ptr;
 #ifdef USE_FENIX
+            op->msg_type = IRECV;
             op->neighbor = source;
             op->tag = tag;
             op->comm = comm;

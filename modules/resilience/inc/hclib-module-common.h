@@ -68,14 +68,21 @@ void poll_on_pending(pending_op **addr_of_head, pending_op **completed_head,
                     //printf("completed_head add start to %d\n", op->neighbor);
                     op->next = completed_head[op->neighbor];
                     completed_head[op->neighbor] = op;
-                    //printf("completed_head add end to %d\n", op->neighbor); fflush(stdout);
+
+                    //int rank;
+                    //MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+                    //printf("completed_head add end in %d neighbor %d type %d tag %d\n", rank, op->neighbor, op->msg_type, op->tag); fflush(stdout);
                 }
 #endif
 
               //Can be tuned to use a task for deserialization to free the communication worker
               //hclib::async([=]{
                 //Deserialize the data if serialized data is present i.e Irecv
+#ifdef USE_FENIX
+                if (op->msg_type == 1) {
+#else
                 if (op->serialized.size > 0) {
+#endif
                     op->data->deserialize(op->serialized);
                 }
                 else {
