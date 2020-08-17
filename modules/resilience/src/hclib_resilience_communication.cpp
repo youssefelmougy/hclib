@@ -73,7 +73,19 @@ bool test_mpi_completion(void *generic_op) {
 
     //callback_source = 0;
     int complete;
-    ::MPI_Test(&op->req, &complete, MPI_STATUS_IGNORE);
+    if(new_rank == 1) {
+        //printf("MPI_Test in rank %d tag %d req %p\n", new_rank, op->tag, &(op->req)); fflush(stdout);
+        if(new_rank == 1 && (op->tag == 78 || op->tag==79)) {
+            printf("MPI_Test in rank %d tag %ld req %p\n", new_rank, op->tag, &(op->req)); fflush(stdout);
+        }
+    }
+    ::MPI_Test(&(op->req), &complete, MPI_STATUS_IGNORE);
+    if(new_rank == 1) {
+        //printf("MPI_Test out rank %d tag %d\n", new_rank, op->tag); fflush(stdout);
+        if(new_rank == 1 && (op->tag == 78 || op->tag==79)) {
+            printf("MPI_Test out rank %d tag %ld req %p\n", new_rank, op->tag, &(op->req)); fflush(stdout);
+        }
+    }
 #ifdef COMM_PROFILE
     test_count++;
 #endif
@@ -106,14 +118,13 @@ int Isend_helper(obj *data, MPI_Datatype datatype, int dest, int64_t tag, hclib_
         //callback_source = 1;
         archive_obj ar_ptr = data->serialize();
         //TODO: should we use MPI_Isend or MPI_Issend?
-        ::MPI_Isend(ar_ptr.data, ar_ptr.size, MPI_BYTE, dest, tag, comm, &req);
+        ::MPI_Isend(ar_ptr.data, ar_ptr.size, MPI_BYTE, dest, tag, comm, &(op->req));
 #ifdef COMM_PROFILE
         send_count++;
         send_size+=ar_ptr.size;
 #endif
 
         op->serialized = ar_ptr;
-        op->req = req;
         op->prom = prom;
         op->data = data;
 #ifdef USE_FENIX
@@ -226,6 +237,16 @@ void re_execute_comm(comm_op *comm_operations) {
     }
 }
 
+void print_pending(pending_mpi_op* list) {
+
+    pending_mpi_op *op = list;
+    while(op) {
+        pending_mpi_op *next = op->next;
+        printf("print_pending in %d neighbor %d type %d tag %ld\n", new_rank, op->neighbor, op->msg_type, op->tag);;
+        op = next;
+    }
+}
+
 void re_enqueue(pending_mpi_op* list, bool isCompletedList, int fail_rank, pending_mpi_op** pending_ptr=nullptr) {
     pending_mpi_op *op = list;
     //printf("re_enqueue in %d with isCompletedList %d\n", new_rank, isCompletedList);
@@ -255,26 +276,29 @@ void re_enqueue(pending_mpi_op* list, bool isCompletedList, int fail_rank, pendi
             else {
                 //printf("re_enqueue no :isCompletedList in %d neighbor %d type %d tag %d\n", new_rank, op->neighbor, op->msg_type, op->tag);
                 op = next;
-                continue;;
+                continue;
             }
           }
           else {
-            //if pending operation was completed to a non failed rank then no need to enqueue again
-            int test_flag;
-            //printf("try MPI_Test in\n");
-            //MPI_Test( &(op->req), &test_flag, MPI_STATUS_IGNORE);
-            //printf("try MPI_Test out\n");
-            if(MPI_Test( &(op->req), &test_flag, MPI_STATUS_IGNORE) != FENIX_ERROR_CANCELLED
-              && op->neighbor != fail_rank) {
-                //TODO: for now we enqueue all sends. But once MPI_Issend completion can
-                //be detected we can remove the check and ignore all completed operations
-                //to non failed ranks.
-                if(op->msg_type == IRECV){
-                    //printf("re_enqueue no :MPI_Test in %d neighbor %d type %d tag %d\n", new_rank, op->neighbor, op->msg_type, op->tag);
-                    op = next;
-                    continue;
-                }
-            }
+            ////if pending operation was completed to a non failed rank then no need to enqueue again
+            //int test_flag;
+            //printf("try MPI_Test in %d\n", new_rank);
+            ////MPI_Test( &(op->req), &test_flag, MPI_STATUS_IGNORE);
+            ////printf("try MPI_Test out\n");
+            ////if(MPI_Test( &(op->req), &test_flag, MPI_STATUS_IGNORE) != FENIX_ERROR_CANCELLED
+            //if(Fenix_check_cancelled(&(op->req), MPI_STATUS_IGNORE) == false
+            //  && op->neighbor != fail_rank) {
+            //    printf("try MPI_Test mid %d\n", new_rank);
+            //    //TODO: for now we enqueue all sends. But once MPI_Issend completion can
+            //    //be detected we can remove the check and ignore all completed operations
+            //    //to non failed ranks.
+            //    if(op->msg_type == IRECV){
+            //        printf("re_enqueue no :MPI_Test in %d neighbor %d type %d tag %d\n", new_rank, op->neighbor, op->msg_type, op->tag);
+            //        op = next;
+            //        continue;
+            //    }
+            //}
+            //printf("try MPI_Test out %d\n", new_rank);
           }
 
           //TODO: map from old communicator to new communicator

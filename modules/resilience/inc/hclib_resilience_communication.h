@@ -136,14 +136,15 @@ void Irecv(int count, int source, int64_t tag, hclib::promise_t<COMMUNICATION_OB
                 ar_ptr.data = malloc(count);
 
             //callback_source = 2;
-            MPI_Request req;
-            ::MPI_Irecv(ar_ptr.data, count, MPI_BYTE, source, tag, comm, &req);
+            ::MPI_Irecv(ar_ptr.data, count, MPI_BYTE, source, tag, comm, &(op->req));
+            int rank;
+            MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+            printf("In Irecv actual in %d from %d tag %d pending %p pending_addr %p req %p comm %p\n", rank, source, tag, pending, &pending, &(op->req), comm);
 #ifdef COMM_PROFILE
             recv_count++;
             recv_size+=count;
 #endif
 
-            op->req = req;
             op->prom = prom;
             op->serialized = ar_ptr;
 #ifdef USE_FENIX
