@@ -14,7 +14,6 @@ namespace communication {
 
 enum op_type {ISEND, IRECV};
 
-bool is_initial_role();
 void hclib_launch(generic_frame_ptr fct_ptr, void *arg, const char **deps, int ndeps);
 
 template <typename T>
@@ -29,8 +28,16 @@ extern MPI_Comm new_comm;
 #define MPI_COMM_WORLD_DEFAULT MPI_COMM_WORLD_RES
 
 #else //USE_FENIX
+
+template <typename T>
+inline void launch(const char **deps, int ndeps, T &&lambda) {
+    hclib::launch(deps, ndeps, std::forward<T>(lambda));
+}
+
 #define MPI_COMM_WORLD_DEFAULT MPI_COMM_WORLD
 #endif //USE_FENIX
+
+bool is_initial_role();
 
 /*
 The object that will be saved to the archive.
@@ -78,7 +85,7 @@ extern pending_mpi_op **completed;
 extern hclib::locale_t *nic;
 extern int callback_source;
 
-#ifdef USE_FENIX
+//#ifdef USE_FENIX
 struct comm_op {
     MPI_Comm comm;
     int ndims;
@@ -95,7 +102,7 @@ struct comm_op {
 
 void Cart_create(MPI_Comm comm, int ndims, int dims[], int periods[], int reorder, MPI_Comm *cart_comm);
 void Cart_shift(MPI_Comm comm, int direction, int disp, int *rank_source, int *rank_dest);
-#endif // USE_FENIX
+//#endif // USE_FENIX
 
 bool test_mpi_completion(void *generic_op);
 
@@ -135,11 +142,11 @@ void Irecv(int count, int source, int64_t tag, hclib::promise_t<COMMUNICATION_OB
             if(ar_ptr.data == nullptr)
                 ar_ptr.data = malloc(count);
 
-            //callback_source = 2;
+            callback_source = 2;
             ::MPI_Irecv(ar_ptr.data, count, MPI_BYTE, source, tag, comm, &(op->req));
             int rank;
             MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-            printf("In Irecv actual in %d from %d tag %d pending %p pending_addr %p req %p comm %p\n", rank, source, tag, pending, &pending, &(op->req), comm);
+            //printf("In Irecv actual in %d from %d tag %d pending %p pending_addr %p req %p comm %p\n", rank, source, tag, pending, &pending, &(op->req), comm);
 #ifdef COMM_PROFILE
             recv_count++;
             recv_size+=count;

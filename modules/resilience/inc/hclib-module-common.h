@@ -20,6 +20,9 @@ void poll_on_pending(pending_op **addr_of_head, pending_op **completed_head,
         assert(op != NULL);
 
         while (op) {
+                    //int rank;
+                    //MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+                    //printf("poll_on_pending rank %d tag %d neighbor %d type %d\n", rank, op->tag, op->neighbor, op->msg_type);
             pending_op *next = op->next;
 
             const bool complete = test_completion_callback(op);

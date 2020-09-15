@@ -7,6 +7,10 @@
 
 #ifdef USE_FENIX
 #include<fenix.h>
+#include<unordered_map>
+#include<unordered_set>
+#include<vector>
+using namespace std;
 #endif
 
 namespace hclib {
@@ -19,14 +23,15 @@ hclib::locale_t *nic = nullptr;
 
 static int nic_locale_id;
 
+comm_op *comm_operations = nullptr;
+int callback_source = 0;
 #ifdef USE_FENIX
 //TODO: see which of these variables can be made local
-comm_op *comm_operations = nullptr;
 bool just_recovered = false;
 int old_rank = -1, new_rank = -1;
 MPI_Comm new_comm;
 static int fenix_status;
-int callback_source = 0;
+unordered_map<int, unordered_set<int>> recv_map;
 #endif
 
 HCLIB_MODULE_INITIALIZATION_FUNC(mpi_pre_initialize) {
@@ -63,7 +68,16 @@ HCLIB_MODULE_INITIALIZATION_FUNC(mpi_finalize) {
 //    MPI_Barrier(MPI_COMM_WORLD_DEFAULT);
 //    Fenix_Finalize();
 //#endif
-    MPI_Finalize();
+
+    //TODO: MPI_Finalize should be called always.
+    //MPI_Finalize after recovery causes deadlock inside it
+    //and therefore we bypass it now if recovery happened
+    if(is_initial_role()) {
+        //printf("MPI_Finalize in %d\n", new_rank);
+        callback_source = 8;
+        MPI_Finalize();
+        //printf("MPI_Finalize out %d\n", new_rank);
+    }
 }
 
 HCLIB_REGISTER_MODULE("resilience_mpi", mpi_pre_initialize, mpi_post_initialize, mpi_finalize)
@@ -71,21 +85,10 @@ HCLIB_REGISTER_MODULE("resilience_mpi", mpi_pre_initialize, mpi_post_initialize,
 bool test_mpi_completion(void *generic_op) {
     auto op = (pending_mpi_op *)generic_op;
 
-    //callback_source = 0;
+    callback_source = 3;
     int complete;
-    if(new_rank == 1) {
-        //printf("MPI_Test in rank %d tag %d req %p\n", new_rank, op->tag, &(op->req)); fflush(stdout);
-        if(new_rank == 1 && (op->tag == 78 || op->tag==79)) {
-            printf("MPI_Test in rank %d tag %ld req %p\n", new_rank, op->tag, &(op->req)); fflush(stdout);
-        }
-    }
     ::MPI_Test(&(op->req), &complete, MPI_STATUS_IGNORE);
-    if(new_rank == 1) {
-        //printf("MPI_Test out rank %d tag %d\n", new_rank, op->tag); fflush(stdout);
-        if(new_rank == 1 && (op->tag == 78 || op->tag==79)) {
-            printf("MPI_Test out rank %d tag %ld req %p\n", new_rank, op->tag, &(op->req)); fflush(stdout);
-        }
-    }
+
 #ifdef COMM_PROFILE
     test_count++;
 #endif
@@ -111,14 +114,26 @@ bool test_mpi_completion(void *generic_op) {
 }
 
 int Isend_helper(obj *data, MPI_Datatype datatype, int dest, int64_t tag, hclib_promise_t *prom, MPI_Comm comm) {
+
+#ifdef USE_FENIX
+    //If data is already recieved at dest before crash no need to send again
+    if(recv_map[dest].count(tag) == 1) {
+        if (prom) {
+            hclib_promise_put(prom, data);
+        }
+        return 0;
+    }
+#endif // USE_FENIX
+
     hclib::async_nb_await_at([=] {
         MPI_Request req;
         auto op = (pending_mpi_op *)malloc(sizeof(pending_mpi_op));
         assert(op);
-        //callback_source = 1;
+        callback_source = 1;
         archive_obj ar_ptr = data->serialize();
         //TODO: should we use MPI_Isend or MPI_Issend?
         ::MPI_Isend(ar_ptr.data, ar_ptr.size, MPI_BYTE, dest, tag, comm, &(op->req));
+        //printf("Isend actual in %d to %d tag %d\n", new_rank, dest, tag);
 #ifdef COMM_PROFILE
         send_count++;
         send_size+=ar_ptr.size;
@@ -156,12 +171,6 @@ int Iallreduce_helper(void *data, MPI_Datatype datatype, int64_t mpi_op, hclib_p
         hclib::append_to_pending(op, &pending, completed, test_mpi_completion, nic);
     }, nullptr, nic);
     return 0;
-}
-
-#ifdef USE_FENIX
-
-bool is_initial_role() {
-    return fenix_status == FENIX_ROLE_INITIAL_RANK;
 }
 
 void Cart_create(MPI_Comm comm, int dim, int dims[], int periods[], int reorder, MPI_Comm *cart_comm) {
@@ -221,6 +230,12 @@ void Cart_shift(MPI_Comm comm, int direction, int disp, int *rank_source, int *r
     }
 }
 
+#ifdef USE_FENIX
+
+bool is_initial_role() {
+    return fenix_status == FENIX_ROLE_INITIAL_RANK;
+}
+
 void re_execute_comm(comm_op *comm_operations) {
     comm_op *op=comm_operations;
     while(op) {
@@ -247,28 +262,88 @@ void print_pending(pending_mpi_op* list) {
     }
 }
 
+void get_completed_recv() {
+
+    int tmp_rank, tmp_world_size;
+    MPI_Comm_rank(MPI_COMM_WORLD_DEFAULT, &tmp_rank);
+    MPI_Comm_size(MPI_COMM_WORLD_DEFAULT, &tmp_world_size);
+
+    vector<vector<int>> table(tmp_world_size);
+
+    //collect all completed recv tags
+    if(completed != nullptr) {
+      for(int i=0;i<tmp_world_size;i++) {
+        pending_mpi_op *op = completed[i];
+
+        while(op) {
+          if(op->msg_type == IRECV) {
+            table[op->neighbor].push_back(op->tag);
+          }
+          op = op->next;
+        }
+      }
+    }
+
+    //all to all with number tags
+    int num_tags_send[tmp_world_size], num_tags_recv[tmp_world_size], i=0;
+    for(auto& elem:table)
+        num_tags_send[i++] = elem.size();
+
+    MPI_Alltoall(num_tags_send, 1, MPI_INT, num_tags_recv, 1, MPI_INT, MPI_COMM_WORLD_DEFAULT);
+    //printf("MPI_Alltoall in %d\n", tmp_rank);
+
+    int displ_tags_send[tmp_world_size+1] = {}, displ_tags_recv[tmp_world_size+1] = {};
+    for(int i=1;i<tmp_world_size+1;i++) {
+        displ_tags_send[i] = displ_tags_send[i-1] + num_tags_send[i-1];
+        displ_tags_recv[i] = displ_tags_recv[i-1] + num_tags_recv[i-1];
+    }
+
+    //based on recieved count of tags do all to allv of the actual tags
+    int send_count = displ_tags_send[tmp_world_size];
+    int recv_count = displ_tags_recv[tmp_world_size];
+    int send_buff[send_count], recv_buff[recv_count];
+    //flatten table into a 1D array
+    for(int i=0;i<tmp_world_size;i++) {
+        copy(table[i].begin(), table[i].end(), &send_buff[displ_tags_send[i]]);
+    }
+
+    MPI_Alltoallv(send_buff, num_tags_send, displ_tags_send, MPI_INT, recv_buff, num_tags_recv, displ_tags_recv, MPI_INT, MPI_COMM_WORLD_DEFAULT);
+    printf("MPI_Alltoallv in %d\n", tmp_rank);
+
+    //create a map from received data with rank+tag as key
+    //unordered_map<int, unordered_set<int>> recv_map;
+    for(int i=0;i<tmp_world_size;i++) {
+      for(int j=displ_tags_recv[i]; j<displ_tags_recv[i+1]; j++) {
+          recv_map[i].insert(recv_buff[j]);
+      }
+    }
+    //return recv_map;
+}
+
 void re_enqueue(pending_mpi_op* list, bool isCompletedList, int fail_rank, pending_mpi_op** pending_ptr=nullptr) {
     pending_mpi_op *op = list;
     //printf("re_enqueue in %d with isCompletedList %d\n", new_rank, isCompletedList);
+
+    //unordered_map<int, unordered_set<int>> recv_map;
+    if(isCompletedList)
+      get_completed_recv();
+
     while(op) {
         //printf("re_enqueue loop in %d with isCompletedList %d\n", new_rank, isCompletedList);
         pending_mpi_op *next = op->next;
 
-        //if(op->neighbor == fails[0]) {
-          //archive_obj ar_ptr = op->data->serialize();
-          //op->serialized = ar_ptr;
-          //TODO: use a seperate field to distinguish between send/recv rather
-          //than using op->serialized.size() so that the previous op->serialized
-          //data can be reused instead of calling op->data->serialize() again
           archive_obj ar_ptr = op->serialized;
 
           if(isCompletedList) {
             //if(op->neighbor == fail_rank) {
             //printf("re_enqueue out :isCompletedList in %d neighbor %d type %d tag %d\n", new_rank, op->neighbor, op->msg_type, op->tag);
-            if(op->neighbor == fail_rank || op->msg_type == ISEND) {
+
+            //Re-enqueue the completed send operation if the corresponding recv was not completed
+            if(op->msg_type == ISEND && recv_map[op->neighbor].count(op->tag) == 0) {
                 //printf("re_enqueue yes :isCompletedList in %d neighbor %d type %d tag %d\n", new_rank, op->neighbor, op->msg_type, op->tag);
-                //put the op into pending list and re-enqueue the operation since it is to a failed rank
-                //TODO:For now we enqueue sends to any rank. This should be removed.
+
+                //put the op into pending list and re-enqueue the operation
+                //and set prom to null since it was already 'put' before crash
                 op->prom = nullptr;
                 op->next = *pending_ptr;
                 *pending_ptr = op;
@@ -309,12 +384,8 @@ void re_enqueue(pending_mpi_op* list, bool isCompletedList, int fail_rank, pendi
           //Enqueue incomplete operations using new communicator
           //Isend
           if(op->msg_type == ISEND) {
-          //TODO: remove the additional serialization by adding a new field for send/recv to op
-          //ar_ptr = op->data->serialize();
-          //op->serialized = ar_ptr;
               //printf("re_enqueue yes :Isend in %d neighbor %d type %d tag %d\n", new_rank, op->neighbor, op->msg_type, op->tag);
               ::MPI_Isend(ar_ptr.data, ar_ptr.size, MPI_BYTE, op->neighbor, op->tag, op->comm, &(op->req));
-          //op->serialized.size = 0;
           }
           //Irecv
           else if (op->msg_type == IRECV) {
@@ -324,7 +395,6 @@ void re_enqueue(pending_mpi_op* list, bool isCompletedList, int fail_rank, pendi
           else {
               assert(false);
           }
-        //}
 
         op = next;
     }
@@ -333,7 +403,13 @@ void re_enqueue(pending_mpi_op* list, bool isCompletedList, int fail_rank, pendi
 
 void my_recover_callback( MPI_Comm new_comm_world, int error, void *callback_data) {
     just_recovered = true;
-    //printf("recovering in rank %d with callback_source %d\n", new_rank, *(int*)callback_data);
+    printf("recovering in rank %d with callback_source %d\n", new_rank, *(int*)callback_data);
+
+    //In the spare rank, participate in the all-to-all collective and return
+    if(new_rank == -1) {
+        get_completed_recv();
+        return;
+    }
 
     //Recovering
     //else {
@@ -424,13 +500,14 @@ void hclib_launch(generic_frame_ptr fct_ptr, void *arg, const char **deps,
         MPI_Info_set(info, "FENIX_RESUME_MODE", "NO_JUMP");
 
         int error;
-        Fenix_Init(&fenix_status, world_comm, &new_comm, nullptr, nullptr, spare_ranks, 0, info, &error);
+        //Fenix_Init(&fenix_status, world_comm, &new_comm, nullptr, nullptr, spare_ranks, 0, info, &error);
+        Fenix_Init_cb(&fenix_status, world_comm, &new_comm, nullptr, nullptr, spare_ranks, 0, info, &error, my_recover_callback, &callback_source);
         assert(fenix_status == FENIX_ROLE_INITIAL_RANK || fenix_status == FENIX_ROLE_RECOVERED_RANK);
         assert(fenix_status != FENIX_ROLE_SURVIVOR_RANK);
         MPI_Comm_rank(MPI_COMM_WORLD_DEFAULT, &new_rank);
         MPI_Comm_size(MPI_COMM_WORLD_DEFAULT, &new_world_size);
 
-        Fenix_Callback_register(my_recover_callback, &callback_source);
+        //Fenix_Callback_register(my_recover_callback, &callback_source);
 #if COMM_PROFILE
         printf("init old rank: %d, new rank: %d\n", old_rank, new_rank);
 #endif
@@ -458,6 +535,7 @@ void hclib_launch(generic_frame_ptr fct_ptr, void *arg, const char **deps,
             //Perform barrier in communication worker
             hclib::async_at([=]() {
                 printf("invoking is_initial_role barrier in %d\n", new_rank);
+                callback_source = 5;
                 MPI_Barrier(MPI_COMM_WORLD_DEFAULT);
                 printf("done is_initial_role barrier in %d\n", new_rank);
 
@@ -468,8 +546,10 @@ void hclib_launch(generic_frame_ptr fct_ptr, void *arg, const char **deps,
                         //pending = pending->next;
                         hclib::poll_on_pending(&pending, completed, test_mpi_completion, nic);
                     }
+                    callback_source = 6;
                     MPI_Barrier(MPI_COMM_WORLD_DEFAULT);
                 }
+                callback_source = 7;
                 Fenix_Finalize();
             }, nic);
         //}, hclib_get_closest_locale());
@@ -551,6 +631,12 @@ void hclib_launch(generic_frame_ptr fct_ptr, void *arg, const char **deps,
         end_time = hclib_current_time_ns();
         printf("\nHCLIB TIME %llu ns\n", end_time - start_time);
     }
+}
+
+#else // USE_FENIX
+
+bool is_initial_role() {
+    return true;
 }
 
 #endif // USE_FENIX
