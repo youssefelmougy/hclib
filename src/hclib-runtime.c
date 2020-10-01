@@ -45,7 +45,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <unistd.h>
 #include <errno.h>
 #include <sys/time.h>
-#include <dlfcn.h>
 #include <stddef.h>
 
 #include <hclib.h>
@@ -55,6 +54,10 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <hclib-locality-graph.h>
 #include <hclib-module.h>
 #include <hclib-instrument.h>
+
+#ifdef HAVE_DLFCN_H
+#include <dlfcn.h>
+#endif
 
 #ifdef USE_HWLOC
 #include <hwloc.h>
@@ -295,6 +298,7 @@ void hclib_global_init() {
 
 static void load_dependencies(const char **module_dependencies,
         int n_module_dependencies) {
+#ifdef HAVE_DLFCN_H
     int i;
     char *hclib_root = getenv("HCLIB_ROOT");
     if (hclib_root == NULL) {
@@ -311,9 +315,10 @@ static void load_dependencies(const char **module_dependencies,
         void *handle = dlopen(module_path_buf, RTLD_LAZY);
         if (handle == NULL) {
             fprintf(stderr, "WARNING: Failed dynamically loading %s for \"%s\" "
-                    "dependency\n", module_path_buf, module_name);
+                    "dependency: %s\n", module_path_buf, module_name, dlerror());
         }
     }
+#endif
 }
 
 static void hclib_entrypoint(const char **module_dependencies,
@@ -474,7 +479,20 @@ static inline void execute_task(hclib_task_t *task) {
     // task->_fp is of type 'void (*generic_frame_ptr)(void*)'
     (task->_fp)(task->args);
     check_out_finish(current_finish);
+#ifndef HCLIB_INLINE_FUTURES_ONLY
+    if (task->waiting_on_extra) {
+        free(task->waiting_on_extra);
+    }
+#endif
     free(task);
+}
+
+void hclib_default_queue_capacity(int* used, int* capacity) {
+    const int wid = hclib_get_current_worker();
+    hclib_locale_t *default_locale = hc_context->graph->locales + 0;
+    hclib_internal_deque_t * deq = &(default_locale->deques[wid].deque);
+    *used = deq->tail - deq->head;
+    *capacity = INIT_DEQUE_CAPACITY;
 }
 
 static inline void rt_schedule_async(hclib_task_t *async_task,
@@ -579,12 +597,25 @@ void spawn_handler(hclib_task_t *task, hclib_locale_t *locale,
     }
 
     if (nfutures > 0) {
-        if (nfutures > MAX_NUM_WAITS) {
+        unsigned n_inlined = (nfutures > MAX_NUM_WAITS ? MAX_NUM_WAITS : nfutures);
+        unsigned n_extra = (nfutures > MAX_NUM_WAITS ? nfutures - MAX_NUM_WAITS : 0);
+
+        memcpy(&(task->waiting_on[0]), futures, n_inlined * sizeof(*futures));
+
+        if (n_extra > 0) {
+#ifdef HCLIB_INLINE_FUTURES_ONLY
             fprintf(stderr, "Number of dependent futures (%d) exceeds limit of "
                     "%d\n", nfutures, MAX_NUM_WAITS);
             exit(1);
+#else
+            task->waiting_on_extra = (hclib_future_t **)malloc(
+                    (n_extra + 1) * sizeof(task->waiting_on_extra[0]));
+            assert(task->waiting_on_extra);
+            memcpy(task->waiting_on_extra, futures + MAX_NUM_WAITS,
+                    n_extra * sizeof(task->waiting_on_extra[0]));
+            task->waiting_on_extra[n_extra] = NULL;
+#endif
         }
-        memcpy(task->waiting_on, futures, nfutures * sizeof(hclib_future_t *));
         task->waiting_on_index = -1;
     }
 
@@ -1074,7 +1105,7 @@ void help_finish(finish_t *finish) {
     hclib_worker_state *ws = CURRENT_WS_INTERNAL;
     hclib_task_t *need_to_swap_ctx = NULL;
     while (finish->counter > 1 && need_to_swap_ctx == NULL) {
-        need_to_swap_ctx = find_and_run_task(ws, 0, &(finish->counter), 1,
+        need_to_swap_ctx = find_and_run_task(ws, 1, &(finish->counter), 1,
                 finish);
     }
 
@@ -1144,11 +1175,13 @@ void hclib_yield(hclib_locale_t *locale) {
         ws = CURRENT_WS_INTERNAL;
 
 #ifdef HCLIB_STATS
-    worker_stats[ws->id].count_yield_iterations++;
+        worker_stats[ws->id].count_yield_iterations++;
 #endif
 
+        // Try to pop a task created by this thread from our pop path
         task = locale_pop_task(ws);
         if (!task) {
+            // If the pop above fails, try stealing some tasks on our steal path
             int victim;
             const int nstolen = locale_steal_task(ws, (void **)stolen, &victim);
             if (nstolen) {
@@ -1164,12 +1197,16 @@ void hclib_yield(hclib_locale_t *locale) {
                 }
 #endif
 #endif
+                /*
+                 * If the steal is successful, take one of those tasks to run
+                 * (stolen[0]) and push the rest back in to the work stealing
+                 * system.
+                 */
                 task = stolen[0];
                 for (int i = 1; i < nstolen; i++) {
                     rt_schedule_async(stolen[i], ws);
                 }
             }
-            // task = locale_steal_task(ws);
         }
 
         if (task) {
@@ -1315,7 +1352,7 @@ void hclib_user_harness_timer(double dur) {
  * Main entrypoint for runtime initialization, this function must be called by
  * the user program before any HC actions are performed.
  */
-static void hclib_init(const char **module_dependencies,
+void hclib_init(const char **module_dependencies,
         int n_module_dependencies, const int instrument) {
     if (getenv("HCLIB_PROFILE_LAUNCH_BODY")) {
         profile_launch_body = 1;
@@ -1411,7 +1448,7 @@ void hclib_print_runtime_stats(FILE *fp) {
 #endif
 }
 
-static void hclib_finalize(const int instrument) {
+void hclib_finalize(const int instrument) {
     LiteCtx *finalize_ctx = LiteCtx_proxy_create(__func__);
     LiteCtx *finish_ctx = LiteCtx_create(_hclib_finalize_ctx);
 #ifdef HCLIB_STATS

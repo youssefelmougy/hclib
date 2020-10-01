@@ -25,3 +25,4 @@ clean:
 install: $(TARGETS)
 	cp lib/*.a lib/*.so $(HCLIB_ROOT)/lib
 	cp inc/*.h $(HCLIB_ROOT)/include/
+	cp ../common/hclib-module-common.h $(HCLIB_ROOT)/include/
