@@ -7,8 +7,48 @@ extern "C" {
 
 #define DONE_MARK -1
 #define BUFFER_SIZE 10000001
+#ifndef ELASTIC_BUFFER_SIZE
+#define ELASTIC_BUFFER_SIZE 48
+#endif
 
 namespace hclib {
+
+#ifdef USE_LAMBDA
+class BaseLambdaPacket {
+  public:
+    virtual void invoke() = 0;
+    virtual size_t get_bytes() = 0;
+    virtual ~BaseLambdaPacket() {}
+};
+
+template<typename L>
+class LambdaPacket : public BaseLambdaPacket {
+    L lambda;
+
+  public:
+    LambdaPacket(L lambda) : lambda(lambda) {}
+
+    void invoke() {
+        lambda();
+    }
+
+    size_t get_bytes() {
+        return sizeof(*this);
+    }
+};
+
+template<typename T>
+struct BufferPacket {
+    T data;
+    int64_t rank;
+    BaseLambdaPacket* lambda_pkt;
+
+    BufferPacket() : rank(0) {}
+    BufferPacket(T data, int64_t rank) : data(data), rank(rank) {}
+    BufferPacket(int64_t rank, BaseLambdaPacket* lambda_pkt) : rank(rank), lambda_pkt(lambda_pkt) {}
+};
+
+#else // USE_LAMBDA
 
 template<typename T>
 struct BufferPacket {
@@ -18,6 +58,8 @@ struct BufferPacket {
     BufferPacket() : rank(0) {}
     BufferPacket(T data, int64_t rank) : data(data), rank(rank) {}
 };
+
+#endif // USE_LAMBDA
 
 template<typename T, int SIZE>
 class Mailbox {
@@ -51,9 +93,13 @@ class Mailbox {
     }
 
     void start() {
+#ifdef USE_LAMBDA
+        conv = convey_new_elastic(1, ELASTIC_BUFFER_SIZE, SIZE_MAX, 0, NULL, convey_opt_PROGRESS);
+#else
         //buff = new hclib::conveyor::safe_buffer<BufferPacket<T>>(SIZE);
         //conv = convey_new(SIZE_MAX, 0, NULL, 0);
         conv = convey_new(SIZE_MAX, 0, NULL, convey_opt_PROGRESS);
+#endif
         assert( conv != nullptr );
         convey_begin(conv, sizeof(T));
         done_mark.rank = DONE_MARK;
@@ -64,10 +110,18 @@ class Mailbox {
         convey_free(conv);
     }
 
+#ifdef USE_LAMBDA
+    template<typename L>
+    void send(int rank, L lambda) {
+        assert(!buff->full());
+        buff->push_back(BufferPacket<T>(rank, new LambdaPacket<L>(lambda)));
+    }
+#else
     void send(T pkt, int rank) {
         assert(!buff->full());
         buff->push_back(BufferPacket<T>(pkt, rank));
     }
+#endif // USE_LAMBDA
 
     void done() {
         assert(!buff->full());
@@ -107,7 +161,13 @@ class Mailbox {
               for(i=0;i<buff_size; i++){
                   bp = buff->operator[](i);
                   if( bp.rank == DONE_MARK) break;
+#ifdef USE_LAMBDA
+                  //printf("size %d\n", bp.lambda_pkt->get_bytes());
+                  if( !convey_epush(conv, bp.lambda_pkt->get_bytes(), bp.lambda_pkt, bp.rank)) break;
+                  //delete bp.lambda_pkt;
+#else
                   if( !convey_push(conv, &(bp.data), bp.rank)) break;
+#endif //  USE_LAMBDA
               }
 
 	          if(i>0)
@@ -117,12 +177,22 @@ class Mailbox {
 #endif
                   buff->erase_begin(i);
               }
-              T pop;
               int64_t from;
+#ifdef USE_LAMBDA
+              convey_item_t item;
+              while( convey_epull(conv, &item) == convey_OK) {
+                  BaseLambdaPacket* data = (BaseLambdaPacket*)item.data;
+                  data->invoke();
+              }
+#else
+
+              T pop;
               while( convey_pull(conv, &pop, &from) == convey_OK) {
                   //hclib::async([=]() { process(pop, from); });
                   process(pop, from);
               }
+#endif // USE_LAMBDA
+
 #ifndef YIELD_LOOP
               hclib::yield_at(nic);
 #else
@@ -137,7 +207,7 @@ class Mailbox {
     }
 };
 
-template<int N, typename T, int SIZE=BUFFER_SIZE>
+template<int N, typename T=int64_t, int SIZE=BUFFER_SIZE>
 class Selector {
 
   private:
@@ -196,6 +266,18 @@ class Selector {
         start_worker_loop();
     }
 
+#ifdef USE_LAMBDA
+    template<typename L>
+    void send(int mb_id, int rank, L lambda) {
+        mb[mb_id].send(rank, lambda);
+    }
+
+    template<typename L>
+    void send(int rank, L lambda) {
+        assert(N==1);
+        send(0, rank, lambda);
+    }
+#else
     void send(int mb_id, T pkt, int rank) {
         mb[mb_id].send(pkt, rank);
     }
@@ -204,6 +286,7 @@ class Selector {
         assert(N==1);
         send(0, pkt, rank);
     }
+#endif // USE_LAMBDA
 
     void done(int mb_id) {
         mb[mb_id].done();
@@ -229,7 +312,7 @@ class Selector {
     }
 };
 
-template<typename T>
+template<typename T=int64_t>
 using Actor = Selector<1,T>;
 
 }; // namespace hclib
