@@ -155,25 +155,16 @@ class Mailbox {
         buff->push_back(done_mark);
     }
 
-    int start_worker_loop(int status=0) {
 
 #ifndef YIELD_LOOP
+    int start_worker_loop(int status=0) {
+
         assert(status == 0);
         hclib::async_at([=]{
-#endif
           while(true) {
               size_t buff_size = buff->size();
               if(buff_size > 0) break;
-#ifndef YIELD_LOOP
               hclib::yield_at(nic);
-#else
-              if(status == 1)
-                  return 1;
-              else {
-                  assert(status == 2);
-                  break;
-              }
-#endif
           }
 
           BufferPacket<T> bp;
@@ -221,18 +212,81 @@ class Mailbox {
               }
 #endif // USE_LAMBDA
 
-#ifndef YIELD_LOOP
               hclib::yield_at(nic);
-#else
-              return 2;
-#endif
           }
           worker_loop_end.put(1);
-#ifndef YIELD_LOOP
         }, nic);
-#endif
         return 0;
     }
+
+#else // YIELD_LOOP
+
+    int start_worker_loop(int status=0) {
+
+          while(true) {
+              size_t buff_size = buff->size();
+              if(buff_size > 0) break;
+              if(status == 1)
+                  return 1;
+              else {
+                  assert(status == 2);
+                  break;
+              }
+          }
+
+          BufferPacket<T> bp;
+          if(buff->size() > 0)
+            bp = buff->at(0);
+
+          //Assumes once 'advance' is called with done=true, the conveyor
+          //enters endgame and subsequent value of 'done' is ignored
+          while(convey_advance(conv, bp.rank == DONE_MARK)) {
+              int i;
+              size_t buff_size = buff->size();
+              for(i=0;i<buff_size; i++){
+                  bp = buff->operator[](i);
+                  if( bp.rank == DONE_MARK) break;
+#ifdef USE_LAMBDA
+                  //printf("size %d\n", bp.lambda_pkt->get_bytes());
+                  if( !convey_epush(conv, bp.lambda_pkt->get_bytes(), bp.lambda_pkt, bp.rank)) break;
+                  //delete bp.lambda_pkt;
+#else
+                  if( !convey_push(conv, &(bp.data), bp.rank)) break;
+#endif //  USE_LAMBDA
+              }
+
+	          if(i>0)
+              {
+#ifdef USE_LOCK
+                  std::lock_guard<std::mutex> lg(buff->get_mutex());
+#endif
+                  buff->erase_begin(i);
+              }
+              int64_t from;
+#ifdef USE_LAMBDA
+              convey_item_t item;
+              while( convey_epull(conv, &item) == convey_OK) {
+                  BaseLambdaPacket* data = (BaseLambdaPacket*)item.data;
+                  data->invoke();
+              }
+#else
+
+              T pop;
+              //while(!get_dep_mb()->get_buffer()->full() &&  convey_pull(conv, &pop, &from) == convey_OK) {
+              while( convey_pull(conv, &pop, &from) == convey_OK) {
+                  //hclib::async([=]() { process(pop, from); });
+                  process(pop, from);
+              }
+#endif // USE_LAMBDA
+
+              return 2;
+          }
+          worker_loop_end.put(1);
+          return 0;
+    }
+
+#endif // YIELD_LOOP
+
 };
 
 template<int N, typename T=int64_t, int SIZE=BUFFER_SIZE>
