@@ -35,9 +35,6 @@
 //  OF THE POSSIBILITY OF SUCH DAMAGE.
 // 
  *****************************************************************/ 
-#ifndef YIELD_LOOP
-#define YIELD_LOOP
-#endif
 
 #include <shmem.h>
 extern "C" {

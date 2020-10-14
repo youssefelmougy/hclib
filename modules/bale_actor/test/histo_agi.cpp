@@ -78,10 +78,10 @@ double histo_agi(int64_t *index, int64_t T,  int64_t *counts) {
 int main(int argc, char * argv[]) {
   lgp_init(argc, argv);
 
-  char hostname[1024];
-  hostname[1023] = '\0';
-  gethostname(hostname, 1023);
-  printf("Hostname: %s rank: %d\n", hostname, MYTHREAD);
+  //char hostname[1024];
+  //hostname[1023] = '\0';
+  //gethostname(hostname, 1023);
+  //printf("Hostname: %s rank: %d\n", hostname, MYTHREAD);
 
   int64_t buf_cnt = 1024;
   int64_t models_mask = 0; // run all the programing models

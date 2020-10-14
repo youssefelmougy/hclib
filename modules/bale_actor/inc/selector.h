@@ -6,7 +6,7 @@ extern "C" {
 }
 
 #define DONE_MARK -1
-#define BUFFER_SIZE 10000001
+#define BUFFER_SIZE 1024
 #ifndef ELASTIC_BUFFER_SIZE
 #define ELASTIC_BUFFER_SIZE 48
 #endif
@@ -68,6 +68,8 @@ class Mailbox {
     convey_t* conv=nullptr;
     BufferPacket<T> done_mark;
     hclib::promise_t<int> worker_loop_end;
+    bool is_early_exit = false;
+    Mailbox* dep_mb = nullptr;
 
   public:
 
@@ -92,6 +94,22 @@ class Mailbox {
         return worker_loop_end.get_future();
     }
 
+    hclib::conveyor::safe_buffer<BufferPacket<T>>* get_buffer() {
+        return buff;
+    }
+
+    void set_is_early_exit(bool val) {
+        is_early_exit = val;
+    }
+
+    void set_dep_mb(Mailbox* val) {
+        dep_mb = val;
+    }
+
+    Mailbox* get_dep_mb() {
+        return dep_mb;
+    }
+
     void start() {
 #ifdef USE_LAMBDA
         conv = convey_new_elastic(1, ELASTIC_BUFFER_SIZE, SIZE_MAX, 0, NULL, convey_opt_PROGRESS);
@@ -113,17 +131,26 @@ class Mailbox {
 #ifdef USE_LAMBDA
     template<typename L>
     void send(int rank, L lambda) {
+        while(buff->full()) hclib::yield_at(nic);
         assert(!buff->full());
         buff->push_back(BufferPacket<T>(rank, new LambdaPacket<L>(lambda)));
     }
 #else
-    void send(T pkt, int rank) {
+    bool send(T pkt, int rank) {
+        if(buff->full()) {
+            if(is_early_exit)
+                return false;
+            else
+                while(buff->full()) hclib::yield_at(nic);
+        }
         assert(!buff->full());
         buff->push_back(BufferPacket<T>(pkt, rank));
+        return true;
     }
 #endif // USE_LAMBDA
 
     void done() {
+        while(buff->full()) hclib::yield_at(nic);
         assert(!buff->full());
         buff->push_back(done_mark);
     }
@@ -187,6 +214,7 @@ class Mailbox {
 #else
 
               T pop;
+              //while(!get_dep_mb()->get_buffer()->full() &&  convey_pull(conv, &pop, &from) == convey_OK) {
               while( convey_pull(conv, &pop, &from) == convey_OK) {
                   //hclib::async([=]() { process(pop, from); });
                   process(pop, from);
@@ -261,6 +289,7 @@ class Selector {
 
     void start() {
         for(int i=0; i<N; i++) {
+            //mb[i].set_dep_mb(&mb[(i+1)%N]);
             mb[i].start();
         }
         start_worker_loop();
@@ -278,13 +307,13 @@ class Selector {
         send(0, rank, lambda);
     }
 #else
-    void send(int mb_id, T pkt, int rank) {
-        mb[mb_id].send(pkt, rank);
+    bool send(int mb_id, T pkt, int rank) {
+        return mb[mb_id].send(pkt, rank);
     }
 
-    void send(T pkt, int rank) {
+    bool send(T pkt, int rank) {
         assert(N==1);
-        send(0, pkt, rank);
+        return send(0, pkt, rank);
     }
 #endif // USE_LAMBDA
 

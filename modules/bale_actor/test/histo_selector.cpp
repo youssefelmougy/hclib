@@ -103,10 +103,10 @@ int main(int argc, char * argv[]) {
   const char *deps[] = { "system", "bale_actor" };
   hclib::launch(deps, 2, [=] {
 
-  char hostname[1024];
-  hostname[1023] = '\0';
-  gethostname(hostname, 1023);
-  printf("Hostname: %s rank: %d\n", hostname, MYTHREAD);
+  //char hostname[1024];
+  //hostname[1023] = '\0';
+  //gethostname(hostname, 1023);
+  //printf("Hostname: %s rank: %d\n", hostname, MYTHREAD);
 
   int64_t buf_cnt = 1024;
   int64_t models_mask = 0; // run all the programing models

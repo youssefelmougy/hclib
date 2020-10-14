@@ -1126,7 +1126,19 @@ void hclib_yield(hclib_locale_t *locale) {
     worker_stats[ws->id].count_yield_iterations++;
 #endif
 
-        task = locale_pop_task(ws);
+        //task = locale_pop_task(ws);
+
+        //Select task in fifo (queue) rather than lifo (stack) order
+        //This is only tested with one worker for the Conveyors-Actor work
+        int victim;
+        const int nstolen = locale_steal_task(ws, (void **)stolen, &victim);
+        //printf("v %d n %d\n", victim, nstolen);
+        assert(nstolen == 0 || (nstolen == 1 && victim == 0));
+        if(nstolen == 1)
+            task = stolen[0];
+        else
+            task = locale_pop_task(ws);
+
         if (!task) {
             int victim;
             const int nstolen = locale_steal_task(ws, (void **)stolen, &victim);
