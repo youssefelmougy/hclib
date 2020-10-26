@@ -25,9 +25,11 @@ upc: $(TARGETS_UPC)
 
 %_conveyor: %_conveyor.cpp
 	$(CXX) -g -O3 -std=c++11 -I$(BALE_INSTALL)/include -L$(BALE_INSTALL)/lib -o $@ $^ -lspmat -lconvey -lexstack -llibgetput -lm
+	#$(CXX) -g -O3 -std=c++11 -I $(HPCTOOLKIT_HOME)/include -I$(BALE_INSTALL)/include -L$(BALE_INSTALL)/lib -o $@ $^ -lspmat -lconvey -lexstack -llibgetput -lm -L $(HPCTOOLKIT_HOME)/lib/hpctoolkit -lhpctoolkit
 
 %_selector: %_selector.cpp
 	$(CXX) -g -O3 -std=c++11 $(HCLIB_CFLAGS) $(HCLIB_LDFLAGS) -o $@ $^ $(HCLIB_LDLIBS) -lspmat -lconvey -lexstack -llibgetput -lhclib_bale_actor -lm
+	#$(CXX) -g -O3 -std=c++11 -I $(HPCTOOLKIT_HOME)/include $(HCLIB_CFLAGS) $(HCLIB_LDFLAGS) -o $@ $^ $(HCLIB_LDLIBS) -lspmat -lconvey -lexstack -llibgetput -lhclib_bale_actor -lm -L $(HPCTOOLKIT_HOME)/lib/hpctoolkit -lhpctoolkit
 
 %_shmem: %_shmem.cpp
 	$(CXX) -g -O3 -o $@ $^ -lm

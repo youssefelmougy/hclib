@@ -273,6 +273,7 @@ int main(int argc, char** argv) {
         lgp_min_avg_max_d(stat, t1, THREADS);
         T0_fprintf(stderr, " %8.3lf seconds\n", stat->avg);
 
+#if USE_ERROR_CHECK
         /* correctness check */
         if (check) {      
             sparsemat_t * outmatT = transpose_matrix(outmat);
@@ -281,6 +282,7 @@ int main(int argc, char** argv) {
             }
             clear_matrix(outmatT);
         }
+#endif // USE_ERROR_CHECK
 
         clear_matrix(outmat);
         clear_matrix(inmat);

@@ -505,9 +505,11 @@ int main(int argc, char * argv[]) {
     lgp_barrier();
     T0_fprintf(stderr,"  %8.3lf seconds\n", laptime);
 
+#if USE_ERROR_CHECK
     if( check_is_triangle(mat, rperminv2, cperminv2, dump_files) ) {
       printf("\nERROR: After toposort_matrix_upc: mat2 is not upper-triangular!\n");
     }
+#endif // USE_ERROR_CHECK
 
   lgp_barrier();
   lgp_finalize();

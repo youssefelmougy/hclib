@@ -264,6 +264,7 @@ int main(int argc, char* argv[]) {
     lgp_min_avg_max_d(stat, t1, THREADS);
     T0_fprintf(stderr, " %8.3lf seconds\n", stat->avg);
 
+#if USE_ERROR_CHECK
     if (!is_perm(out, numrows)) {
         error++;
         T0_printf("\nERROR: rand_permp_%ld failed!\n\n", use_model & models_mask);
@@ -273,7 +274,8 @@ int main(int argc, char* argv[]) {
     if (error) {
         T0_fprintf(stderr,"BALE FAIL!!!!\n"); 
     }
-  
+#endif // USE_ERROR_CHECK
+
     lgp_finalize();
   
     return error;

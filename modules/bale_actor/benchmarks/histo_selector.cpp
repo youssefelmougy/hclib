@@ -103,10 +103,10 @@ int main(int argc, char * argv[]) {
   const char *deps[] = { "system", "bale_actor" };
   hclib::launch(deps, 2, [=] {
 
-  char hostname[1024];
-  hostname[1023] = '\0';
-  gethostname(hostname, 1023);
-  fprintf(stderr, "Hostname: %s rank: %d\n", hostname, MYTHREAD);
+  //char hostname[1024];
+  //hostname[1023] = '\0';
+  //gethostname(hostname, 1023);
+  //fprintf(stderr, "Hostname: %s rank: %d\n", hostname, MYTHREAD);
 
   int64_t l_num_ups  = 1000000;     // per thread number of requests (updates)
   int64_t lnum_counts = 1000;       // per thread size of the table
@@ -169,6 +169,7 @@ int main(int argc, char * argv[]) {
  
   lgp_barrier();
 
+#if USE_ERROR_CHECK
   // Check the results
   // Assume that the atomic add version will correctly zero out the counts array
   for(i = 0; i < l_num_ups; i++) {
@@ -188,6 +189,7 @@ int main(int argc, char * argv[]) {
   if(totalerrors) {
      T0_fprintf(stderr,"FAILED!!!! total errors = %ld\n", totalerrors);
   }
+#endif // USE_ERROR_CHECK
 
   lgp_all_free(counts);
   free(index);

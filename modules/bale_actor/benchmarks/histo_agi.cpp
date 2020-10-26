@@ -78,10 +78,10 @@ double histo_agi(int64_t *index, int64_t T,  int64_t *counts) {
 int main(int argc, char * argv[]) {
   lgp_init(argc, argv);
 
-  char hostname[1024];
-  hostname[1023] = '\0';
-  gethostname(hostname, 1023);
-  fprintf(stderr,"Hostname: %s rank: %d\n", hostname, MYTHREAD);
+  //char hostname[1024];
+  //hostname[1023] = '\0';
+  //gethostname(hostname, 1023);
+  //fprintf(stderr,"Hostname: %s rank: %d\n", hostname, MYTHREAD);
 
   int64_t l_num_ups  = 1000000;     // per thread number of requests (updates)
   int64_t lnum_counts = 1000;       // per thread size of the table

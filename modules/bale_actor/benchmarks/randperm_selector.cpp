@@ -35,9 +35,6 @@
 //  OF THE POSSIBILITY OF SUCH DAMAGE.
 // 
  *****************************************************************/ 
-#ifndef YIELD_LOOP
-#define YIELD_LOOP
-#endif
 
 #include <shmem.h>
 extern "C" {
@@ -185,26 +182,33 @@ int64_t* copied_rand_permp_selector(int64_t N, int seed) {
     double t1 = wall_seconds();
 
     hclib::finish([lN, M, lperm, hitsPtr, iendPtr, phaseOneSelector]() {
+        phaseOneSelector->mb[THROW].set_is_early_exit(true);
         phaseOneSelector->start();
         pkg_t pkg;
-        int64_t i = 0;
+        //int64_t i = 0;
 
         // Since a throw a fail, we need to keep track of hits
         // instead of believing our lN request will all result in hits
         while (*hitsPtr != lN) {
-            i = *iendPtr;
+            //i = *iendPtr;
 
-            while (i < lN) {
+            while (*iendPtr < lN) {
                 int64_t r = lrand48() % M;
                 int64_t pe = r % THREADS;
                 pkg.idx = r / THREADS;
-                pkg.val = lperm[i];
+                pkg.val = lperm[*iendPtr];
 
-                phaseOneSelector->send(THROW, pkg, pe);
-                i++;
+                bool ret = phaseOneSelector->send(THROW, pkg, pe);
+                //i++;
+
+                if(ret)
+                    (*iendPtr)++;
+                else
+                    hclib::yield();
+
             }
 
-            *iendPtr = i;
+            //*iendPtr = i;
 
             // let the mailbox process in order for hits to update
             hclib::yield();
@@ -323,6 +327,7 @@ int main(int argc, char* argv[]) {
         lgp_min_avg_max_d(stat, t1, THREADS);
         T0_fprintf(stderr, " %8.3lf seconds\n", stat->avg);
 
+#if USE_ERROR_CHECK
         if (!is_perm(out, numrows)) {
             error++;
             T0_printf("\nERROR: rand_permp_selector failed!\n\n");
@@ -332,7 +337,8 @@ int main(int argc, char* argv[]) {
         if (error) {
             T0_fprintf(stderr,"BALE FAIL!!!!\n"); 
         }
-  
+#endif // USE_ERROR_CHECK
+
     });
 
     return 0;

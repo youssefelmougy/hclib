@@ -5,6 +5,10 @@ extern "C" {
 #include "convey.h"
 }
 
+#ifndef NO_USE_BUFFER
+#define USE_BUFFER
+#endif
+
 #define DONE_MARK -1
 #define BUFFER_SIZE 1024
 #ifndef ELASTIC_BUFFER_SIZE
@@ -68,7 +72,7 @@ class Mailbox {
     convey_t* conv=nullptr;
     BufferPacket<T> done_mark;
     hclib::promise_t<int> worker_loop_end;
-    bool is_early_exit = false;
+    bool is_early_exit = false, is_done = false;
     Mailbox* dep_mb = nullptr;
 
   public:
@@ -137,6 +141,7 @@ class Mailbox {
     }
 #else
     bool send(T pkt, int rank) {
+#ifdef USE_BUFFER
         if(buff->full()) {
             if(is_early_exit)
                 return false;
@@ -146,10 +151,19 @@ class Mailbox {
         assert(!buff->full());
         buff->push_back(BufferPacket<T>(pkt, rank));
         return true;
+#else // USE_BUFFER
+        int ret = convey_push(conv, &pkt, rank);
+        if(is_early_exit)
+            return ret == convey_OK;
+        else if(ret != convey_OK)
+            while(convey_push(conv, &pkt, rank) != convey_OK) hclib::yield_at(nic);
+        return true;
+#endif // USE_BUFFER
     }
 #endif // USE_LAMBDA
 
     void done() {
+        is_done = true;
         while(buff->full()) hclib::yield_at(nic);
         assert(!buff->full());
         buff->push_back(done_mark);
@@ -161,6 +175,7 @@ class Mailbox {
 
         assert(status == 0);
         hclib::async_at([=]{
+#ifdef USE_BUFFER
           while(true) {
               size_t buff_size = buff->size();
               if(buff_size > 0) break;
@@ -195,6 +210,9 @@ class Mailbox {
 #endif
                   buff->erase_begin(i);
               }
+#else // USE_BUFFER
+          while(convey_advance(conv, is_done)) {
+#endif // USE_BUFFER
               int64_t from;
 #ifdef USE_LAMBDA
               convey_item_t item;

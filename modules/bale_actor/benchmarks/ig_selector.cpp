@@ -142,10 +142,10 @@ int main(int argc, char * argv[]) {
   const char *deps[] = { "system", "bale_actor" };
   hclib::launch(deps, 2, [=] {
 
-    char hostname[1024];
-    hostname[1023] = '\0';
-    gethostname(hostname, 1023);
-    fprintf(stderr, "Hostname: %s rank: %d\n", hostname, MYTHREAD);
+    //char hostname[1024];
+    //hostname[1023] = '\0';
+    //gethostname(hostname, 1023);
+    //fprintf(stderr, "Hostname: %s rank: %d\n", hostname, MYTHREAD);
 
     int64_t i;
     int64_t ltab_siz = 100000;
@@ -202,13 +202,15 @@ int main(int argc, char * argv[]) {
   
        T0_fprintf(stderr,"  %8.3lf seconds\n", laptime);
   
+#if USE_ERROR_CHECK
        num_errors += ig_check_and_zero(use_model, tgt, index, l_num_req);
   
     total_errors = num_errors;
     if( total_errors ) {
       T0_fprintf(stderr,"YOU FAILED!!!!\n");
     }
-  
+#endif // USE_ERROR_CHECK
+
     lgp_barrier();
     lgp_all_free(table);
     free(index);
