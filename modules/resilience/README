@@ -1,0 +1,10 @@
+
+Enabling Resiliency in Asynchronous Many-Task Programming Models
+----------------------------------------------------------------
+
+Document also available at
+https://github.com/srirajpaul/hclib/blob/feature/resilience/modules/resilience/
+
+Resilience is an imminent issue for next-generation platforms due to projected increases in soft/transient failures as part of the inherent trade-offs among performance, energy, and costs in system design. A comprehensive approach is created to enable application-level resilience in Asynchronous Many-Task (AMT) programming models with a focus on remedying Silent Data Corruption (SDC) that can often go undetected by the hardware and OS. This approach makes it possible for the application programmer to declaratively express resilience attributes with minimal code changes and delegate the complexity of efficiently supporting resilience to the runtime system.
+
+A prototype implementation of this approach is created as an extension to the Habanero C/C++ library (HClib), where different resilience techniques, including task replay, task replication, algorithm-based fault tolerance (ABFT), and checkpointing are available. Please check the 'benchmarks' directory for instructions to run the mini-applications.
