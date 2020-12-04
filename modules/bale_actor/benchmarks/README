@@ -93,6 +93,8 @@ Getting Started
     C) Install Conveyors library
 
     >> git clone https://github.com/jdevinney/bale.git
+    #Bale 2.1 moved to another repository
+    >> git clone https://github.com/jdevinney/bale_old.git
     >> cd bale
     >> git checkout tags/bale-2.1 -b bale-2.1
     >> chmod +x ./install.sh
