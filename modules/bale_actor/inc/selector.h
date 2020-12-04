@@ -1,4 +1,7 @@
 
+#ifndef SELECTOR_H
+#define SELECTOR_H
+
 #include "safe_buffer.h"
 #include "hclib_bale_actor.h"
 extern "C" {
@@ -418,4 +421,4 @@ using Actor = Selector<1,T>;
 
 }; // namespace hclib
 
-
+#endif
