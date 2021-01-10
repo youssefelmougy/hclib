@@ -53,7 +53,7 @@ extern "C" {
 
 double put_selector_agi(int64_t *pckindx, int64_t T,  int64_t *lcounts) {
   minavgmaxD_t stat[1];
-  Put *put_ptr = new Put();
+  Put<int64_t> *put_ptr = new Put<int64_t>();
 
   lgp_barrier();
   double tm = wall_seconds();

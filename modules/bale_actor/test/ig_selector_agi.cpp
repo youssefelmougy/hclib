@@ -58,46 +58,10 @@ extern "C" {
  * \return average run time
  *
  */
-
-struct IgPkt {
-    int64_t idx;
-    int64_t val;
-};
-
-class IgSelector: public hclib::Selector<2, IgPkt> {
-  
-  //shared table array src, target
-  int64_t * ltable, *tgt;
-
-  void req_process(IgPkt pkt, int sender_rank) {
-      pkt.val = ltable[pkt.val];
-      send(RESPONSE, pkt, sender_rank);
-  }
-
-  void resp_process(IgPkt pkt, int sender_rank) {
-      tgt[pkt.idx] = pkt.val;
-  }
-
-  public:
-
-    IgSelector(int64_t *ltable, int64_t *tgt) : ltable(ltable), tgt(tgt){
-        mb[REQUEST].process = [this](IgPkt pkt, int sender_rank) { this->req_process(pkt, sender_rank); };
-        mb[RESPONSE].process = [this](IgPkt pkt, int sender_rank) { this->resp_process(pkt, sender_rank); };
-    }
-
-    void get(int64_t dst, int64_t src) {
-          IgPkt pkt;
-          pkt.idx = dst;
-          pkt.val = src >> 16;
-          int dest_rank = src & 0xffff;
-          send(REQUEST, pkt, dest_rank);
-    }
-};
-
 double ig_selector_agi(int64_t *tgt, int64_t *pckindx, int64_t l_num_req,  int64_t *ltable) {
 
     minavgmaxD_t stat[1];
-    Get *get_ptr = new Get();
+    Get<int64_t> *get_ptr = new Get<int64_t>();
 
     lgp_barrier();
     double tm = wall_seconds();

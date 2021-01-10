@@ -4,63 +4,67 @@
 
 #include<selector.h>
 
+template<typename T>
 struct PutPkt {
-    int64_t *loc;
-    int64_t val;
+    T *loc;
+    T val;
 };
 
+template<typename T>
 struct GetPkt {
-    int64_t *dest;
+    T *dest;
     union {
-        int64_t *src;
-        int64_t val;
+        T *src;
+        T val;
     };
 };
 
 enum MailBoxType{REQUEST, RESPONSE};
 
-class Put : public hclib::Actor<PutPkt> {
+template<typename T, typename P=PutPkt<T>>
+class Put : public hclib::Actor<P> {
 
-  void process(PutPkt pkt, int sender_rank) {
+  void process(P pkt, int sender_rank) {
       *(pkt.loc) = pkt.val;
   }
 
   public:
     Put() {
-        mb[0].process = [this](PutPkt pkt, int sender_rank) { this->process(pkt, sender_rank);};
-        start();
+        hclib::Actor<P>::mb[0].process = [this](P pkt, int sender_rank) { this->process(pkt, sender_rank);};
+        hclib::Actor<P>::start();
     }
 
     void operator()(int64_t *loc, int64_t val, int pe) {
-        send({loc, val}, pe);
+        hclib::Actor<P>::send({loc, val}, pe);
     }
 };
 
-class Get : public hclib::Selector<2, GetPkt>{
+template<typename T, typename P=GetPkt<T>>
+class Get : public hclib::Selector<2, P>{
 
-  void req_process(GetPkt pkt, int sender_rank) {
+  void req_process(P pkt, int sender_rank) {
       pkt.val = *(pkt.src);
-      send(RESPONSE, pkt, sender_rank);
+      hclib::Selector<2, P>::send(RESPONSE, pkt, sender_rank);
   }
 
-  void resp_process(GetPkt pkt, int sender_rank) {
+  void resp_process(P pkt, int sender_rank) {
       *(pkt.dest) = pkt.val;
   }
 
   public:
 
     Get() {
-        mb[REQUEST].process = [this](GetPkt pkt, int sender_rank) { this->req_process(pkt, sender_rank); };
-        mb[RESPONSE].process = [this](GetPkt pkt, int sender_rank) { this->resp_process(pkt, sender_rank); };
-        start();
+        hclib::Selector<2, P>::mb[REQUEST].process = [this](P pkt, int sender_rank) { this->req_process(pkt, sender_rank); };
+        hclib::Selector<2, P>::mb[RESPONSE].process = [this](P pkt, int sender_rank) { this->resp_process(pkt, sender_rank); };
+        hclib::Selector<2, P>::start();
     }
 
     void operator()(int64_t *dest, int64_t *src, int pe) {
-       send(REQUEST, {dest, src}, pe); 
+       hclib::Selector<2, P>::send(REQUEST, {dest, src}, pe);
     }
 
     void done() {
-        hclib::Selector<2, GetPkt>::done(REQUEST);
+        hclib::Selector<2, P>::done(REQUEST);
     }
 };
 
