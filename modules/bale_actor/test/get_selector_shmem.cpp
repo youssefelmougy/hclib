@@ -36,7 +36,7 @@
 // 
  *****************************************************************/ 
 
-/*! \file ig_selector_agi.upc
+/*! \file ig_selector_shmem.upc
  * \brief A Selector implementation of indexgather.
  */
 
@@ -44,7 +44,7 @@
 extern "C" {
 #include <spmat.h>
 }
-#include "selector_agi.h"
+#include "selector_shmem.h"
 
 #define THREADS shmem_n_pes()
 #define MYTHREAD shmem_my_pe()
@@ -58,10 +58,10 @@ extern "C" {
  * \return average run time
  *
  */
-double ig_selector_agi(int64_t *tgt, int64_t *pckindx, int64_t l_num_req,  int64_t *ltable) {
+double ig_selector_shmem(int64_t *tgt, int64_t *pckindx, int64_t l_num_req,  int64_t *ltable) {
 
     minavgmaxD_t stat[1];
-    Get<int64_t> *get_ptr = new Get<int64_t>();
+    Get_nbi<int64_t> *shmem_get_nbi = new Get_nbi<int64_t>();
 
     lgp_barrier();
     double tm = wall_seconds();
@@ -70,9 +70,9 @@ double ig_selector_agi(int64_t *tgt, int64_t *pckindx, int64_t l_num_req,  int64
           int64_t pe, col;
           col = pckindx[i] >> 16;
           pe = pckindx[i] & 0xffff;
-          (*get_ptr)(tgt+i, ltable+col, pe);
+          (*shmem_get_nbi)(tgt+i, ltable+col, 1, pe);
       }
-      get_ptr->done(); // Indicate that we are done with sending messages to the REQUEST mailbox
+      shmem_get_nbi->done(); // Indicate that we are done with sending messages to the REQUEST mailbox
     });
 
     tm = wall_seconds() - tm;
@@ -80,7 +80,7 @@ double ig_selector_agi(int64_t *tgt, int64_t *pckindx, int64_t l_num_req,  int64
 
     lgp_min_avg_max_d( stat, tm, THREADS );
 
-    delete get_ptr;
+    delete shmem_get_nbi;
     return( stat->avg );
 }
 
@@ -172,7 +172,7 @@ int main(int argc, char * argv[]) {
     double volume_per_node = (2*8*l_num_req*cores_per_node)*(1.0E-9);
     double injection_bw = 0.0;
   
-          laptime = ig_selector_agi(tgt, pckindx, l_num_req,  ltable);
+          laptime = ig_selector_shmem(tgt, pckindx, l_num_req,  ltable);
   
        injection_bw = volume_per_node / laptime;
        T0_fprintf(stderr,"  %8.3lf seconds\n", laptime);

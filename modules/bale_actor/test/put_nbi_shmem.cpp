@@ -37,7 +37,7 @@
 //
  *****************************************************************/
 
-/*! \file put_selector_agi.upc
+/*! \file put_nbi_shmem.upc
  * \brief A Selector implementation of put demonstration.
  */
 
@@ -45,40 +45,35 @@
 extern "C" {
 #include <spmat.h>
 }
-#include "selector_agi.h"
 
 #define THREADS shmem_n_pes()
 #define MYTHREAD shmem_my_pe()
 #define VAL 22
 
-double put_selector_agi(int64_t *pckindx, int64_t T,  int64_t *lcounts) {
+double put_nbi_shmem(int64_t *pckindx, int64_t T,  int64_t *lcounts) {
   minavgmaxD_t stat[1];
-  Put<int64_t> *put_ptr = new Put<int64_t>();
 
   lgp_barrier();
   double tm = wall_seconds();
-  hclib::finish([=]() {
-    for(int i=0; i< T; i++){
-      int64_t pe, col;
-      col = pckindx[i] >> 16;
-      pe  = pckindx[i] & 0xffff;
-      (*put_ptr)(lcounts+col, VAL, pe);
-    }
-    put_ptr->done();
-  });
+
+  int64_t val = VAL;
+  for(int i=0; i< T; i++){
+    int64_t pe, col;
+    col = pckindx[i] >> 16;
+    pe  = pckindx[i] & 0xffff;
+    shmem_put_nbi(lcounts+col, &val, 1,  pe);
+  }
+
   lgp_barrier();
 
   tm = wall_seconds() - tm;
   lgp_min_avg_max_d( stat, tm, THREADS );
 
-  delete put_ptr;
   return stat->avg;
 }
 
 int main(int argc, char * argv[]) {
-
-  const char *deps[] = { "system", "bale_actor" };
-  hclib::launch(deps, 2, [=] {
+  lgp_init(argc, argv);
 
   //char hostname[1024];
   //hostname[1023] = '\0';
@@ -149,7 +144,7 @@ int main(int argc, char * argv[]) {
   double injection_bw = 0.0;
   int64_t num_models = 0L;               // number of models that are executed
 
-      laptime = put_selector_agi(pckindx, l_num_ups, lcounts);
+      laptime = put_nbi_shmem(pckindx, l_num_ups, lcounts);
       num_models++;
 
     injection_bw = volume_per_node / laptime;
@@ -186,8 +181,7 @@ int main(int argc, char * argv[]) {
   lgp_all_free(counts);
   free(index);
   free(pckindx);
-  });
-
+  lgp_finalize();
   return 0;
 }
 

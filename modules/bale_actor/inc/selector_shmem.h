@@ -1,6 +1,6 @@
 
-#ifndef SELECTOR_AGI_H
-#define SELECTOR_AGI_H
+#ifndef SELECTOR_SHMEM_H
+#define SELECTOR_SHMEM_H
 
 #include<selector.h>
 
@@ -22,25 +22,28 @@ struct GetPkt {
 enum MailBoxType{REQUEST, RESPONSE};
 
 template<typename T, typename P=PutPkt<T>>
-class Put : public hclib::Actor<P> {
+class Put_nbi : public hclib::Actor<P> {
 
   void process(P pkt, int sender_rank) {
       *(pkt.loc) = pkt.val;
   }
 
   public:
-    Put() {
+    Put_nbi() {
         hclib::Actor<P>::mb[0].process = [this](P pkt, int sender_rank) { this->process(pkt, sender_rank);};
         hclib::Actor<P>::start();
     }
 
-    void operator()(int64_t *loc, int64_t val, int pe) {
-        hclib::Actor<P>::send({loc, val}, pe);
+    void operator()(T *dest, T *src, size_t nelems,  int pe) {
+        for(int i=0;i<nelems;i++) {
+            hclib::Actor<P>::send({dest+i, src[i]}, pe);
+        }
+        //hclib::Actor<P>::send({loc, val}, pe);
     }
 };
 
 template<typename T, typename P=GetPkt<T>>
-class Get : public hclib::Selector<2, P>{
+class Get_nbi: public hclib::Selector<2, P>{
 
   void req_process(P pkt, int sender_rank) {
       pkt.val = *(pkt.src);
@@ -53,14 +56,17 @@ class Get : public hclib::Selector<2, P>{
 
   public:
 
-    Get() {
+    Get_nbi() {
         hclib::Selector<2, P>::mb[REQUEST].process = [this](P pkt, int sender_rank) { this->req_process(pkt, sender_rank); };
         hclib::Selector<2, P>::mb[RESPONSE].process = [this](P pkt, int sender_rank) { this->resp_process(pkt, sender_rank); };
         hclib::Selector<2, P>::start();
     }
 
-    void operator()(int64_t *dest, int64_t *src, int pe) {
-       hclib::Selector<2, P>::send(REQUEST, {dest, src}, pe);
+    void operator()(T *dest, T *src, size_t nelems, int pe) {
+        for(int i=0;i<nelems;i++) {
+            hclib::Selector<2, P>::send(REQUEST,  {dest+i, src+i}, pe);
+        }
+        //hclib::Selector<2, P>::send(REQUEST, {dest, src}, pe);
     }
 
     void done() {
