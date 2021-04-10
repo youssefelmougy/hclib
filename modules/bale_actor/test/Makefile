@@ -3,8 +3,8 @@ include $(HCLIB_ROOT)/include/hclib.mak
 include $(HCLIB_ROOT)/../modules/bale_actor/inc/hclib_bale_actor.post.mak
 
 TARGETS=test_conveyor test_selector test_selector3 \
-        histo_agi histo_conveyor histo_selector histo_selector_lambda histo_agi_selector\
-        ig_agi ig_conveyor ig_selector ig_selector_lambda ig_agi_selector\
+        histo_agi histo_conveyor histo_selector histo_selector_lambda histo_selector_lambda2  histo_agi_selector\
+        ig_agi ig_conveyor ig_selector ig_selector_lambda ig_selector_lambda2 ig_agi_selector\
         toposort_agi toposort_conveyor toposort_selector toposort_pure_selector \
 		triangle_agi triangle_conveyor triangle_selector \
 		randperm_agi randperm_conveyor randperm_selector randperm_pure_selector \
