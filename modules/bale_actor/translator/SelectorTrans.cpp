@@ -22,6 +22,7 @@ using namespace clang::ast_matchers;
 
 namespace __internal__ {
     const CXXRecordDecl* searchLambda(const Stmt *s) {
+        if (!s) { return nullptr; }
         const LambdaExpr *lambda = dyn_cast<LambdaExpr>(s);
         if (lambda) {
             return lambda->getLambdaClass();
@@ -35,15 +36,33 @@ namespace __internal__ {
 
     StringRef getName(const Expr *e) {
         const DeclRefExpr *dre = dyn_cast<DeclRefExpr>(e);
-        const ImplicitCastExpr *ice = dyn_cast<ImplicitCastExpr>(e);
-        if (!dre && ice) {
-            dre = dyn_cast<DeclRefExpr>(ice->getSubExpr());
+        const IntegerLiteral *intL = dyn_cast<IntegerLiteral>(e);
+        if (intL) {
+            static llvm::SmallString<16> val;
+            intL->getValue().toStringUnsigned(val);
+            StringRef ret = val.str();
+            return ret;
+        } else {
+            const ImplicitCastExpr *ice = dyn_cast<ImplicitCastExpr>(e);
+            if (!dre && ice) {
+                dre = dyn_cast<DeclRefExpr>(ice->getSubExpr());
+                const ImplicitCastExpr *ice2 = dyn_cast<ImplicitCastExpr>(ice->getSubExpr());
+                if (ice2) {
+                    dre = dyn_cast<DeclRefExpr>(ice2->getSubExpr());
+                }
+            }
+            assert(dre != str::nullptr);
+            return dre->getDecl()->getName();
         }
-        return dre->getDecl()->getName();
+        llvm::errs() << "Could not get the name of:\n";
+        e->dump();
     }
 
     bool isArgToSend(const VarDecl *d, const Stmt *s) {
         bool ret = false;
+        if (!d || !s) {
+            return ret;
+        }
         const CXXMemberCallExpr *send = dyn_cast<CXXMemberCallExpr>(s);
         if (send) {
             if (send->getMethodDecl()
@@ -107,13 +126,10 @@ namespace __internal__ {
 
     std::pair<std::string, std::string> synthesizePacketType(const int nMBs, std::vector<std::vector<const VarDecl *>> &scalars, std::map<const VarDecl*, std::string> &nameMap) {
         llvm::errs() << scalars.size() << ", " << scalars[0].size() << "\n";
-        if (nMBs == 1) {
-            if (scalars[0].size() == 1) {
-                // single MB & single scalar
-                nameMap.insert(std::pair<const VarDecl*, std::string>(scalars[0][0], "pkt"));
-                return std::make_pair(scalars[0][0]->getType().getAsString(), "primitive");
-            } else {
-            }
+        if (nMBs == 1 && scalars[0].size() == 1) {
+            // single MB & single scalar
+            nameMap.insert(std::pair<const VarDecl*, std::string>(scalars[0][0], "pkt"));
+            return std::make_pair(scalars[0][0]->getType().getAsString(), "primitive");
         } else {
             std::vector<const VarDecl*> done;
             std::string ret = "struct packet {\n";
@@ -140,12 +156,29 @@ namespace __internal__ {
 
         for (auto const& e: nameMap) {
             // TODO: avoid int -> packet.int
+            // array subscripts 1: array[v] -> array[pkt.v]
             std::regex reg_idx("\\[\\s*" + e.first->getName().str() + "\\s*\\]");
+
+            std::regex reg_idx2("\\[\\s*" + e.first->getName().str() + "\\s(\\+.+)\\]");
+
+            // rhs
             std::regex reg_rhs("\\=\\s*" + e.first->getName().str() + ";");
+            // lhs 1: int ret_val -> pkt.ret_val (ret_val is captured by inner-lambda)
             std::regex reg_lhs(e.first->getType().getAsString() + "\\s+" + e.first->getName().str());
+            // lhs 2: v == -> pkt.v ==
+            std::regex reg_lhs_eq(e.first->getName().str() + "\\s+==");
+            // lhs 3: v < -> pkt.v <
+            std::regex reg_lhs_lt(e.first->getName().str() + "\\s+<");
             ret = std::regex_replace(ret, reg_idx, "[" + e.second + "]");
+            std::smatch sm;
+            std::regex_search(ret, sm, reg_idx2);
+            if (sm.size() == 2) {
+                ret = std::regex_replace(ret, reg_idx2, "[" + e.second + sm.str(1) + "]");
+            }
             ret = std::regex_replace(ret, reg_rhs, "= " + e.second + ";");
             ret = std::regex_replace(ret, reg_lhs, e.second);
+            ret = std::regex_replace(ret, reg_lhs_eq, e.second + " ==");
+            ret = std::regex_replace(ret, reg_lhs_lt, e.second + " <");
         }
 
         // get mailbox id
@@ -248,15 +281,16 @@ public:
                 mes += __internal__::translateLambdaBody(lambdas[mb], nameMap, TheRewriter);
                 mes += "\n";
             }
-            
+
             // Constructor
             mes += "SynthesizedActor(";
             for (auto const v : arrays[0]) {
                 mes += v->getType().getAsString() + " _" + v->getName().str();
                 if (v != *(arrays[0].end() - 1)) mes += ", ";
             }
-            mes += "): ";
+            mes += ")";
             for (auto const v : arrays[0]) {
+                if (v == *(arrays[0].begin())) mes += ": ";
                 mes += v->getName().str() + "(_" + v->getName().str() + ")";
                 if (v != *(arrays[0].end() - 1)) mes += ", ";
                 else mes += " ";
@@ -314,13 +348,18 @@ public:
                 TheRewriter.InsertText(ActorSendExpr->getBeginLoc(), mes, true, true);
             }
 #else
-            // igs_ptr->send(REQUEST, dest_rank, lambda)
-            std::string mes = "packet pkt;\n";
-            for (auto const &S: scalars[0]) {
-                mes += llvm::Twine("pkt." + S->getName() + " = " + S->getName() + ";\n").str();
+            std::string mes = "";
+            if (scalars[0].size() == 1) {
+                mes += packet_type + " pkt;\n";
+                mes += "pkt = " + llvm::Twine(scalars[0][0]->getName()).str() + ";\n";
+            } else {
+                mes += "packet pkt;\n";
+                for (auto const &S: scalars[0]) {
+                    mes += llvm::Twine("pkt." + S->getName() + " = " + S->getName() + ";\n").str();
+                }
             }
             mes += ActorInstance->getName().str() + "->send(" +  __internal__::getName(ActorSendExpr->getArg(0)).str() + ", pkt, " + __internal__::getName(ActorSendExpr->getArg(1)).str() + ")";
-            TheRewriter.ReplaceText(SourceRange(ActorSendExpr->getBeginLoc(), ActorSendExpr->getEndLoc()), mes);
+                TheRewriter.ReplaceText(SourceRange(ActorSendExpr->getBeginLoc(), ActorSendExpr->getEndLoc()), mes);
 #endif
         }
     }
