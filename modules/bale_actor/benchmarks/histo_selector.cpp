@@ -76,11 +76,11 @@ class HistogramActor: public hclib::Actor<int64_t> {
 double histo_selector(int64_t *pckindx, int64_t T,  int64_t *lcounts) {
   minavgmaxD_t stat[1];
   HistogramActor *hs_ptr = new HistogramActor(lcounts);
-  hs_ptr->start();
 
   lgp_barrier();
   double tm = wall_seconds();
   hclib::finish([=]() {
+    hs_ptr->start();
     for(int i=0; i< T; i++){
       int64_t pe, col;
       col = pckindx[i] >> 16;

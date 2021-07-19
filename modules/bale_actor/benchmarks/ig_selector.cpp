@@ -93,11 +93,11 @@ double ig_selector(int64_t *tgt, int64_t *pckindx, int64_t l_num_req,  int64_t *
 
     minavgmaxD_t stat[1];
     IgSelector *igs_ptr = new IgSelector(ltable, tgt);
-    igs_ptr->start();
 
     lgp_barrier();
     double tm = wall_seconds();
     hclib::finish([=]() {
+      igs_ptr->start();
       for(int i=0;i<l_num_req;i++) {
           IgPkt pkt;
           pkt.idx = i;
