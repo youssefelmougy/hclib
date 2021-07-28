@@ -63,17 +63,19 @@ extern "C" {
 
 double histo_selector(int64_t *pckindx, int64_t T,  int64_t *lcounts) {
   minavgmaxD_t stat[1];
-  hclib::Actor<>* hs_ptr = new hclib::Actor<>();
-  hs_ptr->start();
+  //hclib::Actor<>* hs_ptr = new hclib::Actor<>();
+  hclib::Selector<1> *hs_ptr = new hclib::Selector<1>();
 
   lgp_barrier();
   double tm = wall_seconds();
   hclib::finish([=]() {
+    hs_ptr->start();
     for(int i=0; i< T; i++){
       int64_t pe, col;
       col = pckindx[i] >> 16;
       pe  = pckindx[i] & 0xffff;
-      hs_ptr->send(pe, [=]() {lcounts[col] += 1;});
+      //hs_ptr->send(pe, [=]() {lcounts[col] += 1;});
+      hs_ptr->send(0, pe, [=]() {lcounts[col] += 1;});
     }
     hs_ptr->done();
   });

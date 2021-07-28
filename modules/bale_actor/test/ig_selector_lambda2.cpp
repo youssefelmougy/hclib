@@ -87,12 +87,12 @@ double ig_selector(int64_t *tgt, int64_t *pckindx, int64_t l_num_req,  int64_t *
     minavgmaxD_t stat[1];
     hclib::Selector<2> *igs_ptr = new hclib::Selector<2>();
     igs_ptr_global = igs_ptr;
-    igs_ptr->start();
 
     lgp_barrier();
     double tm = wall_seconds();
     int64_t sender_rank = MYTHREAD;
     hclib::finish([=]() {
+      igs_ptr->start();
       for(int i=0;i<l_num_req;i++) {
           int64_t index = pckindx[i] >> 16;
           int64_t dest_rank = pckindx[i] & 0xffff;
