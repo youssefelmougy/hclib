@@ -34,14 +34,11 @@ namespace __internal__ {
         return nullptr;
     }
 
-    StringRef getName(const Expr *e) {
+    void findName(const Expr *e, llvm::SmallString<16> &ret) {
         const DeclRefExpr *dre = dyn_cast<DeclRefExpr>(e);
         const IntegerLiteral *intL = dyn_cast<IntegerLiteral>(e);
         if (intL) {
-            static llvm::SmallString<16> val;
-            intL->getValue().toStringUnsigned(val);
-            StringRef ret = val.str();
-            return ret;
+            intL->getValue().toStringUnsigned(ret);
         } else {
             const ImplicitCastExpr *ice = dyn_cast<ImplicitCastExpr>(e);
             if (!dre && ice) {
@@ -52,7 +49,7 @@ namespace __internal__ {
                 }
             }
             assert(dre != str::nullptr);
-            return dre->getDecl()->getName();
+            ret = dre->getDecl()->getName();
         }
         llvm::errs() << "Could not get the name of:\n";
         e->dump();
@@ -124,7 +121,7 @@ namespace __internal__ {
 
     }
 
-    std::pair<std::string, std::string> synthesizePacketType(const int nMBs, std::vector<std::vector<const VarDecl *>> &scalars, std::map<const VarDecl*, std::string> &nameMap) {
+    std::pair<std::string, std::string> synthesizePacketType(const int uniqueID, const int nMBs, std::vector<std::vector<const VarDecl *>> &scalars, std::map<const VarDecl*, std::string> &nameMap) {
         llvm::errs() << scalars.size() << ", " << scalars[0].size() << "\n";
         if (nMBs == 1 && scalars[0].size() == 1) {
             // single MB & single scalar
@@ -132,7 +129,7 @@ namespace __internal__ {
             return std::make_pair(scalars[0][0]->getType().getAsString(), "primitive");
         } else {
             std::vector<const VarDecl*> done;
-            std::string ret = "struct packet {\n";
+            std::string ret = "struct packet" + std::to_string(uniqueID) + "{\n";
             for (int i = 0; i < nMBs; i++) {
                 for (auto const s: scalars[i]) {
                     if (std::find(done.begin(), done.end(), s) == done.end()) {
@@ -145,7 +142,7 @@ namespace __internal__ {
             }
             ret += "};\n";
             llvm::errs() << ret;
-            return std::make_pair("packet", ret);
+            return std::make_pair("packet" + std::to_string(uniqueID), ret);
         }
         return std::make_pair("WRONG", "");
     }
@@ -249,9 +246,10 @@ public:
         }
 
         const int nMBs = depth;
+        static int uniqueID = 0;
         std::map<const VarDecl*, std::string> nameMap;
         std::pair<std::string, std::string> packet;
-        packet = __internal__::synthesizePacketType(nMBs, scalars, nameMap);
+        packet = __internal__::synthesizePacketType(uniqueID, nMBs, scalars, nameMap);
         std::string packet_type = packet.first;
         std::string packet_def = packet.second;
         llvm::errs() << "packet_type: " << packet_type << "\n";
@@ -265,7 +263,8 @@ public:
             if (packet_def.compare("primitive") != 0) {
                 mes += packet_def;
             }
-            mes += "class SynthesizedActor : public hclib::Selector<" + std::to_string(nMBs) + ", " + packet_type + "> { \n";
+            const std::string CLASS = "SynthesizedActor" + std::to_string(uniqueID);
+            mes += "class " + CLASS + " : public hclib::Selector<" + std::to_string(nMBs) + ", " + packet_type + "> { \n";
             mes += "public: \n";
             // output arrays
             // (outermost lambda should captures the all array)
@@ -283,7 +282,7 @@ public:
             }
 
             // Constructor
-            mes += "SynthesizedActor(";
+            mes += CLASS + "(";
             for (auto const v : arrays[0]) {
                 mes += v->getType().getAsString() + " _" + v->getName().str();
                 if (v != *(arrays[0].end() - 1)) mes += ", ";
@@ -305,8 +304,8 @@ public:
             mes += "};\n";
 
             // instantiation
-            mes += "SynthesizedActor *" + ActorInstance->getName().str();
-            mes += " = new SynthesizedActor(";
+            mes += CLASS + " *" + ActorInstance->getName().str();
+            mes += " = new " + CLASS + "(";
             for (auto const v : arrays[0]) {
                 mes += v->getName().str();
                 if (v != *(arrays[0].end() - 1)) mes += ", ";
@@ -348,20 +347,28 @@ public:
                 TheRewriter.InsertText(ActorSendExpr->getBeginLoc(), mes, true, true);
             }
 #else
-            std::string mes = "";
+            const std::string PACKET = "pkt" + std::to_string(uniqueID);
+            std::string mes = packet_type + " " + PACKET + ";\n";
             if (scalars[0].size() == 1) {
-                mes += packet_type + " pkt;\n";
-                mes += "pkt = " + llvm::Twine(scalars[0][0]->getName()).str() + ";\n";
+                mes += PACKET + " = " + llvm::Twine(scalars[0][0]->getName()).str() + ";\n";
             } else {
-                mes += "packet pkt;\n";
                 for (auto const &S: scalars[0]) {
-                    mes += llvm::Twine("pkt." + S->getName() + " = " + S->getName() + ";\n").str();
+                    mes += llvm::Twine(PACKET + "." + S->getName() + " = " + S->getName() + ";\n").str();
                 }
             }
-            mes += ActorInstance->getName().str() + "->send(" +  __internal__::getName(ActorSendExpr->getArg(0)).str() + ", pkt, " + __internal__::getName(ActorSendExpr->getArg(1)).str() + ")";
-                TheRewriter.ReplaceText(SourceRange(ActorSendExpr->getBeginLoc(), ActorSendExpr->getEndLoc()), mes);
+            llvm::SmallString<16> orgArg0;
+            llvm::SmallString<16> orgArg1;
+            __internal__::findName(ActorSendExpr->getArg(0), orgArg0);
+            __internal__::findName(ActorSendExpr->getArg(1), orgArg1);
+            mes += ActorInstance->getName().str() + "->send(";
+            mes += orgArg0.str();
+            mes += ", pkt" + std::to_string(uniqueID) + ", ";
+            mes += orgArg1.str();
+            mes += ")";
+            TheRewriter.ReplaceText(SourceRange(ActorSendExpr->getBeginLoc(), ActorSendExpr->getEndLoc()), mes);
 #endif
         }
+        uniqueID++;
     }
 
 private:
