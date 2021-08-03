@@ -65,7 +65,8 @@ int64_t * tmprowcnts = nullptr;
 int64_t lnnz = 0;
 int64_t * wrkoff = nullptr;
 sparsemat_t * Ap = nullptr;
-hclib::Selector<2> *ps3_ptr = nullptr;
+void *ps3_ptr_global = nullptr;
+hclib::Selector<2> *get_selector() { return (hclib::Selector<2>*)ps3_ptr_global; }
 
 sparsemat_t * permute_matrix_selector(sparsemat_t * A, int64_t * rperminv, int64_t * cperminv) {
   int64_t * lrperminv = lgp_local_part(int64_t, rperminv);
@@ -147,7 +148,8 @@ sparsemat_t * permute_matrix_selector(sparsemat_t * A, int64_t * rperminv, int64
   /****************************************************************/
   /* do column permutation ... this is essentially an indexgather */
   /****************************************************************/
-  ps3_ptr = new hclib::Selector<2>();
+  hclib::Selector<2> *ps3_ptr = new hclib::Selector<2>();
+  ps3_ptr_global = (void*)ps3_ptr;
   hclib::finish([=]() {
     int sender_rank = MYTHREAD;
     ps3_ptr->start();
@@ -156,7 +158,7 @@ sparsemat_t * permute_matrix_selector(sparsemat_t * A, int64_t * rperminv, int64
         int64_t pe = Ap->lnonzero[i] % THREADS;
         ps3_ptr->send(0, pe, [=](){
           int64_t pkg_nonz_ret = lcperminv[pkg_nonz];
-          ps3_ptr->send(1, sender_rank, [=]() {
+          get_selector()->send(1, sender_rank, [=]() {
             Ap->lnonzero[i] = pkg_nonz_ret;
           });
         });

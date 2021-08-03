@@ -15,7 +15,7 @@ extern "C" {
 #define DONE_MARK -1
 #define BUFFER_SIZE 1024
 #ifndef ELASTIC_BUFFER_SIZE
-#define ELASTIC_BUFFER_SIZE 48
+#define ELASTIC_BUFFER_SIZE 128
 #endif
 
 namespace hclib {
@@ -137,10 +137,17 @@ class Mailbox {
 
 #ifdef USE_LAMBDA
     template<typename L>
-    void send(int rank, L lambda) {
-        while(buff->full()) hclib::yield_at(nic);
+    bool send(int rank, L lambda) {
+        //printf("size %d\n", sizeof(lambda));
+        if(buff->full()) {
+            if(is_early_exit)
+                return false;
+            else
+                while(buff->full()) hclib::yield_at(nic);
+        }
         assert(!buff->full());
         buff->push_back(BufferPacket<T>(rank, new LambdaPacket<L>(lambda)));
+        return true;
     }
 #else
     bool send(T pkt, int rank) {
@@ -372,14 +379,14 @@ class Selector {
 
 #ifdef USE_LAMBDA
     template<typename L>
-    void send(int mb_id, int rank, L lambda) {
-        mb[mb_id].send(rank, lambda);
+    bool send(int mb_id, int rank, L lambda) {
+        return mb[mb_id].send(rank, lambda);
     }
 
     template<typename L>
-    void send(int rank, L lambda) {
+    bool send(int rank, L lambda) {
         assert(N==1);
-        send(0, rank, lambda);
+        return send(0, rank, lambda);
     }
 #else
     bool send(int mb_id, T pkt, int rank) {

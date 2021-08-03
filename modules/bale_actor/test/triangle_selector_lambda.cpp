@@ -68,7 +68,8 @@ double triangle_selector(int64_t* count, int64_t* sr, sparsemat_t* L, sparsemat_
   
     if (alg == 0) {
         //TriangleSelector* triSelector = new TriangleSelector(count, L);
-        hclib::Actor<>* triSelector = new hclib::Actor<>();
+        //hclib::Actor<>* triSelector = new hclib::Actor<>();
+        hclib::Selector<1> *triSelector = new hclib::Selector<1>();
         count_global = count;
         L_global = L;
 
@@ -93,7 +94,7 @@ double triangle_selector(int64_t* count, int64_t* sr, sparsemat_t* L, sparsemat_
                         }
 
                         numpushed++;
-                        triSelector->send(pe, [=]() {
+                        triSelector->send(0, pe, [=]() {
                             int64_t tempCount = 0;
                     
                             for (int64_t k = get_mat()->loffset[vj]; k < get_mat()->loffset[vj + 1]; k++) {
@@ -114,7 +115,7 @@ double triangle_selector(int64_t* count, int64_t* sr, sparsemat_t* L, sparsemat_
                 }
             }
             // Indicate that we are done with sending messages to the REQUEST mailbox
-            triSelector->done();
+            triSelector->done(0);
         });
     } else {
         assert(false);

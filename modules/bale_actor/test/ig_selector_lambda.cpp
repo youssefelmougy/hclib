@@ -67,16 +67,14 @@ struct IgPkt {
 
 enum MailBoxType{REQUEST, RESPONSE};
 
-hclib::Selector<2>* igs_ptr_global;
-hclib::Selector<2>* get_selector() {
-    return igs_ptr_global;
-}
+void* igs_ptr_global;
+hclib::Selector<2>* get_selector() { return (hclib::Selector<2>*)igs_ptr_global; }
 
 double ig_selector(int64_t *tgt, int64_t *pckindx, int64_t l_num_req,  int64_t *ltable) {
 
     minavgmaxD_t stat[1];
     hclib::Selector<2> *igs_ptr = new hclib::Selector<2>();
-    igs_ptr_global = igs_ptr;
+    igs_ptr_global = (void*)igs_ptr;
 
     lgp_barrier();
     double tm = wall_seconds();
