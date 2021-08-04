@@ -79,9 +79,6 @@ randperm [-h][-n num][-M mask][-s seed]
     Regular Benchmark stuff starts here
 */
 
-enum PhaseOneMailBoxType {THROW, REPLY};
-enum PhaseTwoMailBoxType {MSG};
-
 void *phaseOneSelector_global = nullptr;
 hclib::Selector<2> * get_selector() { return (hclib::Selector<2> *)phaseOneSelector_global; }
 int64_t * pos_global = nullptr;
@@ -122,7 +119,7 @@ int64_t* copied_rand_permp_selector(int64_t N, int seed) {
     double t1 = wall_seconds();
 
     hclib::finish([lN, M, ltarget, lperm, hitsPtr, iendPtr, phaseOneSelector]() {
-        phaseOneSelector->mb[THROW].set_is_early_exit(true);
+        phaseOneSelector->mb[0].set_is_early_exit(true);
         int senderRank = MYTHREAD;
         phaseOneSelector->start();
         //int64_t i = 0;
@@ -138,7 +135,7 @@ int64_t* copied_rand_permp_selector(int64_t N, int seed) {
                 int64_t pkg_idx = r / THREADS;
                 int64_t pkg_val = lperm[*iendPtr];
 
-                bool ret = phaseOneSelector->send(THROW, pe, [=]() {
+                bool ret = phaseOneSelector->send(0, pe, [=]() {
                     int64_t val = 0;
                     if (ltarget[pkg_idx] == -1L) {
                         val = pkg_val;
@@ -146,7 +143,7 @@ int64_t* copied_rand_permp_selector(int64_t N, int seed) {
                     } else {
                         val = -(pkg_val + 1);
                     }
-                    get_selector()->send(REPLY, senderRank, [=]() {
+                    get_selector()->send(1, senderRank, [=]() {
                         if (val < 0L) {
                             lperm[--(*iendPtr)] = -(val) - 1;
                         } else {
@@ -170,7 +167,7 @@ int64_t* copied_rand_permp_selector(int64_t N, int seed) {
             // If enough hits are processed, break and teardown
             //if (*hitsPtr >= lN) { break; }
         }
-        phaseOneSelector->done(THROW);
+        phaseOneSelector->done(0);
     });
 
     lgp_barrier();
@@ -209,7 +206,7 @@ int64_t* copied_rand_permp_selector(int64_t N, int seed) {
 
         while (i < cnt) {
             int64_t val = ltarget[i];
-            phaseTwoSelector->send(MSG, pe, [=]() {
+            phaseTwoSelector->send(0, pe, [=]() {
                 lperm[(*pos_global)++] = val;
             });
 
@@ -219,7 +216,7 @@ int64_t* copied_rand_permp_selector(int64_t N, int seed) {
             if (pe == THREADS) pe = 0;
         }
 
-        phaseTwoSelector->done(MSG);
+        phaseTwoSelector->done(0);
     });
 
     pos = lgp_reduce_add_l(pos);

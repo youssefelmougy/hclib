@@ -9,7 +9,7 @@ TARGETS=test_conveyor test_selector test_selector3 \
 		triangle_agi triangle_conveyor triangle_selector triangle_selector_lambda\
 		randperm_agi randperm_conveyor randperm_selector randperm_pure_selector randperm_selector_lambda \
         permute_agi permute_conveyor permute_selector permute_selector_lambda \
-		transpose_agi transpose_conveyor transpose_selector \
+		transpose_agi transpose_conveyor transpose_selector transpose_selector_lambda \
         put_selector_shmem put_nbi_shmem \
         get_selector_shmem get_nbi_shmem
 
