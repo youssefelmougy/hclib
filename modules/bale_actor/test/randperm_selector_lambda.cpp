@@ -129,7 +129,7 @@ int64_t* copied_rand_permp_selector(int64_t N, int seed) {
 
         // Since a throw a fail, we need to keep track of hits
         // instead of believing our lN request will all result in hits
-        while (*hitsPtr != lN) {
+        while (*hitsPtr < lN) {
             //i = *iendPtr;
 
             while (*iendPtr < lN) {
@@ -157,10 +157,8 @@ int64_t* copied_rand_permp_selector(int64_t N, int seed) {
 
                 //i++;
 
-                if(ret)
-                    (*iendPtr)++;
-                else
-                    hclib::yield();
+                if(ret) (*iendPtr)++;
+                else hclib::yield();
 
             }
 
@@ -170,7 +168,7 @@ int64_t* copied_rand_permp_selector(int64_t N, int seed) {
             hclib::yield();
 
             // If enough hits are processed, break and teardown
-            if (*hitsPtr >= lN) { break; }
+            //if (*hitsPtr >= lN) { break; }
         }
         phaseOneSelector->done(THROW);
     });
