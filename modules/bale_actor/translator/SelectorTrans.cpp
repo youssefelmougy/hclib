@@ -35,10 +35,12 @@ namespace __internal__ {
     }
 
     void findName(const Expr *e, llvm::SmallString<16> &ret) {
+        bool done = false;
         const DeclRefExpr *dre = dyn_cast<DeclRefExpr>(e);
         const IntegerLiteral *intL = dyn_cast<IntegerLiteral>(e);
         if (intL) {
             intL->getValue().toStringUnsigned(ret);
+            done = true;
         } else {
             const ImplicitCastExpr *ice = dyn_cast<ImplicitCastExpr>(e);
             if (!dre && ice) {
@@ -50,9 +52,12 @@ namespace __internal__ {
             }
             assert(dre != str::nullptr);
             ret = dre->getDecl()->getName();
+            done = true;
         }
-        llvm::errs() << "Could not get the name of:\n";
-        e->dump();
+        if (!done) {
+            llvm::errs() << "Could not get the name of:\n";
+            e->dump();
+        }
     }
 
     bool isArgToSend(const VarDecl *d, const Stmt *s) {
@@ -146,46 +151,35 @@ namespace __internal__ {
         }
         return std::make_pair("WRONG", "");
     }
-    
+
     std::string translateLambdaBody(const Stmt *lambda, std::map<const VarDecl*, std::string> &nameMap, Rewriter &TheRewriter) {
         assert(lambda->isLambda() == true && "lambda is expected");
         std::string ret = Lexer::getSourceText(CharSourceRange::getTokenRange(lambda->getSourceRange()), TheRewriter.getSourceMgr(), TheRewriter.getLangOpts()).str();
 
         for (auto const& e: nameMap) {
-            // TODO: avoid int -> packet.int
-            // array subscripts 1: array[v] -> array[pkt.v]
-            std::regex reg_idx("\\[\\s*" + e.first->getName().str() + "\\s*\\]");
-
-            std::regex reg_idx2("\\[\\s*" + e.first->getName().str() + "\\s(\\+.+)\\]");
-
-            // rhs
-            std::regex reg_rhs("\\=\\s*" + e.first->getName().str() + ";");
-            // lhs 1: int ret_val -> pkt.ret_val (ret_val is captured by inner-lambda)
-            std::regex reg_lhs(e.first->getType().getAsString() + "\\s+" + e.first->getName().str());
-            // lhs 2: v == -> pkt.v ==
-            std::regex reg_lhs_eq(e.first->getName().str() + "\\s+==");
-            // lhs 3: v < -> pkt.v <
-            std::regex reg_lhs_lt(e.first->getName().str() + "\\s+<");
-            ret = std::regex_replace(ret, reg_idx, "[" + e.second + "]");
-            std::smatch sm;
-            std::regex_search(ret, sm, reg_idx2);
-            if (sm.size() == 2) {
-                ret = std::regex_replace(ret, reg_idx2, "[" + e.second + sm.str(1) + "]");
-            }
-            ret = std::regex_replace(ret, reg_rhs, "= " + e.second + ";");
-            ret = std::regex_replace(ret, reg_lhs, e.second);
-            ret = std::regex_replace(ret, reg_lhs_eq, e.second + " ==");
-            ret = std::regex_replace(ret, reg_lhs_lt, e.second + " <");
+            // T val -> pkt.val
+            std::regex reg_decl(e.first->getType().getAsString() + "\\s+" + e.first->getName().str());
+            ret = std::regex_replace(ret, reg_decl, e.second);
+#if 0
+            std::regex reg_var("[!a-zA-Z0-9_]+"+ e.first->getName().str());
+            ret = std::regex_replace(ret, reg_var, e.second);
+#endif
+            std::regex reg_var2("([(\\[\\s])+"+ e.first->getName().str());
+            ret = std::regex_replace(ret, reg_var2, "$1" + e.second);
         }
 
         // get mailbox id
         std::smatch sm;
         std::regex_search(ret, sm, std::regex("send\\((.+),\\s*(.+),\\s*(.+)\\)"));
         std::string mailbox = sm.str(1);
-        
+
         //
-        std::regex reg_sel("\\get_selector.+;");
+        std::regex reg_sel("get_selector.+;", std::regex::extended);
         ret = std::regex_replace(ret, reg_sel, "send(" + mailbox + ", pkt, sender_rank);");
+
+        //
+        std::regex reg_dup("pkt.pkt.");
+        ret = std::regex_replace(ret, reg_dup, "pkt.");
         return ret;
     }
 
@@ -200,6 +194,7 @@ public:
         // Diagnostic
         clang::DiagnosticsEngine &DE = Context->getDiagnostics();
         const unsigned ID_LAMBDA_ELIGIBLE = DE.getCustomDiagID(clang::DiagnosticsEngine::Remark, "will be processed (outermost send+lambda)");
+        const unsigned ID_LAMBDA_NOT_ELIGIBLE = DE.getCustomDiagID(clang::DiagnosticsEngine::Remark, "will not be processed");
 
         // hs_ptr
         const auto ActorInstantiation = Result.Nodes.getNodeAs<DeclRefExpr>("hs_ptr");
@@ -219,10 +214,19 @@ public:
             return;
         }
 
+        //
+        static std::vector<const Stmt*> processed;
+
         // lambda
         auto const *Lambda = Result.Nodes.getNodeAs<CXXRecordDecl>("Lambda");
         auto const *mDecl = Lambda->getLambdaCallOperator();
-        DE.Report(Lambda->getBeginLoc(), ID_LAMBDA_ELIGIBLE);
+
+        if (std::find(processed.begin(), processed.end(), mDecl->getBody()) != processed.end()) {
+            DE.Report(Lambda->getBeginLoc(), ID_LAMBDA_NOT_ELIGIBLE);
+            return;
+        } else {
+            DE.Report(Lambda->getBeginLoc(), ID_LAMBDA_ELIGIBLE);
+        }
 
         // Analyze the captured vars by the lambda
         // 1. Non pointer type: treated as an index to global arrays
@@ -233,6 +237,7 @@ public:
         std::vector<const Stmt*> lambdas(MAX_DEPTH);
 
         __internal__::processCaptures(Lambda, 0, arrays, scalars, lambdas, DE);
+        processed.insert(processed.end(), lambdas.begin(), lambdas.end());
 
         int depth = 0;
         for (; depth < MAX_DEPTH; depth++) {
@@ -317,56 +322,50 @@ public:
         }
         // Update actor->send
         {
-            // TODO: the arguments to send is always int + lambda?
-            // Histogram: arg0 is pe
-            // IG: arg1 is pe
-#if 0
-            const DeclRefExpr *arg0 = nullptr;
-            for (auto const &p : ActorSendExpr->getArg(0)->children()) {
-                for (auto const &q : p->children()) {
-                    arg0 = dyn_cast<DeclRefExpr>(q);
-                    if (arg0) {
-                        llvm::errs() << "hoge2\n";
-                        arg0->dump();
-                    }
-                }
-            }
-            if (arg0) {
-                //const VarDecl argd = dyn_cast<VarDecl>(arg);
-                std::string mes = ActorInstance->getName().str() + "->send(";
-
-                // Packet creation
-                // col
-                for (auto const v: scalars[0]) {
-                    mes += v->getName().str();
-                    mes += ", ";
-                }
-                // pe
-                mes += arg0->getDecl()->getName().str() + ");\n ";
-                mes += "//";
-                TheRewriter.InsertText(ActorSendExpr->getBeginLoc(), mes, true, true);
-            }
-#else
+            // packet
             const std::string PACKET = "pkt" + std::to_string(uniqueID);
-            std::string mes = packet_type + " " + PACKET + ";\n";
+            std::string mes1 = packet_type + " " + PACKET + ";\n";
             if (scalars[0].size() == 1) {
-                mes += PACKET + " = " + llvm::Twine(scalars[0][0]->getName()).str() + ";\n";
+                mes1 += PACKET + " = " + llvm::Twine(scalars[0][0]->getName()).str() + ";\n";
             } else {
                 for (auto const &S: scalars[0]) {
-                    mes += llvm::Twine(PACKET + "." + S->getName() + " = " + S->getName() + ";\n").str();
+                    mes1 += llvm::Twine(PACKET + "." + S->getName() + " = " + S->getName() + ";\n").str();
+                }
+            }
+
+            //
+
+            // see if the return variable of send() is used
+            bool sendHasReturns = false;
+            SourceLocation insertPoint;
+            const auto& parents = Context->getParents(*ActorSendExpr);
+            if (!parents.empty()) {
+                const Stmt* parent = parents[0].get<Stmt>();
+                if (parent) {
+                    const auto gparents = Context->getParents(*parent);
+                    if (!gparents.empty()) {
+                        const VarDecl* decl  = gparents[0].get<VarDecl>();
+                        if (decl) {
+                            sendHasReturns = true;
+                            insertPoint = decl->getBeginLoc();
+                        }
+                    }
                 }
             }
             llvm::SmallString<16> orgArg0;
             llvm::SmallString<16> orgArg1;
             __internal__::findName(ActorSendExpr->getArg(0), orgArg0);
             __internal__::findName(ActorSendExpr->getArg(1), orgArg1);
-            mes += ActorInstance->getName().str() + "->send(";
-            mes += orgArg0.str();
-            mes += ", pkt" + std::to_string(uniqueID) + ", ";
-            mes += orgArg1.str();
-            mes += ")";
-            TheRewriter.ReplaceText(SourceRange(ActorSendExpr->getBeginLoc(), ActorSendExpr->getEndLoc()), mes);
-#endif
+            std::string mes2 = ActorInstance->getName().str() + "->send(";
+            mes2 += orgArg0.str();
+            mes2 += ", pkt" + std::to_string(uniqueID) + ", ";
+            mes2 += orgArg1.str();
+            mes2 += ")";
+            if (sendHasReturns) {
+                TheRewriter.ReplaceText(SourceRange(insertPoint, ActorSendExpr->getEndLoc()), mes1 + "bool ret = " + mes2);
+            } else {
+                TheRewriter.ReplaceText(SourceRange(ActorSendExpr->getBeginLoc(), ActorSendExpr->getEndLoc()), mes1+mes2);
+            }
         }
         uniqueID++;
     }
@@ -427,7 +426,7 @@ private:
 int main(int argc, const char **argv) {
     auto OptionsParserOrError = CommonOptionsParser::create(argc, argv, MyToolCategory);
     if (auto Err = OptionsParserOrError.takeError()) {
-        llvm_unreachable("Option Error"); 
+        llvm_unreachable("Option Error");
     }
     CommonOptionsParser &OptionsParser = *OptionsParserOrError;
     ClangTool Tool(OptionsParser.getCompilations(),
