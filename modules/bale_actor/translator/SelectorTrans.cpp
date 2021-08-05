@@ -262,7 +262,10 @@ public:
         // Synthesize a selector class
         ActorInstantiation->getDecl()->dump();
         const VarDecl *ActorInstance = dyn_cast<VarDecl>(ActorInstantiation->getDecl());
+        // actorInstance -> uniqueID mapping;
+        static std::map<const VarDecl*, int> instanceMap;
         // Synthesize
+        if (instanceMap.find(ActorInstance) == instanceMap.end())
         {
             std::string mes = "\n";
             if (packet_def.compare("primitive") != 0) {
@@ -319,11 +322,18 @@ public:
             mes += "//";
             //ActorInstantiation->getDecl()->getBeginLoc().print(llvm::errs(), TheRewriter.getSourceMgr());
             TheRewriter.InsertText(ActorInstantiation->getDecl()->getBeginLoc(), mes, true, true);
+            instanceMap.insert(std::pair<const VarDecl*, int>(ActorInstance, uniqueID));
         }
         // Update actor->send
         {
             // packet
             const std::string PACKET = "pkt" + std::to_string(uniqueID);
+            // 
+            if (instanceMap.find(ActorInstance) != instanceMap.end()
+                && instanceMap[ActorInstance] != uniqueID
+                && packet_def.compare("primitive") != 0) {
+                packet_type = "packet" + std::to_string(instanceMap[ActorInstance]);
+            }
             std::string mes1 = packet_type + " " + PACKET + ";\n";
             if (scalars[0].size() == 1) {
                 mes1 += PACKET + " = " + llvm::Twine(scalars[0][0]->getName()).str() + ";\n";
@@ -333,10 +343,8 @@ public:
                 }
             }
 
-            //
-
             // see if the return variable of send() is used
-            bool sendHasReturns = false;
+            const VarDecl *sendReturnDecl = nullptr;
             SourceLocation insertPoint;
             const auto& parents = Context->getParents(*ActorSendExpr);
             if (!parents.empty()) {
@@ -346,8 +354,8 @@ public:
                     if (!gparents.empty()) {
                         const VarDecl* decl  = gparents[0].get<VarDecl>();
                         if (decl) {
-                            sendHasReturns = true;
                             insertPoint = decl->getBeginLoc();
+                            sendReturnDecl = decl;
                         }
                     }
                 }
@@ -361,8 +369,8 @@ public:
             mes2 += ", pkt" + std::to_string(uniqueID) + ", ";
             mes2 += orgArg1.str();
             mes2 += ")";
-            if (sendHasReturns) {
-                TheRewriter.ReplaceText(SourceRange(insertPoint, ActorSendExpr->getEndLoc()), mes1 + "bool ret = " + mes2);
+            if (sendReturnDecl) {
+                TheRewriter.ReplaceText(SourceRange(insertPoint, ActorSendExpr->getEndLoc()), llvm::Twine(mes1 + "bool " + sendReturnDecl->getName() + " = " + mes2).str());
             } else {
                 TheRewriter.ReplaceText(SourceRange(ActorSendExpr->getBeginLoc(), ActorSendExpr->getEndLoc()), mes1+mes2);
             }
