@@ -136,7 +136,7 @@ int64_t* copied_rand_permp_selector(int64_t N, int seed) {
                 int64_t pkg_val = lperm[*iendPtr];
 
                 bool ret = phaseOneSelector->send(0, pe, [=]() {
-                    int64_t val = 0;
+                    int64_t val;
                     if (ltarget[pkg_idx] == -1L) {
                         val = pkg_val;
                         ltarget[pkg_idx] = pkg_val;

@@ -81,11 +81,11 @@ double ig_selector(int64_t *tgt, int64_t *pckindx, int64_t l_num_req,  int64_t *
     int sender_rank = MYTHREAD;
     hclib::finish([=]() {
       igs_ptr->start();
-      for(int i=0;i<l_num_req;i++) {
+      for(int64_t i=0;i<l_num_req;i++) {
           int64_t index = pckindx[i] >> 16;
-          int dest_rank = pckindx[i] & 0xffff;
+          int64_t dest_rank = pckindx[i] & 0xffff;
           igs_ptr->send(REQUEST, dest_rank, [=]() {
-              int ret_val = ltable[index];
+              int64_t ret_val = ltable[index];
               get_selector()->send(RESPONSE, sender_rank, [=]() {tgt[i] = ret_val;});
           });
       }

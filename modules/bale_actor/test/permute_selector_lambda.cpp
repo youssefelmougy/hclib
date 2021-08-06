@@ -153,13 +153,13 @@ sparsemat_t * permute_matrix_selector(sparsemat_t * A, int64_t * rperminv, int64
   hclib::finish([=]() {
     int sender_rank = MYTHREAD;
     ps3_ptr->start();
-    for(int i=0;i < Ap->lnnz; i++){
+    for(int64_t i=0;i < Ap->lnnz; i++){
         int64_t pkg_nonz = Ap->lnonzero[i] / THREADS;
         int64_t pe = Ap->lnonzero[i] % THREADS;
         ps3_ptr->send(0, pe, [=](){
-          int64_t pkg_nonz_ret = lcperminv[pkg_nonz];
+          int64_t lpkg_nonz_ret = lcperminv[pkg_nonz];
           get_selector()->send(1, sender_rank, [=]() {
-            Ap->lnonzero[i] = pkg_nonz_ret;
+            Ap->lnonzero[i] = lpkg_nonz_ret;
           });
         });
     }

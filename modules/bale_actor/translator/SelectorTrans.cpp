@@ -115,7 +115,7 @@ namespace __internal__ {
         if (inner_lambda) {
             processCaptures(inner_lambda, depth+1, arrays, scalars, lambdas, DE);
         }
-
+#if 0
         if (depth == 0) {
             for (int i = 0; i < MAX_DEPTH; i++) {
                 for (auto const &S : scalars[i]) {
@@ -123,31 +123,116 @@ namespace __internal__ {
                 }
             }
         }
-
+#endif
     }
 
-    std::pair<std::string, std::string> synthesizePacketType(const int uniqueID, const int nMBs, std::vector<std::vector<const VarDecl *>> &scalars, std::map<const VarDecl*, std::string> &nameMap) {
-        llvm::errs() << scalars.size() << ", " << scalars[0].size() << "\n";
+    std::pair<std::string, std::string> synthesizePacketType(const int uniqueID, const int nMBs, std::vector<std::vector<const VarDecl *>> &scalars, std::map<const VarDecl*, std::string> &nameMap, bool &shrank, clang::DiagnosticsEngine &DE) {
+        // Diagnostics
+        const unsigned ID_PACKET_IS_SCALAR = DE.getCustomDiagID(clang::DiagnosticsEngine::Remark, "packet is scalar");
+        const unsigned ID_STRUCT_SHRINKABLE = DE.getCustomDiagID(clang::DiagnosticsEngine::Remark, "packet struct is shrinkable");
+        const unsigned ID_STRUCT_NOT_SHRINKABLE = DE.getCustomDiagID(clang::DiagnosticsEngine::Remark, "packet struct is NOT shrinkable");
+
         if (nMBs == 1 && scalars[0].size() == 1) {
             // single MB & single scalar
+            DE.Report(ID_PACKET_IS_SCALAR);
             nameMap.insert(std::pair<const VarDecl*, std::string>(scalars[0][0], "pkt"));
             return std::make_pair(scalars[0][0]->getType().getAsString(), "primitive");
         } else {
+            auto packet_info = new std::map<const QualType, unsigned>[nMBs+1];
             std::vector<const VarDecl*> done;
-            std::string ret = "struct packet" + std::to_string(uniqueID) + "{\n";
+            bool shrinkable = false;
             for (int i = 0; i < nMBs; i++) {
                 for (auto const s: scalars[i]) {
+                    //
+                    QualType type = s->getType();
+                    if (packet_info[i].find(type) == packet_info[i].end()) {
+                        packet_info[i].insert(std::pair<const QualType, unsigned>(type, 1));
+                        packet_info[nMBs].insert(std::pair<const QualType, unsigned>(type, 1));
+                    } else {
+                        packet_info[i][type]++;
+                        if (packet_info[i][type] > packet_info[nMBs][type]) {
+                            packet_info[nMBs][type] = packet_info[i][type];
+                        }
+                    }
+                    //
                     if (std::find(done.begin(), done.end(), s) == done.end()) {
                         done.push_back(s);
-                        nameMap.insert(std::pair<const VarDecl*, std::string>(s, llvm::Twine("pkt." + s->getName()).str()));
-                        ret += s->getType().getAsString();
-                        ret += llvm::Twine(" " + s->getName() + ";\n").str();
                     }
                 }
             }
-            ret += "};\n";
-            llvm::errs() << ret;
-            return std::make_pair("packet" + std::to_string(uniqueID), ret);
+            unsigned nSlots = 0;
+            for (auto& elem: packet_info[nMBs]) {
+                nSlots += elem.second;
+            }
+            llvm::errs() << "nSlots: " << nSlots << " done.size() = " << done.size() << "\n";
+            shrinkable = nSlots < done.size();
+            if (shrinkable) {
+                shrank = true;
+                DE.Report(ID_STRUCT_SHRINKABLE);
+                //
+                std::string ret = "struct packet" + std::to_string(uniqueID) + "{\n";
+                for (auto& elem: packet_info[nMBs]) {
+                    const VarDecl*** assign = new const VarDecl**[nMBs];
+                    for (int i = 0; i < nMBs; i++) {
+                        assign[i] = new const VarDecl*[elem.second];
+                        for (int j = 0; j < elem.second; j++) {
+                            assign[i][j] = nullptr;
+                        }
+                    }
+                    //
+                    llvm::errs() << "[Packet slot assignment]\n";
+                    for (int i = 0; i < nMBs; i++) {
+                        llvm::errs() << "MB" << std::to_string(i) << "\n";
+                        std::vector<const VarDecl*> done;
+                        for (auto const s: scalars[i]) {
+                            if (elem.first == s->getType()) {
+                                for (int j = 0; j < elem.second; j++) {
+                                    if ((i - 1 >= 0) && assign[i-1][j] == s) {
+                                        assign[i][j] = s;
+                                        llvm::errs() << s->getName() << " still in slot " << j << "\n";
+                                        done.push_back(s);
+                                    }
+                                }
+                                if (std::find(done.begin(), done.end(), s) == done.end()) {
+                                    for (int j = 0; j < elem.second; j++) {
+                                        if (assign[i][j] == nullptr) {
+                                            assign[i][j] = s;
+                                            llvm::errs() << s->getName() << " goes to slot " << j << ", name: " << llvm::Twine("pkt.slot" + std::to_string(j)).str() << "\n";
+                                            nameMap.insert(std::pair<const VarDecl*, std::string>(s, llvm::Twine("pkt.slot" + std::to_string(j)).str()));
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // 
+                    for (unsigned i = 0; i < elem.second; i++) {
+                        ret += elem.first.getAsString() + " " + "slot" + std::to_string(i) + ";\n";
+                    }
+                }
+                ret += "};\n";
+                llvm::errs() << ret;
+                return std::make_pair("packet" + std::to_string(uniqueID), ret);
+            } else {
+                DE.Report(ID_STRUCT_NOT_SHRINKABLE);
+                std::vector<const VarDecl*> done;
+                std::string ret = "struct packet" + std::to_string(uniqueID) + "{\n";
+                for (int i = 0; i < nMBs; i++) {
+                    for (auto const s: scalars[i]) {
+                        if (std::find(done.begin(), done.end(), s) == done.end()) {
+                            done.push_back(s);
+                            nameMap.insert(std::pair<const VarDecl*, std::string>(s, llvm::Twine("pkt." + s->getName()).str()));
+                            ret += s->getType().getAsString();
+                            ret += llvm::Twine(" " + s->getName() + ";\n").str();
+                        }
+                    }
+                }
+                ret += "};\n";
+                llvm::errs() << ret;
+                return std::make_pair("packet" + std::to_string(uniqueID), ret);
+            }
         }
         return std::make_pair("WRONG", "");
     }
@@ -160,12 +245,13 @@ namespace __internal__ {
             // T val -> pkt.val
             std::regex reg_decl(e.first->getType().getAsString() + "\\s+" + e.first->getName().str());
             ret = std::regex_replace(ret, reg_decl, e.second);
-#if 0
-            std::regex reg_var("[!a-zA-Z0-9_]+"+ e.first->getName().str());
-            ret = std::regex_replace(ret, reg_var, e.second);
+#if 1
+            std::regex reg_var("([^a-zA-Z0-9_])"+ e.first->getName().str() + "([^a-zA-Z0-9_])");
+            ret = std::regex_replace(ret, reg_var, "$1" + e.second + "$2");
+#else
+            std::regex reg_var2("([(\\[\\s])+"+ e.first->getName().str() + "([(\\]\\s])+");
+            ret = std::regex_replace(ret, reg_var2, "$1" + e.second + "$2");
 #endif
-            std::regex reg_var2("([(\\[\\s])+"+ e.first->getName().str());
-            ret = std::regex_replace(ret, reg_var2, "$1" + e.second);
         }
 
         // get mailbox id
@@ -239,6 +325,7 @@ public:
         __internal__::processCaptures(Lambda, 0, arrays, scalars, lambdas, DE);
         processed.insert(processed.end(), lambdas.begin(), lambdas.end());
 
+        // # of mailboxes = depth
         int depth = 0;
         for (; depth < MAX_DEPTH; depth++) {
             llvm::errs() << "[captured level-" << depth << "]\n";
@@ -246,7 +333,7 @@ public:
                 break;
             }
             for (auto const &S : scalars[depth]) {
-                llvm::errs() << S->getName() << "\n";
+                llvm::errs() << S->getName() << "(type = " << S->getType().getAsString() << ")\n";
             }
         }
 
@@ -254,7 +341,8 @@ public:
         static int uniqueID = 0;
         std::map<const VarDecl*, std::string> nameMap;
         std::pair<std::string, std::string> packet;
-        packet = __internal__::synthesizePacketType(uniqueID, nMBs, scalars, nameMap);
+        bool shrank = false;
+        packet = __internal__::synthesizePacketType(uniqueID, nMBs, scalars, nameMap, shrank, DE);
         std::string packet_type = packet.first;
         std::string packet_def = packet.second;
         llvm::errs() << "packet_type: " << packet_type << "\n";
@@ -339,7 +427,14 @@ public:
                 mes1 += PACKET + " = " + llvm::Twine(scalars[0][0]->getName()).str() + ";\n";
             } else {
                 for (auto const &S: scalars[0]) {
-                    mes1 += llvm::Twine(PACKET + "." + S->getName() + " = " + S->getName() + ";\n").str();
+                    if (!shrank) {
+                        mes1 += llvm::Twine(PACKET + "." + S->getName() + " = " + S->getName() + ";\n").str();
+                    } else {
+                        std::string tmp = nameMap[S];
+                        std::regex reg_pkt("pkt\\.");
+                        tmp = std::regex_replace(tmp, reg_pkt, "");
+                        mes1 += llvm::Twine(PACKET + "." + tmp + " = " + S->getName() + ";\n").str();
+                    }
                 }
             }
 
