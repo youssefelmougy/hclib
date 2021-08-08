@@ -138,8 +138,8 @@ int64_t* copied_rand_permp_selector(int64_t N, int seed) {
                 bool ret = phaseOneSelector->send(0, pe, [=]() {
                     int64_t val;
                     if (ltarget[pkg_idx] == -1L) {
-                        val = pkg_val;
                         ltarget[pkg_idx] = pkg_val;
+                        val = pkg_val;
                     } else {
                         val = -(pkg_val + 1);
                     }
