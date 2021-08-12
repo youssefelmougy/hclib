@@ -85,6 +85,30 @@ namespace __internal__ {
         return ret;
     }
 
+    SourceLocation getLocOfNewStatement(ASTContext *Context, const CallExpr *finish, const DeclRefExpr *hs_ptr) {
+        const auto& parents = Context->getParents(*finish);
+        if (!parents.empty()) {
+            const Stmt* parent = parents[0].get<Stmt>();
+            if (parent) {
+                const auto& gparents = Context->getParents(*parent);
+                if (!gparents.empty()) {
+                    auto gparent = gparents[0].get<Stmt>();
+                    for (auto c: gparent->children()) {
+                        const BinaryOperator *bo = dyn_cast<BinaryOperator>(c);
+                        if (bo) {
+                            const DeclRefExpr *dre = dyn_cast<DeclRefExpr>(bo->getLHS());
+                            const CXXNewExpr *cne = dyn_cast<CXXNewExpr>(bo->getRHS());
+                            if (dre && cne
+                                && dre->getDecl() == hs_ptr->getDecl()) {
+                                return dre->getBeginLoc();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     void processCaptures(const CXXRecordDecl *lambda, const unsigned int depth, std::vector<std::vector<const VarDecl *>> &arrays, std::vector<std::vector<const VarDecl *>> &scalars, std::vector<const Stmt*> &lambdas, clang::DiagnosticsEngine &DE) {
         assert(lambda->isLambda() == true && "lambda is expected");
 
@@ -237,7 +261,7 @@ namespace __internal__ {
         return std::make_pair("WRONG", "");
     }
 
-    std::string translateLambdaBody(const Stmt *lambda, std::map<const VarDecl*, std::string> &nameMap, Rewriter &TheRewriter) {
+    std::string translateLambdaBody(const Stmt *lambda, std::map<const VarDecl*, std::string> &nameMap, std::string hs_ptr, Rewriter &TheRewriter) {
         assert(lambda->isLambda() == true && "lambda is expected");
         std::string ret = Lexer::getSourceText(CharSourceRange::getTokenRange(lambda->getSourceRange()), TheRewriter.getSourceMgr(), TheRewriter.getLangOpts()).str();
 
@@ -259,9 +283,12 @@ namespace __internal__ {
         std::regex_search(ret, sm, std::regex("send\\((.+),\\s*(.+),\\s*(.+)\\)"));
         std::string mailbox = sm.str(1);
 
-        //
+        // use regex::extended to match multiple lines
         std::regex reg_sel("get_selector.+;", std::regex::extended);
         ret = std::regex_replace(ret, reg_sel, "send(" + mailbox + ", pkt, sender_rank);");
+
+        std::regex reg_sel2(hs_ptr + ".+;", std::regex::extended);
+        ret = std::regex_replace(ret, reg_sel2, "send(" + mailbox + ", pkt, sender_rank);");
 
         //
         std::regex reg_dup("pkt.pkt.");
@@ -287,6 +314,9 @@ public:
 
         // hs_ptr->send();
         const auto ActorSendExpr = Result.Nodes.getNodeAs<CXXMemberCallExpr>("send");
+
+        // hclib::finish
+        const auto FinishCallExpr = Result.Nodes.getNodeAs<CallExpr>("finish");
 
         // selection
         if (!ActorInstantiation || !ActorSendExpr) {
@@ -373,7 +403,7 @@ public:
                 mes += "void process" + std::to_string(mb) + "(";
                 mes += packet_type + " pkt, ";
                 mes += "int sender_rank)";
-                mes += __internal__::translateLambdaBody(lambdas[mb], nameMap, TheRewriter);
+                mes += __internal__::translateLambdaBody(lambdas[mb], nameMap, ActorInstance->getName().str(), TheRewriter);
                 mes += "\n";
             }
 
@@ -409,7 +439,12 @@ public:
             mes += ");\n";
             mes += "//";
             //ActorInstantiation->getDecl()->getBeginLoc().print(llvm::errs(), TheRewriter.getSourceMgr());
-            TheRewriter.InsertText(ActorInstantiation->getDecl()->getBeginLoc(), mes, true, true);
+            if (!ActorInstance->hasGlobalStorage()) {
+                TheRewriter.InsertText(ActorInstantiation->getDecl()->getBeginLoc(), mes, true, true);
+            } else {
+                SourceLocation loc = __internal__::getLocOfNewStatement(Context, FinishCallExpr, ActorInstantiation);
+                TheRewriter.InsertText(loc, mes, true, true);
+            }
             instanceMap.insert(std::pair<const VarDecl*, int>(ActorInstance, uniqueID));
         }
         // Update actor->send
@@ -484,10 +519,21 @@ public:
 
         auto Lambda = expr(hasType(cxxRecordDecl(isLambda()).bind("Lambda")));
         // This matches some internal repl of ->send();
-#if 1
+#if 0
         Matcher.addMatcher(cxxMemberCallExpr(on(declRefExpr().bind("hs_ptr")),callee(cxxMethodDecl(hasName("send"))),
                                              hasArgument(2, Lambda)).bind("send"),
                            &HandlerForLambda);
+#elif 1
+        Matcher.addMatcher(callExpr(callee(functionDecl(hasName("hclib::finish"))),
+                                    hasAnyArgument(hasDescendant(
+                                                       lambdaExpr(
+                                                           forEachDescendant(
+                                                               cxxMemberCallExpr(on(declRefExpr().bind("hs_ptr")),callee(cxxMethodDecl(hasName("send"))),
+                                                                                 hasArgument(2, Lambda)).bind("send")
+                                                               )
+                                                           )
+                                                       )
+                                        )).bind("finish"), &HandlerForLambda);
 #else
         Matcher.addMatcher(cxxMemberCallExpr(callee(cxxMethodDecl(hasName("send"))),
                                              hasArgument(1, Lambda),
