@@ -3,7 +3,7 @@ A Scalable Actor-based Programming System for PGAS Runtimes
 ----------------------------------------------------------------
 
 Document also available at
-https://github.com/srirajpaul/hclib/blob/bale_actor/modules/bale_actor/benchmarks/README
+https://github.com/srirajpaul/hclib/blob/bale3_actor/modules/bale_actor/benchmarks/README
 
 The whole experiment consists of five phases, 0: prepare your system,
 1: Prepare dependencies, 2: building HClib library, 3: building the 
@@ -93,19 +93,16 @@ Getting Started
     C) Install Conveyors library
 
     >> git clone https://github.com/jdevinney/bale.git
-    #Bale 2.1 moved to another repository
-    >> git clone https://github.com/jdevinney/bale_old.git
-    >> cd bale
-    >> git checkout tags/bale-2.1 -b bale-2.1
-    >> chmod +x ./install.sh
-    >> ./install.sh -s -f
+    >> cd bale/src/bale_classic
+    >> ./bootstrap.sh
+    >> ./make_bale -s -f -j
     >> export BALE_INSTALL=$PWD/build_unknown
 
 2) HClib-Selector Installation
 
     >> git clone https://github.com/srirajpaul/hclib.git
     >> cd hclib
-    >> git checkout bale_actor
+    >> git checkout bale3_actor
     >> ./install.sh
     >> export HCLIB_ROOT=$PWD/hclib-install
     >> cd modules/bale_actor; make

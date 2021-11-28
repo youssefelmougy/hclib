@@ -9,7 +9,7 @@ int main() {
     shmem_init();
     convey_t* conveyor = convey_new(SIZE_MAX, 0, NULL, 0);
     if(!conveyor){printf("ERROR: histo_conveyor: convey_new failed!\n"); return(-1.0);}
-    int ret = convey_begin(conveyor, sizeof(int64_t));
+    int ret = convey_begin(conveyor, sizeof(int64_t), 0);
     if(ret < 0){printf("ERROR: histo_conveyor: begin failed!\n"); return(-1.0);}
 
     printf("Finished inititialization\n");

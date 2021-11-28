@@ -119,14 +119,14 @@ class Mailbox {
 
     void start() {
 #ifdef USE_LAMBDA
-        conv = convey_new_elastic(1, ELASTIC_BUFFER_SIZE, SIZE_MAX, 0, NULL, convey_opt_PROGRESS);
+        conv = convey_new_elastic(ELASTIC_BUFFER_SIZE, SIZE_MAX, 0, NULL, convey_opt_PROGRESS);
 #else
         //buff = new hclib::conveyor::safe_buffer<BufferPacket<T>>(SIZE);
         //conv = convey_new(SIZE_MAX, 0, NULL, 0);
         conv = convey_new(SIZE_MAX, 0, NULL, convey_opt_PROGRESS);
 #endif
         assert( conv != nullptr );
-        convey_begin(conv, sizeof(T));
+        convey_begin(conv, sizeof(T), 0);
         done_mark.rank = DONE_MARK;
     }
 

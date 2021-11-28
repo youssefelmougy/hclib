@@ -111,8 +111,8 @@ int64_t* copied_rand_permp_conveyor(int64_t N, int seed) {
     if (!conv_throw) { return nullptr; }
     if (!conv_reply) { return nullptr; }
 
-    convey_begin(conv_throw, sizeof(pkg_t));
-    convey_begin(conv_reply, sizeof(int64_t));
+    convey_begin(conv_throw, sizeof(pkg_t), 0);
+    convey_begin(conv_reply, sizeof(int64_t), 0);
   
     bool more;
     int64_t hits = 0;
@@ -167,7 +167,7 @@ int64_t* copied_rand_permp_conveyor(int64_t N, int seed) {
 
     convey_free(conv_throw);
     convey_reset(conv_reply);
-    convey_begin(conv_reply, sizeof(int64_t));
+    convey_begin(conv_reply, sizeof(int64_t), 0);
   
     /* now locally pack the values you have in target */
     cnt = 0;

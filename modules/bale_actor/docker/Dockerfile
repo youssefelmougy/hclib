@@ -27,16 +27,16 @@ ENV UPC=/root/local/bin/oshcc
 
 WORKDIR /root
 RUN git clone https://github.com/jdevinney/bale.git
-WORKDIR /root/bale
-RUN chmod +x ./install.sh
-RUN ./install.sh -s -f
+WORKDIR /root/bale/src/bale_classic
+RUN ./bootstrap.sh
+RUN ./make_bale -s -f -j
 
 ENV BALE_INSTALL=/root/bale/build_unknown
 
 WORKDIR /root
 RUN git clone https://github.com/srirajpaul/hclib
 WORKDIR /root/hclib
-RUN git fetch && git checkout bale_actor
+RUN git fetch && git checkout bale3_actor
 RUN ./install.sh
 ENV HCLIB_ROOT=/root/hclib/hclib-install
 RUN cd modules/bale_actor && make
