@@ -1,5 +1,5 @@
 FROM ubuntu:18.04
-LABEL authors="Akihiro Hayashi <ahayashi@gatech.edu>,Sri Raj Paul <sriraj@gatech.edu>"
+LABEL authors="Akihiro Hayashi <ahayashi@gatech.edu>,Sri Raj Paul <sriraj@gatech.edu>,Youssef Elmougy <yelmougy3@gatech.edu>"
 
 RUN apt-get update && apt-get install -y \
     apt-utils \
@@ -33,7 +33,7 @@ ENV CXX=/root/local/bin/oshc++
 ENV OSHRUN=/root/local/bin/oshrun
 
 WORKDIR /root
-RUN git clone https://github.com/jdevinney/bale.git
+RUN git clone https://github.com/jdevinney/bale_old.git
 WORKDIR /root/bale
 RUN git checkout tags/bale-2.1 -b bale-2.1
 RUN chmod +x ./install.sh
