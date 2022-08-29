@@ -33,7 +33,7 @@ ENV CXX=/root/local/bin/oshc++
 ENV OSHRUN=/root/local/bin/oshrun
 
 WORKDIR /root
-RUN git clone https://github.com/jdevinney/bale_old.git
+RUN git clone https://github.com/jdevinney/bale_old.git bale
 WORKDIR /root/bale
 RUN git checkout tags/bale-2.1 -b bale-2.1
 RUN chmod +x ./install.sh
