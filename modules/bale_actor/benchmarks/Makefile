@@ -10,9 +10,13 @@ TARGETS=histo_agi histo_shmem histo_conveyor histo_selector \
         ig_agi ig_shmem ig_conveyor ig_selector \
         toposort_agi toposort_shmem toposort_conveyor toposort_selector \
 		triangle_agi triangle_shmem triangle_conveyor triangle_selector \
+		tricent_agi tricent_conveyor tricent_selector \
 		randperm_agi randperm_shmem  randperm_conveyor randperm_selector \
         permute_agi permute_shmem permute_conveyor permute_selector \
-		transpose_agi transpose_shmem transpose_conveyor transpose_selector
+		transpose_agi transpose_shmem transpose_conveyor transpose_selector \
+		jaccard_agi jaccard_conveyor jaccard_selector \
+		pagerank_agi pagerank_conveyor pagerank_selector \
+		dependancy_selector
 
 TARGETS_UPC=histo_upc ig_upc toposort_upc triangle_upc randperm_upc permute_upc transpose_upc
 
