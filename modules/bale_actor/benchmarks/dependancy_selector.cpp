@@ -61,17 +61,17 @@ private:
     int64_t* sum_arr_;
 
     void a_process(DepPkt pkg, int sender_rank) {
-        sum_arr_[0]++;
+        sum_arr_[0] = 1;
         send(B, pkg, sender_rank);
         printf("sending message to mailbox B ...\n");
     }
 
     void b_process(DepPkt pkg, int sender_rank) {
-        sum_arr_[1]++;
+        sum_arr_[1] = 1;
     }
     
     void c_process(DepPkt pkg, int sender_rank) {
-        sum_arr_[2]++;
+        sum_arr_[2] = 1;
         send(D, pkg, sender_rank);
         printf("sending message to mailbox D ...\n");
         send(E, pkg, sender_rank);
@@ -79,11 +79,11 @@ private:
     }
 
     void d_process(DepPkt pkg, int sender_rank) {
-        sum_arr_[3]++;
+        sum_arr_[3] = 1;
     }
 
     void e_process(DepPkt pkg, int sender_rank) {
-        sum_arr_[4]++;
+        sum_arr_[4] = 1;
     }
     
 };
