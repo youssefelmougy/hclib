@@ -18,6 +18,9 @@ extern "C" {
 #define ELASTIC_BUFFER_SIZE 128
 #endif
 
+#include <vector>
+using namespace std;
+
 namespace hclib {
 
 #ifdef USE_LAMBDA
@@ -77,6 +80,8 @@ class Mailbox {
     hclib::promise_t<int> worker_loop_end;
     bool is_early_exit = false, is_done = false;
     Mailbox* dep_mb = nullptr;
+    vector<int> dependency_mailboxes;
+    int dep_N = 0;
 
   public:
 
@@ -115,6 +120,22 @@ class Mailbox {
 
     Mailbox* get_dep_mb() {
         return dep_mb;
+    }
+
+    void add_dep_mailbox(int64_t mb_id) {
+        dependency_mailboxes.push_back(mb_id);
+    }
+
+    vector<int> get_dep_mailbox() {
+        return dependency_mailboxes;
+    }
+
+    void set_dep_N(int64_t val) {
+        dep_N = val;
+    }
+
+    int get_dep_N() {
+        return dep_N;
     }
 
     void start() {
@@ -408,6 +429,23 @@ class Selector {
             }
             else {
                 assert(num_work_loop_end == N);
+                end_prom.put(1);
+            }
+        }, mb[mb_id].get_worker_loop_finish(), nic);
+    }
+
+    void done_extended(int mb_id) {
+        mb[mb_id].done();
+        hclib::async_await_at([=]() {
+            num_work_loop_end++;
+            // check all successors:
+            //      if mb has successors then invoke done_extended(succ_mb_id) on all successors
+            //      else invoke end_prom.put(1)
+            vector<int> successor_mailboxes = mb[mb_id].get_dep_mailbox();
+            if (successor_mailboxes.size() > 0) {
+                for (int64_t i = 0; i < successor_mailboxes.size(); i++) { done_extended(successor_mailboxes[i]); }
+            }
+            else if (num_work_loop_end == N) { //if (mb_id == N-1) {//if (num_work_loop_end == mb[mb_id].get_dep_N()) {
                 end_prom.put(1);
             }
         }, mb[mb_id].get_worker_loop_finish(), nic);
