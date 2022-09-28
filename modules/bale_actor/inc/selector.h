@@ -19,6 +19,7 @@ extern "C" {
 #endif
 
 #include <vector>
+#include <list>
 using namespace std;
 
 namespace hclib {
@@ -81,7 +82,7 @@ class Mailbox {
     bool is_early_exit = false, is_done = false;
     Mailbox* dep_mb = nullptr;
     vector<int> dependency_mailboxes;
-    int dep_N = 0;
+    int predecessor_count = 0;
 
   public:
 
@@ -122,20 +123,24 @@ class Mailbox {
         return dep_mb;
     }
 
-    void add_dep_mailbox(int64_t mb_id) {
-        dependency_mailboxes.push_back(mb_id);
+    void add_dep_mailboxes(list<int> predecessor_mailboxes, list<int> successor_mailboxes) {
+        // deal with predecessors
+        predecessor_count = predecessor_mailboxes.size();
+
+        // deal with successors
+        for (int64_t const& mb_id : successor_mailboxes) dependency_mailboxes.push_back(mb_id);
     }
 
-    vector<int> get_dep_mailbox() {
+    vector<int> get_dep_mailboxes() {
         return dependency_mailboxes;
     }
 
-    void set_dep_N(int64_t val) {
-        dep_N = val;
+    int64_t get_predecessor_count() {
+        return predecessor_count;
     }
 
-    int get_dep_N() {
-        return dep_N;
+    void dec_predecessor_count() {
+        predecessor_count--;
     }
 
     void start() {
@@ -439,13 +444,23 @@ class Selector {
         hclib::async_await_at([=]() {
             num_work_loop_end++;
             // check all successors:
-            //      if mb has successors then invoke done_extended(succ_mb_id) on all successors
-            //      else invoke end_prom.put(1)
-            vector<int> successor_mailboxes = mb[mb_id].get_dep_mailbox();
+            //      if mb has successors then 
+            //          loop through sucessors
+            //             if sucessor only has 1 predecessor then invoke done_extended(succ_mb_id)
+            //             otherwise decrement predecessor_count and move to next sucessor
+            //      else if num_work_loop_end == N then invoke end_prom.put(1)
+            vector<int> successor_mailboxes = mb[mb_id].get_dep_mailboxes();
             if (successor_mailboxes.size() > 0) {
-                for (int64_t i = 0; i < successor_mailboxes.size(); i++) { done_extended(successor_mailboxes[i]); }
+                for (int64_t const& i : successor_mailboxes) {
+                    int64_t num_predecessors = mb[i].get_predecessor_count();
+                    if (num_predecessors == 1) {
+                        done_extended(i);
+                    } else {
+                        mb[i].dec_predecessor_count();
+                    }
+                }
             }
-            else if (num_work_loop_end == N) { //if (mb_id == N-1) {//if (num_work_loop_end == mb[mb_id].get_dep_N()) {
+            else if (num_work_loop_end == N) {
                 end_prom.put(1);
             }
         }, mb[mb_id].get_worker_loop_finish(), nic);
