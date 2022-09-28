@@ -29,31 +29,27 @@ public:
         mb[A].process = [this] (DepPkt pkt, int sender_rank) { 
             this->a_process(pkt, sender_rank);
         };
-        mb[A].add_dep_mailbox(B); // add dependancy A -> B
-        //mb[A].set_dep_N(2);      // number of dependancies = 2
+        mb[A].add_dep_mailboxes({}, {B,D}); // predecessors = {}, successors = {B,D}
 
         mb[B].process = [this] (DepPkt pkt, int sender_rank) { 
             this->b_process(pkt, sender_rank);
         };
-        //mb[B].set_dep_N(2);      // number of dependancies = 2
+        mb[B].add_dep_mailboxes({A}, {}); // predecessors = {A}, successors = {}
         
         mb[C].process = [this] (DepPkt pkt, int sender_rank) { 
             this->c_process(pkt, sender_rank);
         };
-        mb[C].add_dep_mailbox(D); // add dependancy C -> D
-        mb[C].add_dep_mailbox(E); // add dependancy C -> E
-        //mb[C].set_dep_N(3);      // number of dependancies = 3
+        mb[C].add_dep_mailboxes({}, {D,E}); // predecessors = {}, successors = {D,E}
 
         mb[D].process = [this] (DepPkt pkt, int sender_rank) { 
             this->d_process(pkt, sender_rank);
         };
-        //mb[D].set_dep_N(3);      // number of dependancies = 3
+        mb[D].add_dep_mailboxes({A,C}, {}); // predecessors = {A,C}, successors = {}
 
         mb[E].process = [this] (DepPkt pkt, int sender_rank) { 
             this->e_process(pkt, sender_rank);
         };
-        //mb[E].set_dep_N(3);      // number of dependancies = 3
-        
+        mb[E].add_dep_mailboxes({C}, {}); // predecessors = {C}, successors = {}
     }
 
 private:
@@ -64,6 +60,8 @@ private:
         sum_arr_[0] = 1;
         send(B, pkg, sender_rank);
         printf("sending message to mailbox B ...\n");
+        send(D, pkg, sender_rank);
+        printf("sending message to mailbox D ...\n");
     }
 
     void b_process(DepPkt pkg, int sender_rank) {
@@ -113,7 +111,9 @@ int main(int argc, char* argv[]) {
             /*      DEPENDANCY GRAPH:       */
             //
             //          A   -->   B
-            //
+            //              \
+            //               \
+            //                >
             //          C   -->   D
             //              \
             //               \
@@ -129,9 +129,7 @@ int main(int argc, char* argv[]) {
             depSelector->send(C, pkg, MYTHREAD);
 
             // invoke done on mailbox A and C
-            //depSelector->done(A);
             depSelector->done_extended(A);
-            //depSelector->done(C);
             depSelector->done_extended(C);
         });
 
