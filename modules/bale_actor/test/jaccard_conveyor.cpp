@@ -102,8 +102,8 @@ double jaccard_conveyor(sparsemat_t* A2, double* jaccard_index, int64_t* edge_de
     convey_begin(replies, sizeof(JaccardPkt), 0);
     lgp_barrier();
 
-    bool failed_convey, change_kk = false;
-    int64_t recover_k, recover_kk = 0;
+    bool failed_convey = false, change_kk = false;
+    int64_t recover_k = 0, recover_kk = 0;
     while (more = convey_advance(requests, (v == A2->lnumrows)),
             more | convey_advance(replies, !more)) {
 
