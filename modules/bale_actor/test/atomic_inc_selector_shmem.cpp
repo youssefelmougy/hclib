@@ -37,32 +37,48 @@
 //
  *****************************************************************/
 
-/*! \file put_nbi_shmem.upc
- * \brief A Selector implementation of put demonstration.
+/*! \file histo_selector.upc
+ * \brief A Selector implementation of histogram.
  */
 
 #include <shmem.h>
 extern "C" {
 #include <spmat.h>
 }
+#include "selector_shmem.h"
 
 #define THREADS shmem_n_pes()
 #define MYTHREAD shmem_my_pe()
-#define VAL 22
 
-double put_nbi_shmem(int64_t *pckindx, int64_t T,  int64_t *lcounts) {
+
+/*!
+ * \brief This routine implements histogram using selector shmem
+ * \param *pckindx array of packed indices for the distributed version of the global array of counts.
+ * \param T the length of the pcindx array
+ * \param *lcounts localized pointer to the count array.
+ * \return average run time
+ *
+ */
+
+double histo_selector_shmem(int64_t *pckindx, int64_t T,  int64_t *lcounts) {
   minavgmaxD_t stat[1];
+  AtomicInc<int64_t> shmem_atomic_inc;
 
   lgp_barrier();
   double tm = wall_seconds();
 
-  int64_t val = VAL;
-  for(int i=0; i< T; i++){
-    int64_t pe, col;
-    col = pckindx[i] >> 16;
-    pe  = pckindx[i] & 0xffff;
-    shmem_int64_put_nbi(lcounts+col, &val, 1,  pe);
-  }
+  hclib_start_finish();
+  shmem_atomic_inc.start();
+
+    for(int i=0; i< T; i++){
+      int64_t pe, col;
+      col = pckindx[i] >> 16;
+      pe  = pckindx[i] & 0xffff;
+      shmem_atomic_inc(lcounts+col, pe);
+    }
+
+  shmem_atomic_inc.done();
+  hclib_end_finish();
 
   lgp_barrier();
 
@@ -73,7 +89,9 @@ double put_nbi_shmem(int64_t *pckindx, int64_t T,  int64_t *lcounts) {
 }
 
 int main(int argc, char * argv[]) {
-  lgp_init(argc, argv);
+
+  const char *deps[] = { "system", "bale_actor" };
+  hclib::launch(deps, 2, [=] {
 
   //char hostname[1024];
   //hostname[1023] = '\0';
@@ -102,7 +120,7 @@ int main(int argc, char * argv[]) {
     }
   }
 
-  T0_fprintf(stderr,"Running put on %d threads\n", THREADS);
+  T0_fprintf(stderr,"Running histo on %d threads\n", THREADS);
   T0_fprintf(stderr,"buf_cnt (number of buffer pkgs)      (-b)= %ld\n", buf_cnt);
   T0_fprintf(stderr,"Number updates / thread              (-n)= %ld\n", l_num_ups);
   T0_fprintf(stderr,"Table size / thread                  (-T)= %ld\n", lnum_counts);
@@ -144,7 +162,7 @@ int main(int argc, char * argv[]) {
   double injection_bw = 0.0;
   int64_t num_models = 0L;               // number of models that are executed
 
-      laptime = put_nbi_shmem(pckindx, l_num_ups, lcounts);
+      laptime = histo_selector_shmem(pckindx, l_num_ups, lcounts);
       num_models++;
 
     injection_bw = volume_per_node / laptime;
@@ -154,19 +172,14 @@ int main(int argc, char * argv[]) {
 
   // Check the results
   // Assume that the atomic add version will correctly zero out the counts array
-  int64_t *res_err = (int64_t *)lgp_all_alloc(num_counts, sizeof(int64_t)); assert(res_err != NULL);
-  int64_t *lres_err = lgp_local_part(int64_t, res_err);
-  memset(lres_err, 0, lnum_counts*sizeof(int64_t));
   for(i = 0; i < l_num_ups; i++) {
-    int val = lgp_get_int64(counts, index[i]);
-    if(val != VAL)
-        lgp_put_int64(res_err, index[i], 1);
+    lgp_atomic_add(counts, index[i], -num_models);
   }
   lgp_barrier();
 
   int64_t num_errors = 0, totalerrors = 0;
   for(i = 0; i < lnum_counts; i++) {
-    if(lres_err[i] == true) {
+    if(lcounts[i] != 0L) {
       num_errors++;
       if(num_errors < 5)  // print first five errors, report number of errors below
         fprintf(stderr,"ERROR: Thread %d error at %ld (= %ld)\n", MYTHREAD, i, lcounts[i]);
@@ -177,11 +190,11 @@ int main(int argc, char * argv[]) {
      T0_fprintf(stderr,"FAILED!!!! total errors = %ld\n", totalerrors);
   }
 
-  lgp_all_free(res_err);
   lgp_all_free(counts);
   free(index);
   free(pckindx);
-  lgp_finalize();
+  });
+
   return 0;
 }
 
