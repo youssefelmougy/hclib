@@ -18,6 +18,12 @@ extern "C" {
 #define ELASTIC_BUFFER_SIZE 128
 #endif
 
+#include <vector>
+#include <tuple>
+#include <list>
+#include <queue>
+using namespace std;
+
 namespace hclib {
 
 #ifdef USE_LAMBDA
@@ -77,6 +83,10 @@ class Mailbox {
     hclib::promise_t<int> worker_loop_end;
     bool is_early_exit = false, is_done = false;
     Mailbox* dep_mb = nullptr;
+    vector<int> dependency_mailboxes;
+    int predecessor_count = 0;
+    bool is_cyclic = false;
+    bool done_called = false;
 
   public:
 
@@ -115,6 +125,42 @@ class Mailbox {
 
     Mailbox* get_dep_mb() {
         return dep_mb;
+    }
+
+    void set_is_cyclic(bool val) {
+        is_cyclic = val;
+    }
+
+    bool get_is_cyclic() {
+        return is_cyclic;
+    }
+
+    void set_done_called(bool val) {
+        done_called = val;
+    }
+
+    bool get_done_called() {
+        return done_called;
+    }
+
+    void add_dep_mailboxes(list<int> predecessor_mailboxes, list<int> successor_mailboxes) {
+        // deal with predecessors
+        predecessor_count = predecessor_mailboxes.size();
+
+        // deal with successors
+        for (int64_t const& mb_id : successor_mailboxes) dependency_mailboxes.push_back(mb_id);
+    }
+
+    vector<int> get_dep_mailboxes() {
+        return dependency_mailboxes;
+    }
+
+    int64_t get_predecessor_count() {
+        return predecessor_count;
+    }
+
+    void dec_predecessor_count() {
+        predecessor_count--;
     }
 
     void start() {
@@ -375,6 +421,25 @@ class Selector {
             mb[i].start();
         }
         start_worker_loop();
+
+        // check if mailbox has cyclic dependency
+        for(int mb_id = 0; mb_id < N; mb_id++) {
+            vector<int> successor_mailboxes = mb[mb_id].get_dep_mailboxes();
+            check_cyclic(successor_mailboxes, mb_id);
+        }
+    }
+
+    void check_cyclic(vector<int> successor_mailboxes, int mb_id) {
+        for (int64_t const& i : successor_mailboxes) {
+            if (i == mb_id) {
+                mb[mb_id].set_is_cyclic(true);
+            } else {
+                vector<int> next_successor_mailboxes = mb[i].get_dep_mailboxes();
+                if (next_successor_mailboxes.size() > 0) {
+                    check_cyclic(next_successor_mailboxes, mb_id);
+                }
+            }
+        }
     }
 
 #ifdef USE_LAMBDA
@@ -400,17 +465,32 @@ class Selector {
 #endif // USE_LAMBDA
 
     void done(int mb_id) {
-        mb[mb_id].done();
-        hclib::async_await_at([=]() {
-            num_work_loop_end++;
-            if(num_work_loop_end < N) {
-                done((mb_id+1)%N);
-            }
-            else {
-                assert(num_work_loop_end == N);
-                end_prom.put(1);
-            }
-        }, mb[mb_id].get_worker_loop_finish(), nic);
+        bool mb_cyclic = mb[mb_id].get_is_cyclic();
+        bool mb_done_called;
+        if (mb_cyclic) mb_done_called = mb[mb_id].get_done_called();
+
+        // only call done on acyclic mb or cyclic mb that has not already received done(mb)
+        if ((!mb_cyclic) || (mb_cyclic && !mb_done_called)) {
+            mb[mb_id].done();
+            if (mb_cyclic) mb[mb_id].set_done_called(true);
+            hclib::async_await_at([=]() {
+                num_work_loop_end++;
+                vector<int> successor_mailboxes = mb[mb_id].get_dep_mailboxes();
+                if (successor_mailboxes.size() > 0) {
+                    for (int64_t const& i : successor_mailboxes) {
+                        int64_t num_predecessors = mb[i].get_predecessor_count();
+                        if (num_predecessors == 1) {
+                            done(i);
+                        } else {
+                            mb[i].dec_predecessor_count();
+                        }
+                    }
+                }
+                else if (num_work_loop_end == N) {
+                    end_prom.put(1);
+                }
+            }, mb[mb_id].get_worker_loop_finish(), nic);
+        }
     }
 
     void done() {
