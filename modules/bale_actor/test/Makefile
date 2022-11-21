@@ -19,6 +19,13 @@ TARGETS_PURE=toposort_pure_selector randperm_pure_selector
 
 all: $(TARGETS)
 
+%_selector: %_selector.cpp
+        @g++ ${HCLIB_ROOT}/../modules/bale_actor/inc/parser_dependency.cpp -o ${HCLIB_ROOT}/../modules/bale_actor/inc/parser_dependency.o
+        @${HCLIB_ROOT}/../modules/bale_actor/inc/parser_dependency.o $@
+        @rm -rf *_parsed_dep.cpp
+        $(CXX) -g -O3 -std=c++11 -DUSE_SHMEM=1 $(HCLIB_CFLAGS) $(HCLIB_LDFLAGS) -o $@ $@_parsed.cpp $(HCLIB_LDLIBS) -lspmat -lconvey -lexstack -llibgetput -lhclib_bale_actor -lm
+        @rm -rf *_parsed.cpp
+
 %: %.cpp
 	$(CXX) -g -O3 -std=c++11 -DUSE_SHMEM=1 $(HCLIB_CFLAGS) $(HCLIB_LDFLAGS) -o $@ $^ $(HCLIB_LDLIBS) -lspmat -lconvey -lexstack -llibgetput -lhclib_bale_actor -lm
 	#$(CXX) -g -O3 -std=c++11 $(HCLIB_CFLAGS) $(HCLIB_LDFLAGS) -o $@ $^ $(HCLIB_LDLIBS) -llibgetput
@@ -30,3 +37,4 @@ test:
 
 clean:
 	rm -f $(TARGETS)
+        rm -rf ${HCLIB_ROOT}/../modules/bale_actor/inc/parser_dependency.o *_parsed.cpp *_parsed_dep.cpp
